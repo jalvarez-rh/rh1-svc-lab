@@ -1,6 +1,5 @@
-=== Getting Started
+=== Sovereign Cloud
 
-. Create a git repo from this template
 . Clone the repo and `cd` into it
 . Run ./utilities/lab-serve
 . Open http://localhost:8080 in your browser
