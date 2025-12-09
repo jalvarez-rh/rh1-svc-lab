@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 'use strict'
 
 module.exports.register = function ({ config }) {
@@ -83,3 +84,19 @@ function getNavEntriesByUrl (items = [], accum = {}) {
   })
   return accum
 }
+=======
+/**
+ * Dev Mode Extension for Antora
+ * 
+ * This extension provides development-mode features for Antora site generation.
+ * Currently a no-op implementation.
+ */
+
+function register(registry, context) {
+  // Dev mode extension - currently no-op
+  // Add development features here as needed
+}
+
+module.exports.register = register;
+
+>>>>>>> 9ffb847 (updates that include the layout for SOVCloud)

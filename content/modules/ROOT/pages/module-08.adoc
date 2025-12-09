@@ -1,0 +1,350 @@
+= Data & AI
+
+In this module, you'll explore data pipeline creation across environments and learn how to bring AI/compute capabilities to your data. This module demonstrates the flexibility of multi-cloud architectures for data processing and AI workloads, including considerations for data locality and compute placement.
+
+[[data-pipeline]]
+
+== Create Simple Data Pipeline Across Environments
+
+Create a data pipeline that moves and processes data between your AWS source cluster and OpenShift CNV target cluster, demonstrating cross-cloud data workflows.
+
+[[pipeline-overview]]
+
+=== Data Pipeline Overview
+
+A data pipeline enables data movement and processing across different environments, supporting use cases such as data migration, backup, analytics, and AI/ML workloads.
+
+Your environment includes:
+* AWS source cluster with predeployed application and cloud database
+* OpenShift CNV target cluster for data processing and storage
+* Hub cluster for orchestration and management
+
+*Procedure*
+
+[start=1]
+. Understand data pipeline requirements:
+** Data source location (AWS cluster)
+** Data destination (OpenShift CNV cluster)
+** Data transformation needs
+** Processing requirements
+
+[start=2]
+. Review existing data sources:
+** Navigate to AWS cluster console
+** Identify database and data sources
+** Review data access methods
+** Check data volume and format
+
+[start=3]
+. Plan data pipeline architecture:
+** Data extraction from source
+** Data transformation (if needed)
+** Data loading to destination
+** Monitoring and observability
+
+NOTE: Data pipelines enable you to process and analyze data across multiple environments while maintaining data locality and compliance requirements.
+
+[[source-cluster]]
+
+=== Source Cluster (AWS) Data
+
+Identify and access data sources on the AWS managed cluster.
+
+*Procedure*
+
+[start=1]
+. Access the AWS managed cluster:
+** Navigate to RHACM → *Clusters*
+** Select AWS managed cluster
+** Access cluster console
+
+[start=2]
+. Identify data sources:
+** Review deployed applications
+** Locate database services
+** Check data storage locations
+** Review data access patterns
+
+[start=3]
+. Review application data:
+** Navigate to application namespace
+** Check database connections
+** Review data schemas
+** Understand data formats
+
+[start=4]
+. Document data source details:
+** Database type and version
+** Connection strings
+** Authentication methods
+** Data volume estimates
+** Data update frequency
+
+[start=5]
+. Test data access:
+** Verify connectivity to data sources
+** Test data queries
+** Review data access permissions
+** Check network connectivity
+
+[start=6]
+. Prepare data for pipeline:
+** Identify data to be processed
+** Review data transformation needs
+** Plan data extraction strategy
+** Consider data privacy and compliance
+
+NOTE: Understanding your data sources is critical for designing effective data pipelines that meet performance and compliance requirements.
+
+[[target-cluster]]
+
+=== Target Cluster (OpenShift CNV) Data
+
+Set up data processing and storage on the OpenShift CNV target cluster.
+
+*Procedure*
+
+[start=1]
+. Access the OpenShift CNV managed cluster:
+** Navigate to RHACM → *Clusters*
+** Select OpenShift CNV managed cluster
+** Access cluster console
+
+[start=2]
+. Prepare target cluster for data processing:
+** Review available storage
+** Check compute resources
+** Verify network connectivity
+** Review security policies
+
+[start=3]
+. Create data processing namespace:
+** Create namespace for data pipeline
+** Configure RBAC permissions
+** Set up service accounts
+** Configure network policies
+
+[start=4]
+. Deploy data processing components:
+** Deploy data ingestion service
+** Configure data storage
+** Set up data transformation jobs
+** Deploy monitoring tools
+
+[start=5]
+. Configure data pipeline application:
+** Navigate to RHACM → *Applications*
+** Create new application for data pipeline
+** Configure GitOps repository
+** Set placement to target cluster
+
+[start=6]
+. Set up data storage:
+** Configure persistent volumes
+** Set up object storage (if needed)
+** Configure backup strategies
+** Review data retention policies
+
+[start=7]
+. Test data pipeline:
+** Run test data extraction
+** Verify data transformation
+** Test data loading
+** Monitor pipeline performance
+
+[start=8]
+. Monitor data pipeline:
+** Review pipeline metrics
+** Check data processing status
+** Monitor resource utilization
+** Review error logs
+
+NOTE: The target cluster provides a flexible platform for data processing with the ability to scale resources based on workload demands.
+
+[[ai-compute]]
+
+== Bringing AI/Compute to Your Data
+
+Demonstrate the flexibility of bringing AI and compute capabilities to your data, regardless of where the data resides.
+
+[[ai-overview]]
+
+=== AI/Compute Flexibility
+
+Modern data architectures enable you to bring compute to your data or move data to compute, depending on your requirements for data locality, compliance, and performance.
+
+*Procedure*
+
+[start=1]
+. Understand AI workload requirements:
+** Data location and volume
+** Compute requirements (CPU, memory, GPU)
+** Processing latency requirements
+** Model training vs. inference needs
+
+[start=2]
+. Review data locality considerations:
+** Data residency requirements
+** Compliance constraints
+** Network bandwidth limitations
+** Cost implications
+
+[start=3]
+. Plan AI workload placement:
+** Identify data sources
+** Determine compute requirements
+** Evaluate placement options
+** Consider hybrid approaches
+
+[start=4]
+. Deploy AI workloads near data:
+** Use RHACM to deploy AI workloads
+** Configure placement rules based on data location
+** Set up data access from AI workloads
+** Monitor performance
+
+[start=5]
+. Review AI workload options:
+** Model training workloads
+** Inference services
+** Data preprocessing jobs
+** Model serving applications
+
+[start=6]
+. Use RHACM for AI workload management:
+** Navigate to *Applications*
+** Create AI workload applications
+** Configure resource requirements
+** Set up auto-scaling
+
+NOTE: Bringing compute to your data reduces data movement, improves performance, and helps meet data residency and compliance requirements.
+
+[[data-location]]
+
+=== Data Location Considerations
+
+Considerations for data location and compute placement in multi-cloud environments.
+
+*Procedure*
+
+[start=1]
+. Review data residency requirements:
+** Regulatory requirements
+** Compliance constraints
+** Data sovereignty needs
+** Organizational policies
+
+[start=2]
+. Evaluate data movement costs:
+** Network transfer costs
+** Data processing costs
+** Storage costs
+** Compute costs
+
+[start=3]
+. Consider performance implications:
+** Network latency
+** Data transfer speeds
+** Processing latency
+** User experience impact
+
+[start=4]
+. Plan hybrid data architectures:
+** Keep sensitive data in place
+** Process data locally when possible
+** Use centralized processing for analytics
+** Balance data locality with efficiency
+
+[start=5]
+. Use RHACM for flexible workload placement:
+** Configure placement rules
+** Use cluster labels for data location
+** Deploy workloads based on data proximity
+** Monitor cross-cluster data flows
+
+[start=6]
+. Implement data governance:
+** Track data location
+** Monitor data access
+** Enforce data policies
+** Audit data movements
+
+NOTE: Data location decisions impact performance, cost, compliance, and security. RHACM provides flexibility to optimize these trade-offs.
+
+[[gpu-inference]]
+
+== GPU Support and Inference Server
+
+Deploy AI inference workloads with GPU support, demonstrating advanced AI capabilities in your multi-cloud environment.
+
+*Procedure*
+
+[start=1]
+. Review GPU availability:
+** Check GPU resources in clusters
+** Verify GPU node availability
+** Review GPU access policies
+** Understand GPU resource requirements
+
+[start=2]
+. Plan inference server deployment:
+** Identify inference model requirements
+** Determine GPU requirements
+** Plan resource allocation
+** Review scaling requirements
+
+[start=3]
+. Deploy inference server application:
+** Navigate to RHACM → *Applications*
+** Create inference server application
+** Configure GPU resource requests
+** Set placement to GPU-enabled cluster
+
+[start=4]
+. Configure inference server:
+** Set up model serving
+** Configure API endpoints
+** Set up load balancing
+** Configure monitoring
+
+[start=5]
+. Test inference server:
+** Send test inference requests
+** Verify GPU utilization
+** Check inference latency
+** Monitor resource usage
+
+[start=6]
+. Integrate inference with data pipeline:
+** Connect inference to data sources
+** Set up data preprocessing
+** Configure inference triggers
+** Monitor end-to-end workflow
+
+[start=7]
+. Optimize inference performance:
+** Review GPU utilization
+** Optimize batch sizes
+** Tune model parameters
+** Scale based on demand
+
+[start=8]
+. Monitor AI workloads:
+** Review inference metrics
+** Monitor GPU performance
+** Track model accuracy
+** Review cost and utilization
+
+NOTE: GPU support enables high-performance AI inference workloads, allowing you to process large volumes of data and serve models with low latency.
+
+== Summary
+
+In this module, you've learned how to:
+
+* Create data pipelines across multiple cloud environments
+* Bring AI and compute capabilities to your data
+* Consider data location and compliance requirements
+* Deploy GPU-enabled inference servers
+
+These capabilities demonstrate the flexibility of multi-cloud architectures for data processing and AI workloads, enabling you to optimize for performance, cost, compliance, and data locality requirements.
+

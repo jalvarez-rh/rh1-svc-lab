@@ -1,395 +1,386 @@
-= Red Hat Advanced Cluster Security for Kubernetes
-
-[[outline]]
-
-== Module outline
-
-Policy-Driven Governance
-
-* Set and enforce security, application, and infrastructure policies centrally
-* Visualize detailed auditing on app and cluster configurations
-* Use the Policy Generator to create policies at scale
-
-NOTE: Due to time and resource constrains you did not explore the ability to monitor VMs from RHACM leveraging Grafana. If you would like to learn more about the out of the box dashboard that allow you to monitor your VM please visit the following blog to learn more - https://developers.redhat.com/articles/2024/12/05/monitor-openshift-virtualization-scale-red-hat-advanced-cluster-management
-
-
-== Policy Driven Governance
-
-Now that you have a cluster and a deployed virtual machines, you need to make sure that infrastructure does not drift from their original configurations. This kind of drift is a serious problem, because it can happen from benign and benevolent fixes and changes, as well as malicious activities that you might not notice but can cause significant problems. The solution that RHACM provides for this is the Governance functionality.
-
-=== Review GRC Functionality
-
-Enterprises must meet internal standards for software engineering, secure engineering, resiliency, security, and regulatory compliance for workloads hosted on private, multi and hybrid clouds. Red Hat Advanced Cluster Management for Kubernetes governance provides an extensible policy framework for enterprises to introduce their own security policies.
-
-The governance lifecycle is based on defined policies, processes, and procedures to manage security and compliance from a central interface page. 
-
-View the following diagram of the governance architecture:
-
-image::113-grc-diagram.png[link=self, window=blank, width=100%, Governance, Risk, Compliance Diagram]
-
-Use the Red Hat Advanced Cluster Management for Kubernetes security policy framework to create and manage policies. Kubernetes custom resource definition instances are used to create policies.
-
-Each Red Hat Advanced Cluster Management policy can have at least one or more templates. For more details about the policy elements, view the Policy YAML table section.
-
-[[create-grc-policies]]
-
-== Creating Policies in RHACM
-
-In order to assist in the creation and management of Red Hat Advanced Cluster Management for Kubernetes policies you use the policy generator tool. This tool, along with GitOps, greatly simplifies the distribution of Kubernetes resource objects to managed OpenShift or Kubernetes clusters through RHACM policies.
-
-=== Prerequisites
-
-To deploy policies with subscriptions, you will need to bind the *open-cluster-management:subscription-admin* ClusterRole to the user creating the subscription.
-
-To do this, complete the following steps:
-
-- Navigate to the *Governance* tab.
-- On the top tabs, click on *Policies*.
-- Click *Create Policy*.
-- On the top switch the toggle to *Display the YAML*.
-
-image::114-policy-toggle.png[link=self, window=blank, width=100%, Display the YAML]
-
-- Copy the following YAML excerpt and paste it in the screen:
-
-[source,yaml,role=execute]
-----
-apiVersion: policy.open-cluster-management.io/v1
-kind: Policy
-metadata:
-  name: policy-configure-subscription-admin-hub
-  namespace: ""
-  annotations:
-    policy.open-cluster-management.io/standards: NIST SP 800-53
-    policy.open-cluster-management.io/categories: CM Configuration Management
-    policy.open-cluster-management.io/controls: CM-2 Baseline Configuration
-spec:
-  remediationAction: inform
-  disabled: false
-  policy-templates:
-    - objectDefinition:
-        apiVersion: policy.open-cluster-management.io/v1
-        kind: ConfigurationPolicy
-        metadata:
-          name: policy-configure-subscription-admin-hub
-        spec:
-          remediationAction: inform
-          severity: low
-          object-templates:
-            - complianceType: musthave
-              objectDefinition:
-                apiVersion: rbac.authorization.k8s.io/v1
-                kind: ClusterRole
-                metadata:
-                  name: open-cluster-management:subscription-admin
-                rules:
-                  - apiGroups:
-                      - app.k8s.io
-                    resources:
-                      - applications
-                    verbs:
-                      - "*"
-                  - apiGroups:
-                      - apps.open-cluster-management.io
-                    resources:
-                      - "*"
-                    verbs:
-                      - "*"
-                  - apiGroups:
-                      - ""
-                    resources:
-                      - configmaps
-                      - secrets
-                      - namespaces
-                    verbs:
-                      - "*"
-            - complianceType: musthave
-              objectDefinition:
-                apiVersion: rbac.authorization.k8s.io/v1
-                kind: ClusterRoleBinding
-                metadata:
-                  name: open-cluster-management:subscription-admin
-                roleRef:
-                  name: open-cluster-management:subscription-admin
-                  apiGroup: rbac.authorization.k8s.io
-                  kind: ClusterRole
-                subjects:
-                  - name: kube:admin
-                    apiGroup: rbac.authorization.k8s.io
-                    kind: User
-                  - name: system:admin
-                    apiGroup: rbac.authorization.k8s.io
-                    kind: User
----
-apiVersion: policy.open-cluster-management.io/v1
-kind: PlacementBinding
-metadata:
-  name: policy-configure-subscription-admin-hub-placement
-  namespace: ""
-placementRef:
-  name: policy-configure-subscription-admin-hub-placement
-  kind: PlacementRule
-  apiGroup: apps.open-cluster-management.io
-subjects:
-  - name: policy-configure-subscription-admin-hub
-    kind: Policy
-    apiGroup: policy.open-cluster-management.io
----
-apiVersion: apps.open-cluster-management.io/v1
-kind: PlacementRule
-metadata:
-  name: policy-configure-subscription-admin-hub-placement
-  namespace: ""
-spec:
-  clusterConditions:
-    - status: "True"
-      type: ManagedClusterConditionAvailable
-  clusterSelector:
-    matchExpressions:
-      - key: name
-        operator: In
-        values:
-          - local-cluster
-----
-
-- Enter a namespace to place the policy, the *default* namespace is OK to use.
-- Click *Next* till the end and then click on *Submit*.
-- Allow a few moments for the policy to propagate to the *local-cluster / RHACM Hub Cluster*.
-- Navigate back to policies and select the *policy-configure-subscription-admin-hub* policy.
-- Under the actions dropdown, select *Enforce*. This will enforce the policy, wait until the green checkmark is displayed.
-
-image::115-enforce-governance-policy.png[link=self, window=blank, width=100%, Enforce the Governance Policy]
-
-=== Using Policy Generator
-
-This Policy Generator description will create 2 configuration policies:
-
-- *openshift-gitops-installed*: The goal of the first policy is to inform if the OpenShift GitOps operator is installed on managed clusters.
-- *kubeadmin-removed*: The goal of the second policy is to inform if the kubeadmin user is removed from managed clusters.
-
-NOTE: Both policies are informative only, and you will only execute them manually to demonstrate how to resolve issues.
-
-With the ArgoCD resource, you can use Red Hat OpenShift GitOps to manage policy definitions by granting OpenShift GitOps access to create policies on the Red Hat Advanced Cluster Management hub cluster.
-
-==== Prerequisites
-
-We need to create a *ClusterRole* resource for OpenShift GitOps, with access to create, read, update, and delete policies and placements: 
-
-- Create a *ClusterRole* from the OCP Console by Clicking the + Icon on the Top right.
-
-image::04-ocp-console-add.png[link=self, window=blank, width=100%, OCP Console Add]
-
-- Copy and Paste the following YAML, Click *Create*
-
-[source,sh,subs="attributes",role=execute]
-----
-kind: ClusterRole
-apiVersion: rbac.authorization.k8s.io/v1
-metadata:
-  name: openshift-gitops-policy-admin
-rules:
-  - verbs:
-      - get
-      - list
-      - watch
-      - create
-      - update
-      - patch
-      - delete
-    apiGroups:
-      - policy.open-cluster-management.io
-    resources:
-      - policies
-      - configurationpolicies
-      - certificatepolicies
-      - operatorpolicies
-      - policysets
-      - placementbindings
-  - verbs:
-      - get
-      - list
-      - watch
-      - create
-      - update
-      - patch
-      - delete
-    apiGroups:
-      - apps.open-cluster-management.io
-    resources:
-      - placementrules
-  - verbs:
-      - get
-      - list
-      - watch
-      - create
-      - update
-      - patch
-      - delete
-    apiGroups:
-      - cluster.open-cluster-management.io
-    resources:
-      - placements
-      - placements/status
-      - placementdecisions
-      - placementdecisions/status
-----
-
-- Navigate back to the + sign again, you need the *ClusterRoleBinding* object to grant the OpenShift GitOps service account access to the *openshift-gitops-policy-admin* ClusterRole object. Click *Create* once complete
-
-[source,sh,subs="attributes",role=execute]
-----
-kind: ClusterRoleBinding
-apiVersion: rbac.authorization.k8s.io/v1
-metadata:
-  name: openshift-gitops-policy-admin
-subjects:
-  - kind: ServiceAccount
-    name: openshift-gitops-argocd-application-controller
-    namespace: openshift-gitops
-roleRef:
-  apiGroup: rbac.authorization.k8s.io
-  kind: ClusterRole
-  name: openshift-gitops-policy-admin
-----
-
-- Navigate to the Terminal in the Showroom tab and execute the following command: 
-
-[source,sh,subs="attributes",role=execute]
-----
-oc -n openshift-gitops patch argocd openshift-gitops --type merge --patch "$(curl https://raw.githubusercontent.com/jalvarez-rh/grc-policy-generator-blog/refs/heads/main/openshift-gitops/argocd-patch.yaml)"
-----
-
-- This command will merge and patch the ArgoCD configuration to point to the latest Init Container that will allow us to deploy the Policies 
-
-=== Deploying a Policy with ArgoCD
-
-- Navigate to *Applications*.
-- Click *Create application, select ArgoCD ApplicationSet - Push Model*.
-* Name: policy-generator
-* Argo server: openshift-gitops
-* Click *NEXT*
-* Under repository types, select the GIT repository
-* URL: https://github.com/jalvarez-rh/demo-policygenerator.git
-* Revision: main
-* Path: dir
-* Remote namespace: policy-generator
-* Click *NEXT* Twice
-
-- Verify that it installs only to the local cluster by setting the following values:
-
-* Cluster sets: *default*
-* Label: *local-cluster*
-* Operator: *equals any of*
-* Value: *true*
-- Verify all the information is correct, click *Create*.
-
-It will take a few minutes to deploy the application, *Click on the Topology Tab* to view and verify that *all of the circles are green*.
-
-image::116-governance-topology.png[link=self, window=blank, width=100%, Governance Topology]
-
-- Navigate to the *Governance* tab.
-- Click on the *Policies* tab.
-- Verify that you see two policies and that their *Cluster Violations* count is one.
-* openshift-gitops-installed
-* kubeadmin-removed
-
-image::117-policies-list.png[link=self, window=blank, width=100%, Governance Policies List]
-
-Now that the policies have been created for us leveraging the Policy Generator Engine let’s go ahead and enforce them:
-
-- On the *openshift-gitops-installed* policy, click on the ellipses and set policy to *Enforce*.
-
-image::118-policies-enforce-red.png[link=self, window=blank, width=100%, Enforce the Policy]
-
-- Click the *Enforce* button to verify.
-- Wait a few minutes and you will see that the *Cluster Violations* will go from *red* to *green*.
-
-image::119-policies-enforce-green.png[link=self, window=blank, width=100%, Policy Enforced]
-
-- Click on the policy and slect *Results* to veify that the gitops operator has been installed.
-
-CAUTION: CAREFUL implementing the *kubeadmin-removed* policy, if you enforce this you won’t be able to continue this lab and access that cluster through the console as the only account created on these clusters is Kubeadmin.
-
-Now you have successfully created a Policy leveraging the Policy Generator to scan your clusters, if you would like to play with other policies please visit the Policy Repo for more Policies you can test out.
-
-[[deploying-applications]]
-
-== A task to complete on your own.
-
-*Here is your mission*
-
-image::https://media.giphy.com/media/v1.Y2lkPTc5MGI3NjExNnJoNHE2MXhocm52ZzFmeHVyY3JiN3F5cGFjYW00dGsycXF2bnNtbyZlcD12MV9pbnRlcm5hbF9naWZfYnlfaWQmY3Q9Zw/3ohs4lNKssQD2wewyQ/giphy.gif[link=self, window=blank, width=100%, class="center"]
-
-*Should you choose to accept it*
-
-Run roxctl against a few of your favorite container images. Try pulling from link:https://hub.docker.com/[docker hub] or link:https://quay.io/[quay.io]. Try modifying the command below to include your image of choice.
-
-For example:
-
-[.console-output]
-[source,bash,subs="+macros,+attributes"]
-----
-[lab-user@bastion ~]$ MYIMAGE=docker.io/ubuntu             
-[lab-user@bastion ~]$ roxctl --insecure-skip-tls-verify -e "$ROX_CENTRAL_ADDRESS:443" image scan --image=$MYIMAGE --force -o table --severity=CRITICAL
-----
-
-[.console-output]
-[source,bash,subs="+macros,+attributes"]
-----
-Scan results for image: docker.io/ubuntu
-(TOTAL-COMPONENTS: 0, TOTAL-VULNERABILITIES: 0, LOW: 0, MODERATE: 0, IMPORTANT: 0, CRITICAL: 0)
-
-+-----------+---------+-----+----------+------+---------------+
-| COMPONENT | VERSION | CVE | SEVERITY | LINK | FIXED VERSION |
-+-----------+---------+-----+----------+------+---------------+
-+-----------+---------+-----+----------+------+---------------+
-----
-Showing that the latest version of Ubuntu from Docker.io has 0 critical vulnerabilities.
-
-*Your turn*
-
-[source,sh,subs="attributes",role=execute]
-----
-MYIMAGE=<Add the registry URL here>
-roxctl --insecure-skip-tls-verify -e "$ROX_CENTRAL_ADDRESS:443" image scan --image $MYIMAGE --force -o table --severity=CRITICAL
-----
-
-[source,sh,subs="attributes",role=execute]
-----
-#!/bin/bash
-
-# API endpoint to create Quay repo
-POST_ENDPOINT="https://${ROX_CENTRAL_ADDRESS}/v1/imageintegrations"
-QUAY_PASSWORD="MzM2Mzg4"
-
-# Fetch cluster information
-curl -k -X GET "${API_ENDPOINT}" \
-     -H "Authorization: Bearer ${ROX_API_TOKEN}" \
-     -H "Accept: application/json" \
-     -H "Content-Type: application/json" \
-     | jq
-
-# Quay repository payload
-read -r -d '' PAYLOAD << EOM
-{
-  "name": "my-quay-repo",
-  "type": "quay",
-  "categories": [
-    "REGISTRY"
-  ],
-  "quay": {
-    "endpoint": "http://$QUAY_URL",
-    "insecure": true
-  },
-  "autogenerated": false,
-  "skipTestIntegration": false
-}
-EOM
-
-# Make API request to create Quay repository
-curl -k -X POST "${POST_ENDPOINT}" \
-     -H "Authorization: Bearer ${ROX_API_TOKEN}" \
-     -H "Content-Type: application/json" \
-     -d "${PAYLOAD}" \
-     | jq
-----
+= Operations & Security
+
+In this module, you'll explore multi-environment cluster and workload management, observability, and cross-cloud operations. This module demonstrates how Red Hat Advanced Cluster Management (RHACM) enables unified operations across diverse cloud environments, including AWS and OpenShift CNV with Hosted Control Planes.
+
+[[multi-env-clusters]]
+
+== Multi-environment Cluster Creation, Management, and Observability
+
+This section covers managing clusters across multiple environments, including the RHACM hub cluster, AWS managed cluster, and OpenShift CNV managed cluster with Hosted Control Planes.
+
+[[hub-cluster-overview]]
+
+=== RHACM Management Cluster Overview
+
+The hub cluster serves as the central management point for all managed clusters in your environment. It runs on OpenShift CNV and includes integrated services:
+
+* Red Hat Advanced Cluster Management (RHACM) - Multi-cluster lifecycle management
+* Red Hat Advanced Cluster Security (RHACS) Central - Centralized security management
+* Red Hat Stackable Cloud Services (SCS) - Cloud-native service management
+* OpenShift GitOps/ArgoCD - GitOps-based application delivery
+
+*Procedure*
+
+[start=1]
+. Access the RHACM console from the OpenShift console at: {openshift_console_url}
+
+[start=2]
+. Navigate to *Clusters* from the left navigation menu to view all managed clusters.
+
+[start=3]
+. Review the cluster inventory, which should include:
+** Hub cluster (local-cluster) - OpenShift CNV
+** AWS managed cluster - Source cluster with predeployed application
+** OpenShift CNV managed cluster - Target cluster using Hosted Control Planes
+
+NOTE: The hub cluster provides a unified view of all clusters regardless of their underlying infrastructure.
+
+[[managed-clusters]]
+
+=== Managed Clusters Overview
+
+Your environment includes two managed clusters:
+
+*AWS Source Cluster*
+This cluster hosts a predeployed application connected to a cloud database. It serves as the source for data and workloads that may need to be migrated or replicated.
+
+*OpenShift CNV Target Cluster (HCP)*
+This cluster uses Hosted Control Planes architecture, providing a decoupled control plane for improved scalability and cost efficiency.
+
+*Procedure*
+
+[start=1]
+. In the RHACM console, click on the *AWS managed cluster* to view its details.
+
+[start=2]
+. Review the cluster status, including:
+** Cluster health
+** Node status
+** Resource utilization
+** Compliance status
+
+[start=3]
+. Click on the *OpenShift CNV managed cluster* to compare its configuration and status.
+
+[start=4]
+. Note the differences in infrastructure while observing the unified management interface.
+
+[[cluster-management]]
+
+=== Cluster Management Operations
+
+RHACM provides comprehensive cluster lifecycle management capabilities across all environments.
+
+*Procedure*
+
+[start=1]
+. Navigate to *Clusters* → *All Clusters* in the RHACM console.
+
+[start=2]
+. Select multiple clusters using the checkboxes to perform bulk operations.
+
+[start=3]
+. Explore cluster actions available from the action menu:
+** View cluster details
+** Edit cluster labels
+** View cluster YAML
+** Access cluster console
+** View cluster logs
+
+[start=4]
+. Use the search and filter capabilities to find specific clusters based on:
+** Cluster name
+** Labels
+** Status
+** Provider type
+
+[start=5]
+. Navigate to *Infrastructure* → *Clusters* → *Cluster sets* to view how clusters are organized.
+
+NOTE: Cluster sets help organize clusters into logical groups for easier management and policy application.
+
+[[cluster-observability]]
+
+=== Cluster Observability
+
+Gain insights into cluster health, performance, and resource utilization across all managed clusters.
+
+*Procedure*
+
+[start=1]
+. Navigate to *Infrastructure* → *Clusters* in the RHACM console.
+
+[start=2]
+. Click on a managed cluster to view detailed metrics and observability data.
+
+[start=3]
+. Review the observability dashboard showing:
+** Cluster health status
+** Node status and capacity
+** Resource usage (CPU, memory, storage)
+** Network metrics
+** Application workload distribution
+
+[start=4]
+. Navigate to *Search* to query resources across all clusters:
+** Search for deployments: `kind:Deployment`
+** Search for pods: `kind:Pod cluster:<cluster-name>`
+** Search for services: `kind:Service`
+
+[start=5]
+. Use the *Search* feature to find resources across multiple clusters simultaneously.
+
+[start=6]
+. Navigate to *Infrastructure* → *Clusters* → *Cluster overview* to see a unified view of all cluster metrics.
+
+TIP: The observability features in RHACM provide a single pane of glass for monitoring multi-cloud environments, reducing operational complexity.
+
+[[multi-env-workloads]]
+
+== Multi-environment Workload Creation, Management, and Observability
+
+This section demonstrates creating and managing different types of workloads (VMs, containers, and AI workloads) across multiple environments.
+
+[[vm-workloads]]
+
+=== Virtual Machine Workloads
+
+OpenShift Virtualization enables you to run and manage virtual machines alongside container workloads using Kubernetes-native APIs.
+
+*Procedure*
+
+[start=1]
+. Navigate to *Infrastructure* → *Virtual Machines* in the RHACM console.
+
+[start=2]
+. Review existing VMs across all managed clusters.
+
+[start=3]
+. To create a new VM, navigate to *Applications* → *Create application*.
+
+[start=4]
+. Select *ArgoCD ApplicationSet-Push Model*.
+
+[start=5]
+. Configure the VM application:
+** Name: `cloud-sovereignty-vm`
+** Argo Server: `openshift-gitops`
+** Repository URL: `https://github.com/example/kubevirt-gitops`
+** Path: `vms/rhel9-vm`
+** Destination namespace: `default`
+
+[start=6]
+. Configure placement to target the OpenShift CNV managed cluster.
+
+[start=7]
+. Submit the application and monitor the VM creation in the topology view.
+
+[start=8]
+. Once created, navigate to *Infrastructure* → *Virtual Machines* to interact with the VM.
+
+[start=9]
+. Use VM actions to:
+** Start/Stop the VM
+** Access the VM console
+** View VM metrics
+** Edit VM configuration
+
+NOTE: VMs can be managed using the same GitOps workflows as container workloads, providing consistency across workload types.
+
+[[container-workloads]]
+
+=== Container Workloads
+
+Deploy and manage containerized applications across multiple clusters using RHACM and OpenShift GitOps.
+
+*Procedure*
+
+[start=1]
+. Navigate to *Applications* → *Create application*.
+
+[start=2]
+. Select *ArgoCD ApplicationSet-Push Model*.
+
+[start=3]
+. Configure a multi-cluster application:
+** Name: `cloud-sovereignty-app`
+** Argo Server: `openshift-gitops`
+** Repository URL: `https://github.com/example/multi-cluster-app`
+** Path: `manifests`
+** Destination namespace: `cloud-sovereignty`
+
+[start=4]
+. Configure placement rules to deploy to multiple clusters:
+** Add placement for AWS cluster
+** Add placement for OpenShift CNV cluster
+
+[start=5]
+. Review the application topology to see deployments across clusters.
+
+[start=6]
+. Navigate to *Search* to query the application resources:
+** Search: `kind:Deployment app=cloud-sovereignty-app`
+
+[start=7]
+. View application resources across clusters in the unified search results.
+
+[start=8]
+. Use the *Topology* view to visualize application relationships and dependencies.
+
+TIP: RHACM enables you to deploy the same application to multiple clusters with cluster-specific configurations using placement rules and cluster labels.
+
+[[ai-workloads]]
+
+=== AI Workloads
+
+Deploy and manage AI/ML workloads across your multi-cloud environment, demonstrating the flexibility of bringing compute to your data.
+
+*Procedure*
+
+[start=1]
+. Navigate to *Applications* → *Create application*.
+
+[start=2]
+. Create an AI workload application:
+** Name: `ai-inference-service`
+** Repository: `https://github.com/example/ai-workloads`
+** Path: `inference-service`
+
+[start=3]
+. Configure the application to deploy to the cluster closest to your data source.
+
+[start=4]
+. Review resource requirements for AI workloads:
+** GPU resources (if available)
+** Memory requirements
+** CPU requirements
+
+[start=5]
+. Monitor AI workload performance using RHACM observability features.
+
+[start=6]
+. Use placement rules to ensure AI workloads run on clusters with appropriate hardware capabilities.
+
+NOTE: AI workloads can be deployed alongside traditional container and VM workloads, providing flexibility in workload placement based on data locality and compute requirements.
+
+[[workload-observability]]
+
+=== Workload Observability
+
+Monitor and observe workloads across all clusters from a unified interface.
+
+*Procedure*
+
+[start=1]
+. Navigate to *Search* in the RHACM console.
+
+[start=2]
+. Use search queries to find workloads:
+** All deployments: `kind:Deployment`
+** Pods in a specific namespace: `kind:Pod namespace:cloud-sovereignty`
+** Services across clusters: `kind:Service`
+
+[start=3]
+. Navigate to *Applications* → *Topology* to visualize workload relationships.
+
+[start=4]
+. Review application health and status across clusters.
+
+[start=5]
+. Use the *Infrastructure* → *Clusters* view to see resource utilization per cluster.
+
+[start=6]
+. Navigate to individual cluster consoles for detailed metrics and logs.
+
+[start=7]
+. Integrate with external observability tools through RHACM's API and webhook capabilities.
+
+TIP: The unified observability provided by RHACM reduces the need to switch between multiple cluster consoles, improving operational efficiency.
+
+[[cross-cloud-networking]]
+
+== Cross-cloud Networking
+
+Establish network connectivity between workloads running on different cloud providers.
+
+NOTE: Cross-cloud networking enables workloads on AWS to communicate with workloads on OpenShift CNV, supporting distributed application architectures.
+
+*Procedure*
+
+[start=1]
+. Review network policies and connectivity requirements for your multi-cloud workloads.
+
+[start=2]
+. Navigate to *Search* to identify services that need cross-cluster connectivity.
+
+[start=3]
+. Use RHACM's network policy management to configure inter-cluster networking.
+
+[start=4]
+. Review network topology in the *Applications* → *Topology* view to visualize cross-cluster connections.
+
+[start=5]
+. Monitor network metrics and connectivity status across clusters.
+
+NOTE: Cross-cloud networking capabilities depend on your network configuration and may require additional setup such as VPN connections or cloud provider networking services.
+
+[[cross-cloud-migration]]
+
+== Cross-cloud Migration
+
+Migrate workloads and data from the AWS source cluster to the OpenShift CNV target cluster.
+
+*Procedure*
+
+[start=1]
+. Navigate to *Applications* in the RHACM console.
+
+[start=2]
+. Identify the application running on the AWS source cluster that needs to be migrated.
+
+[start=3]
+. Review application dependencies and data requirements:
+** Database connections
+** Storage requirements
+** Network dependencies
+** Resource requirements
+
+[start=4]
+. Create a migration plan using RHACM's application management features:
+** Export application manifests from the source cluster
+** Review and adapt manifests for the target cluster
+** Create new application placement targeting the OpenShift CNV cluster
+
+[start=5]
+. Use OpenShift GitOps to deploy the application to the target cluster:
+** Create a new ArgoCD application
+** Configure repository with migrated manifests
+** Set placement to target cluster
+
+[start=6]
+. Monitor the migration process:
+** Watch application deployment status
+** Verify data migration (if applicable)
+** Test application functionality on target cluster
+
+[start=7]
+. Once migration is complete, update placement rules to remove the source cluster.
+
+[start=8]
+. Verify application is running correctly on the target cluster.
+
+[start=9]
+. Use RHACM search to compare application state across clusters during migration.
+
+NOTE: Migration strategies may vary based on application type, data requirements, and business continuity needs. Always test migrations in non-production environments first.
+
+== Summary
+
+In this module, you've explored:
+
+* Multi-environment cluster management and observability
+* Creating and managing VM, container, and AI workloads across clusters
+* Cross-cloud networking concepts
+* Cross-cloud migration workflows
+
+These capabilities demonstrate how RHACM enables unified operations across diverse cloud environments while maintaining security and compliance standards.

@@ -24,13 +24,13 @@ Lets get started!
 
 [[cluster-lifecycle]]
 
-=== Working with Kubernetes Clusters and Cluster Lifecycle
+== Working with Kubernetes Clusters and Cluster Lifecycle
 
 At a high level, Cluster Lifecycle Management involves creating, upgrading, destroying, and importing clusters in a multi-cloud environment. This includes traditional OpenShift clusters, managed environments like ROSA or ARO, and specialized deployments such as Hosted Control Planes or Single-Node OpenShift.
 
 [[hosted-control-planes]]
 
-=== Working with Hosted Control Planes
+== Working with Hosted Control Planes
 
 Hosted Control Planes is a variant of Red Hat OpenShift that follows a distinct architectural model. In standalone OpenShift, the control and data planes are co-located, with a dedicated set of nodes hosting the control plane to ensure quorum, and the network stack is shared. While functional, this setup may not be ideal for large-scale, multi-cluster deployments.
 
