@@ -6,14 +6,10 @@ nav:
 
 asciidoc:
   attributes:
-    lab_name: 'Hands-on with Red Hat OpenShift Platform Plus'
+    # page-toclevels: -1               # <- This will remove the TOC that appear in the right sidebar at wider resolutions
+    lab_name: 'Sovereign Cloud'
     release-version: master
     page-pagination: true
-
-  extensions:
-  - id: dev-mode
-    require: ./content/lib/dev-mode.js
-    enabled: false
-  - ./content/lib/tab-block.js
-  - ./content/lib/remote-include-processor.js
-
+    page-links:
+    - url: https://redhat.com
+      text: Red Hat
