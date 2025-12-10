@@ -6,44 +6,26 @@
 
 [[hub-cluster-overview]]
 
-=== RHACM Management Cluster Overview
-
-[[managed-clusters]]
-
-=== Managed Clusters Overview
-
-[[cluster-management]]
-
-=== Cluster Management Operations
-
-[[cluster-observability]]
-
-=== Cluster Observability
-
-[[multi-env-workloads]]
-
-== Multi-environment Workload Creation, Management, and Observability
+=== RHACM Management Cluster Overview & import
 
 [[vm-workloads]]
 
 === Virtual Machine Workloads
 
+Deploy onto hub cluster
+
 [[container-workloads]]
 
-=== Container Workloads
+=== Container Workloads (Deploy via argocd onto hub cluster)
 
-[[ai-workloads]]
+[[cross-cloud-migration]]
 
-=== AI Workloads
+== Cross-cloud Migration
+
+Duplicate VM and container workloads onto AWS SNO cluster
 
 [[workload-observability]]
 
 === Workload Observability
 
-[[cross-cloud-networking]]
-
-== Cross-cloud Networking
-
-[[cross-cloud-migration]]
-
-== Cross-cloud Migration
+Observe workloads on hub cluster and AWS SNO cluster

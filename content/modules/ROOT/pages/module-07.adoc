@@ -19,7 +19,7 @@
 [[slsa-framework]]
 
 == Redeploy Workloads Following SLSA Framework
-
+ 
 [[slsa-overview]]
 
 === SLSA Framework Overview

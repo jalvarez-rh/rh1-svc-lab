@@ -2,40 +2,24 @@
 
 [[cluster-conformance]]
 
-== Cluster Conformance and Compliance Checks
-
-[[conformance-tests]]
-
-=== Running Conformance Tests
-
-[[compliance-checks]]
-
-=== Compliance Checks
-
-[[security-insights]]
-
 == Security and Environment Insights
 
 [[rhacs-insights]]
 
-=== RHACS Security Insights
+== ACS Compliance Operator Installation and Compliance Checks
 
-[[scs-insights]]
-
-=== SCS Environment Insights
-
-[[policy-creation]]
-
-== Policy Creation and Updates Based on Compliance Results
-
-[[analyze-compliance]]
+[[conformance-tests]]
 
 === Analyze Compliance Results
 
 [[create-policies]]
 
-=== Create Policies from Compliance Findings
+== Policy Creation and Updates Based on Compliance Results (ACM)
+
+[[analyze-compliance]]
+
+=== Update Policies Based on Results (namespace scoped)
 
 [[update-policies]]
 
-=== Update Policies Based on Results
+
