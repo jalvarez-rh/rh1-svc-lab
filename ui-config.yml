@@ -13,3 +13,7 @@ tabs:
   url: 'https://central-stackrox.${DOMAIN}'
 - name: Red Hat Quay
   url: 'https://quay.${DOMAIN}'
+# Single terminal
+- name: Bastion
+  path: /wetty
+  port: 443
