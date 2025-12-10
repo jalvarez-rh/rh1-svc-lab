@@ -1,374 +1,41 @@
 = Assurance
 
-In this module, you'll learn how to ensure cluster conformance, compliance, and security across your multi-cloud environment using Red Hat Advanced Cluster Management (RHACM), Red Hat Advanced Cluster Security (RHACS), and Red Hat Stackable Cloud Services (SCS).
-
 [[cluster-conformance]]
 
 == Cluster Conformance and Compliance Checks
-
-Ensuring clusters meet conformance standards and compliance requirements is critical for maintaining security and operational consistency across environments.
 
 [[conformance-tests]]
 
 === Running Conformance Tests
 
-Kubernetes conformance tests verify that clusters meet the Kubernetes API specification and behave consistently.
-
-*Procedure*
-
-[start=1]
-. Navigate to the RHACM console and select a managed cluster.
-
-[start=2]
-. Review cluster conformance status in the cluster details view.
-
-[start=3]
-. Navigate to *Governance* → *Policies* to view conformance-related policies.
-
-[start=4]
-. Review policy compliance status for conformance requirements:
-** API server configuration
-** Node configuration
-** Network plugin compatibility
-** Storage plugin compatibility
-
-[start=5]
-. Use RHACM's policy framework to enforce conformance standards:
-** Create policies based on Kubernetes conformance requirements
-** Apply policies to all managed clusters
-** Monitor policy compliance status
-
-NOTE: Conformance tests ensure that your clusters can run standard Kubernetes workloads and are compatible with the broader Kubernetes ecosystem.
-
 [[compliance-checks]]
 
 === Compliance Checks
-
-RHACM provides built-in compliance frameworks and the ability to create custom compliance policies.
-
-*Procedure*
-
-[start=1]
-. Navigate to *Governance* → *Policies* in the RHACM console.
-
-[start=2]
-. Review available compliance policy templates:
-** PCI-DSS
-** NIST
-** DISA-STIG
-** Custom compliance frameworks
-
-[start=3]
-. Navigate to *Governance* → *Policy reports* to view compliance status across clusters.
-
-[start=4]
-. Review compliance findings:
-** Policy violations
-** Remediation recommendations
-** Compliance scores per cluster
-
-[start=5]
-. Filter compliance reports by:
-** Cluster
-** Policy category
-** Severity
-** Compliance status
-
-[start=6]
-. Export compliance reports for audit purposes.
-
-[start=7]
-. Use RHACM search to find non-compliant resources:
-** Search: `policy:noncompliant`
-** Search: `compliance:failed`
-
-TIP: Regular compliance checks help maintain security posture and meet regulatory requirements across all environments.
 
 [[security-insights]]
 
 == Security and Environment Insights
 
-Gain visibility into security posture and environment health using RHACS and SCS insights.
-
 [[rhacs-insights]]
 
 === RHACS Security Insights
-
-Red Hat Advanced Cluster Security provides comprehensive security insights across all managed clusters.
-
-*Procedure*
-
-[start=1]
-. Access the RHACS console at: {acs_route}[window=blank]
-
-[start=2]
-. Navigate to the *Dashboard* to view security overview:
-** Risk score
-** Policy violations
-** Vulnerability counts
-** Compliance status
-
-[start=3]
-. Review *Vulnerability Management* → *Workload CVEs*:
-** Filter by cluster to see vulnerabilities per environment
-** Review critical and important vulnerabilities
-** Identify fixable vs. unfixable vulnerabilities
-
-[start=4]
-. Navigate to *Violations* to review security policy violations:
-** Runtime violations
-** Deploy-time violations
-** Build-time violations
-
-[start=5]
-. Use RHACS search to find security issues:
-** Search: `CVE:CVE-2023-XXXXX`
-** Search: `Deployment:app-name cluster:cluster-name`
-** Search: `Exposure Level:External`
-
-[start=6]
-. Review *Risk* → *Risk Priority* to identify highest-risk deployments.
-
-[start=7]
-. Navigate to *Compliance* to view compliance status:
-** Select compliance standard (e.g., NIST, PCI-DSS)
-** Review compliance findings per cluster
-** Identify remediation steps
-
-[start=8]
-. Export security reports for stakeholders:
-** Vulnerability reports
-** Compliance reports
-** Risk assessment reports
-
-NOTE: RHACS Central provides unified security visibility across all managed clusters, enabling consistent security posture management.
 
 [[scs-insights]]
 
 === SCS Environment Insights
 
-Red Hat Stackable Cloud Services provides insights into cloud-native service health and performance.
-
-*Procedure*
-
-[start=1]
-. Navigate to the OpenShift console and access SCS components.
-
-[start=2]
-. Review service health and status across managed clusters.
-
-[start=3]
-. Monitor resource utilization for cloud-native services:
-** Database services
-** Messaging services
-** Cache services
-** Storage services
-
-[start=4]
-. Review service metrics and performance data:
-** Request rates
-** Error rates
-** Latency metrics
-** Resource consumption
-
-[start=5]
-. Use SCS insights to identify:
-** Service dependencies
-** Performance bottlenecks
-** Resource optimization opportunities
-** Service health trends
-
-[start=6]
-. Integrate SCS insights with RHACM observability for unified visibility.
-
-NOTE: SCS provides managed cloud-native services that can be deployed and managed across multiple clusters, with centralized insights into service health and performance.
-
 [[policy-creation]]
 
 == Policy Creation and Updates Based on Compliance Results
-
-Create and update policies based on compliance findings to continuously improve security and compliance posture.
 
 [[analyze-compliance]]
 
 === Analyze Compliance Results
 
-Review compliance findings to identify areas requiring policy updates or remediation.
-
-*Procedure*
-
-[start=1]
-. Navigate to *Governance* → *Policy reports* in the RHACM console.
-
-[start=2]
-. Review compliance summary:
-** Overall compliance score
-** Number of violations per cluster
-** Policy categories with most violations
-** Trends over time
-
-[start=3]
-. Drill down into specific compliance findings:
-** Click on a policy violation to see details
-** Review affected resources
-** Understand violation context
-
-[start=4]
-. Navigate to RHACS → *Compliance* to review security compliance:
-** Select compliance framework
-** Review failed controls
-** Identify root causes
-
-[start=5]
-. Export compliance data for analysis:
-** Policy violation reports
-** Compliance scorecards
-** Remediation recommendations
-
-[start=6]
-. Use RHACM search to find resources with compliance issues:
-** Search: `policy:violation`
-** Search: `compliance:failed`
-** Search: `severity:critical`
-
-TIP: Regular analysis of compliance results helps identify patterns and systemic issues that require policy updates or additional controls.
-
 [[create-policies]]
 
 === Create Policies from Compliance Findings
 
-Create new policies or update existing ones based on compliance analysis results.
-
-*Procedure*
-
-[start=1]
-. Navigate to *Governance* → *Policies* → *Create policy* in the RHACM console.
-
-[start=2]
-. Review compliance findings to identify policy gaps:
-** Common violations
-** Missing controls
-** Inconsistent configurations
-
-[start=3]
-. Create a new policy based on compliance requirements:
-** Policy name: Descriptive name based on compliance finding
-** Policy category: Select appropriate category
-** Standards: Link to compliance framework
-
-[start=4]
-. Configure policy rules:
-** Define conditions that trigger violations
-** Set severity levels
-** Specify remediation steps
-
-[start=5]
-. Configure policy placement:
-** Apply to all clusters
-** Apply to specific cluster sets
-** Apply based on cluster labels
-
-[start=6]
-. Set policy enforcement:
-** Informative (report only)
-** Enforce (block non-compliant resources)
-
-[start=7]
-. Review policy before saving:
-** Verify rule logic
-** Check placement configuration
-** Validate remediation steps
-
-[start=8]
-. Save the policy and monitor its impact:
-** Review policy violations
-** Track compliance improvements
-** Adjust policy as needed
-
-[start=9]
-. Create policies in RHACS for security-specific requirements:
-** Navigate to RHACS → *Platform Configuration* → *Policy Management*
-** Clone existing policies or create new ones
-** Configure policy rules and enforcement
-
-NOTE: Policies should be created iteratively, starting with informative policies to understand impact before enforcing them.
-
 [[update-policies]]
 
 === Update Policies Based on Results
-
-Continuously improve policies based on compliance results and operational feedback.
-
-*Procedure*
-
-[start=1]
-. Navigate to *Governance* → *Policies* in the RHACM console.
-
-[start=2]
-. Identify policies that need updates:
-** High false-positive rates
-** Missing violations
-** Outdated requirements
-** Ineffective remediation steps
-
-[start=3]
-. Review policy violation history:
-** Analyze violation patterns
-** Identify policy gaps
-** Review remediation effectiveness
-
-[start=4]
-. Update policy rules:
-** Refine rule conditions
-** Adjust severity levels
-** Update remediation steps
-
-[start=5]
-. Update policy placement if needed:
-** Add or remove clusters
-** Adjust cluster set membership
-** Update label selectors
-
-[start=6]
-. Test policy updates:
-** Review policy preview
-** Check affected resources
-** Validate rule logic
-
-[start=7]
-. Save updated policy and monitor:
-** Track violation changes
-** Review compliance score improvements
-** Gather feedback from teams
-
-[start=8]
-. Document policy changes:
-** Update policy descriptions
-** Record change rationale
-** Update compliance documentation
-
-[start=9]
-. Use version control for policies:
-** Export policies to Git repository
-** Track policy changes over time
-** Enable policy-as-code workflows
-
-[start=10]
-. Integrate with OpenShift GitOps for policy management:
-** Store policies in Git repository
-** Use ArgoCD to sync policies
-** Enable automated policy updates
-
-TIP: Regular policy reviews and updates ensure that compliance controls remain effective and aligned with organizational requirements and industry standards.
-
-== Summary
-
-In this module, you've learned how to:
-
-* Run cluster conformance tests and compliance checks
-* Gain security insights using RHACS
-* Obtain environment insights using SCS
-* Create and update policies based on compliance results
-
-These capabilities enable continuous improvement of security and compliance posture across your multi-cloud environment, ensuring consistent governance and risk management.
-

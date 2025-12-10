@@ -1,386 +1,49 @@
 = Operations & Security
 
-In this module, you'll explore multi-environment cluster and workload management, observability, and cross-cloud operations. This module demonstrates how Red Hat Advanced Cluster Management (RHACM) enables unified operations across diverse cloud environments, including AWS and OpenShift CNV with Hosted Control Planes.
-
 [[multi-env-clusters]]
 
 == Multi-environment Cluster Creation, Management, and Observability
-
-This section covers managing clusters across multiple environments, including the RHACM hub cluster, AWS managed cluster, and OpenShift CNV managed cluster with Hosted Control Planes.
 
 [[hub-cluster-overview]]
 
 === RHACM Management Cluster Overview
 
-The hub cluster serves as the central management point for all managed clusters in your environment. It runs on OpenShift CNV and includes integrated services:
-
-* Red Hat Advanced Cluster Management (RHACM) - Multi-cluster lifecycle management
-* Red Hat Advanced Cluster Security (RHACS) Central - Centralized security management
-* Red Hat Stackable Cloud Services (SCS) - Cloud-native service management
-* OpenShift GitOps/ArgoCD - GitOps-based application delivery
-
-*Procedure*
-
-[start=1]
-. Access the RHACM console from the OpenShift console at: {openshift_console_url}
-
-[start=2]
-. Navigate to *Clusters* from the left navigation menu to view all managed clusters.
-
-[start=3]
-. Review the cluster inventory, which should include:
-** Hub cluster (local-cluster) - OpenShift CNV
-** AWS managed cluster - Source cluster with predeployed application
-** OpenShift CNV managed cluster - Target cluster using Hosted Control Planes
-
-NOTE: The hub cluster provides a unified view of all clusters regardless of their underlying infrastructure.
-
 [[managed-clusters]]
 
 === Managed Clusters Overview
-
-Your environment includes two managed clusters:
-
-*AWS Source Cluster*
-This cluster hosts a predeployed application connected to a cloud database. It serves as the source for data and workloads that may need to be migrated or replicated.
-
-*OpenShift CNV Target Cluster (HCP)*
-This cluster uses Hosted Control Planes architecture, providing a decoupled control plane for improved scalability and cost efficiency.
-
-*Procedure*
-
-[start=1]
-. In the RHACM console, click on the *AWS managed cluster* to view its details.
-
-[start=2]
-. Review the cluster status, including:
-** Cluster health
-** Node status
-** Resource utilization
-** Compliance status
-
-[start=3]
-. Click on the *OpenShift CNV managed cluster* to compare its configuration and status.
-
-[start=4]
-. Note the differences in infrastructure while observing the unified management interface.
 
 [[cluster-management]]
 
 === Cluster Management Operations
 
-RHACM provides comprehensive cluster lifecycle management capabilities across all environments.
-
-*Procedure*
-
-[start=1]
-. Navigate to *Clusters* → *All Clusters* in the RHACM console.
-
-[start=2]
-. Select multiple clusters using the checkboxes to perform bulk operations.
-
-[start=3]
-. Explore cluster actions available from the action menu:
-** View cluster details
-** Edit cluster labels
-** View cluster YAML
-** Access cluster console
-** View cluster logs
-
-[start=4]
-. Use the search and filter capabilities to find specific clusters based on:
-** Cluster name
-** Labels
-** Status
-** Provider type
-
-[start=5]
-. Navigate to *Infrastructure* → *Clusters* → *Cluster sets* to view how clusters are organized.
-
-NOTE: Cluster sets help organize clusters into logical groups for easier management and policy application.
-
 [[cluster-observability]]
 
 === Cluster Observability
-
-Gain insights into cluster health, performance, and resource utilization across all managed clusters.
-
-*Procedure*
-
-[start=1]
-. Navigate to *Infrastructure* → *Clusters* in the RHACM console.
-
-[start=2]
-. Click on a managed cluster to view detailed metrics and observability data.
-
-[start=3]
-. Review the observability dashboard showing:
-** Cluster health status
-** Node status and capacity
-** Resource usage (CPU, memory, storage)
-** Network metrics
-** Application workload distribution
-
-[start=4]
-. Navigate to *Search* to query resources across all clusters:
-** Search for deployments: `kind:Deployment`
-** Search for pods: `kind:Pod cluster:<cluster-name>`
-** Search for services: `kind:Service`
-
-[start=5]
-. Use the *Search* feature to find resources across multiple clusters simultaneously.
-
-[start=6]
-. Navigate to *Infrastructure* → *Clusters* → *Cluster overview* to see a unified view of all cluster metrics.
-
-TIP: The observability features in RHACM provide a single pane of glass for monitoring multi-cloud environments, reducing operational complexity.
 
 [[multi-env-workloads]]
 
 == Multi-environment Workload Creation, Management, and Observability
 
-This section demonstrates creating and managing different types of workloads (VMs, containers, and AI workloads) across multiple environments.
-
 [[vm-workloads]]
 
 === Virtual Machine Workloads
-
-OpenShift Virtualization enables you to run and manage virtual machines alongside container workloads using Kubernetes-native APIs.
-
-*Procedure*
-
-[start=1]
-. Navigate to *Infrastructure* → *Virtual Machines* in the RHACM console.
-
-[start=2]
-. Review existing VMs across all managed clusters.
-
-[start=3]
-. To create a new VM, navigate to *Applications* → *Create application*.
-
-[start=4]
-. Select *ArgoCD ApplicationSet-Push Model*.
-
-[start=5]
-. Configure the VM application:
-** Name: `cloud-sovereignty-vm`
-** Argo Server: `openshift-gitops`
-** Repository URL: `https://github.com/example/kubevirt-gitops`
-** Path: `vms/rhel9-vm`
-** Destination namespace: `default`
-
-[start=6]
-. Configure placement to target the OpenShift CNV managed cluster.
-
-[start=7]
-. Submit the application and monitor the VM creation in the topology view.
-
-[start=8]
-. Once created, navigate to *Infrastructure* → *Virtual Machines* to interact with the VM.
-
-[start=9]
-. Use VM actions to:
-** Start/Stop the VM
-** Access the VM console
-** View VM metrics
-** Edit VM configuration
-
-NOTE: VMs can be managed using the same GitOps workflows as container workloads, providing consistency across workload types.
 
 [[container-workloads]]
 
 === Container Workloads
 
-Deploy and manage containerized applications across multiple clusters using RHACM and OpenShift GitOps.
-
-*Procedure*
-
-[start=1]
-. Navigate to *Applications* → *Create application*.
-
-[start=2]
-. Select *ArgoCD ApplicationSet-Push Model*.
-
-[start=3]
-. Configure a multi-cluster application:
-** Name: `cloud-sovereignty-app`
-** Argo Server: `openshift-gitops`
-** Repository URL: `https://github.com/example/multi-cluster-app`
-** Path: `manifests`
-** Destination namespace: `cloud-sovereignty`
-
-[start=4]
-. Configure placement rules to deploy to multiple clusters:
-** Add placement for AWS cluster
-** Add placement for OpenShift CNV cluster
-
-[start=5]
-. Review the application topology to see deployments across clusters.
-
-[start=6]
-. Navigate to *Search* to query the application resources:
-** Search: `kind:Deployment app=cloud-sovereignty-app`
-
-[start=7]
-. View application resources across clusters in the unified search results.
-
-[start=8]
-. Use the *Topology* view to visualize application relationships and dependencies.
-
-TIP: RHACM enables you to deploy the same application to multiple clusters with cluster-specific configurations using placement rules and cluster labels.
-
 [[ai-workloads]]
 
 === AI Workloads
-
-Deploy and manage AI/ML workloads across your multi-cloud environment, demonstrating the flexibility of bringing compute to your data.
-
-*Procedure*
-
-[start=1]
-. Navigate to *Applications* → *Create application*.
-
-[start=2]
-. Create an AI workload application:
-** Name: `ai-inference-service`
-** Repository: `https://github.com/example/ai-workloads`
-** Path: `inference-service`
-
-[start=3]
-. Configure the application to deploy to the cluster closest to your data source.
-
-[start=4]
-. Review resource requirements for AI workloads:
-** GPU resources (if available)
-** Memory requirements
-** CPU requirements
-
-[start=5]
-. Monitor AI workload performance using RHACM observability features.
-
-[start=6]
-. Use placement rules to ensure AI workloads run on clusters with appropriate hardware capabilities.
-
-NOTE: AI workloads can be deployed alongside traditional container and VM workloads, providing flexibility in workload placement based on data locality and compute requirements.
 
 [[workload-observability]]
 
 === Workload Observability
 
-Monitor and observe workloads across all clusters from a unified interface.
-
-*Procedure*
-
-[start=1]
-. Navigate to *Search* in the RHACM console.
-
-[start=2]
-. Use search queries to find workloads:
-** All deployments: `kind:Deployment`
-** Pods in a specific namespace: `kind:Pod namespace:cloud-sovereignty`
-** Services across clusters: `kind:Service`
-
-[start=3]
-. Navigate to *Applications* → *Topology* to visualize workload relationships.
-
-[start=4]
-. Review application health and status across clusters.
-
-[start=5]
-. Use the *Infrastructure* → *Clusters* view to see resource utilization per cluster.
-
-[start=6]
-. Navigate to individual cluster consoles for detailed metrics and logs.
-
-[start=7]
-. Integrate with external observability tools through RHACM's API and webhook capabilities.
-
-TIP: The unified observability provided by RHACM reduces the need to switch between multiple cluster consoles, improving operational efficiency.
-
 [[cross-cloud-networking]]
 
 == Cross-cloud Networking
 
-Establish network connectivity between workloads running on different cloud providers.
-
-NOTE: Cross-cloud networking enables workloads on AWS to communicate with workloads on OpenShift CNV, supporting distributed application architectures.
-
-*Procedure*
-
-[start=1]
-. Review network policies and connectivity requirements for your multi-cloud workloads.
-
-[start=2]
-. Navigate to *Search* to identify services that need cross-cluster connectivity.
-
-[start=3]
-. Use RHACM's network policy management to configure inter-cluster networking.
-
-[start=4]
-. Review network topology in the *Applications* → *Topology* view to visualize cross-cluster connections.
-
-[start=5]
-. Monitor network metrics and connectivity status across clusters.
-
-NOTE: Cross-cloud networking capabilities depend on your network configuration and may require additional setup such as VPN connections or cloud provider networking services.
-
 [[cross-cloud-migration]]
 
 == Cross-cloud Migration
-
-Migrate workloads and data from the AWS source cluster to the OpenShift CNV target cluster.
-
-*Procedure*
-
-[start=1]
-. Navigate to *Applications* in the RHACM console.
-
-[start=2]
-. Identify the application running on the AWS source cluster that needs to be migrated.
-
-[start=3]
-. Review application dependencies and data requirements:
-** Database connections
-** Storage requirements
-** Network dependencies
-** Resource requirements
-
-[start=4]
-. Create a migration plan using RHACM's application management features:
-** Export application manifests from the source cluster
-** Review and adapt manifests for the target cluster
-** Create new application placement targeting the OpenShift CNV cluster
-
-[start=5]
-. Use OpenShift GitOps to deploy the application to the target cluster:
-** Create a new ArgoCD application
-** Configure repository with migrated manifests
-** Set placement to target cluster
-
-[start=6]
-. Monitor the migration process:
-** Watch application deployment status
-** Verify data migration (if applicable)
-** Test application functionality on target cluster
-
-[start=7]
-. Once migration is complete, update placement rules to remove the source cluster.
-
-[start=8]
-. Verify application is running correctly on the target cluster.
-
-[start=9]
-. Use RHACM search to compare application state across clusters during migration.
-
-NOTE: Migration strategies may vary based on application type, data requirements, and business continuity needs. Always test migrations in non-production environments first.
-
-== Summary
-
-In this module, you've explored:
-
-* Multi-environment cluster management and observability
-* Creating and managing VM, container, and AI workloads across clusters
-* Cross-cloud networking concepts
-* Cross-cloud migration workflows
-
-These capabilities demonstrate how RHACM enables unified operations across diverse cloud environments while maintaining security and compliance standards.

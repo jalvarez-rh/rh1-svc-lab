@@ -1,297 +1,29 @@
 = Technology & Supply Chain
 
-In this module, you'll explore Red Hat's Secure Supply Chain capabilities and learn how to redeploy workloads following the SLSA (Supply-chain Levels for Software Artifacts) framework. This module demonstrates how to build trust and security into your software supply chain using Red Hat Quay, OpenShift GitOps, and Red Hat Advanced Cluster Management.
-
 [[secure-supply-chain]]
 
 == Red Hat's Secure Supply Chain
-
-Red Hat's Secure Supply Chain provides end-to-end security for container images and applications, from build to deployment, ensuring integrity and authenticity throughout the software lifecycle.
 
 [[supply-chain-overview]]
 
 === Secure Supply Chain Overview
 
-A secure supply chain ensures that software artifacts are built, stored, and deployed with integrity, authenticity, and traceability. Red Hat's solution integrates multiple components:
-
-* Red Hat Quay - Container registry with vulnerability scanning and image signing
-* OpenShift GitOps/ArgoCD - GitOps-based deployment with policy enforcement
-* Red Hat Advanced Cluster Management - Multi-cluster governance and policy management
-* Red Hat Advanced Cluster Security - Runtime and deploy-time security enforcement
-
-*Procedure*
-
-[start=1]
-. Review your supply chain components:
-** Red Hat Quay registry: {quay_console_url}[window=blank]
-** OpenShift GitOps: Available in the OpenShift console
-** RHACM: Available in the OpenShift console
-** RHACS: {acs_route}[window=blank]
-
-[start=2]
-. Understand the supply chain flow:
-** Source code → Build → Scan → Sign → Store → Deploy → Monitor
-
-[start=3]
-. Navigate to Red Hat Quay to review container images:
-** Access: {quay_console_url}[window=blank]
-** Review image repositories
-** Check vulnerability scanning status
-** Review image signing capabilities
-
-NOTE: A secure supply chain provides multiple layers of security, from source code to runtime, ensuring that only trusted and verified artifacts are deployed.
-
 [[quay-integration]]
 
 === Quay Integration
-
-Red Hat Quay provides container registry capabilities with built-in security features including vulnerability scanning, image signing, and access control.
-
-*Procedure*
-
-[start=1]
-. Access Red Hat Quay console at: {quay_console_url}[window=blank]
-
-[start=2]
-. Review image repositories:
-** Navigate to repositories
-** Review image tags and versions
-** Check vulnerability scan status
-
-[start=3]
-. Explore Quay security features:
-** Vulnerability scanning results
-** Image security policies
-** Repository access controls
-** Image signing and verification
-
-[start=4]
-. Review image scanning results:
-** Click on an image repository
-** Navigate to *Tags* tab
-** Review vulnerability counts and severity
-** Check fixable vs. unfixable vulnerabilities
-
-[start=5]
-. Configure image security policies:
-** Navigate to repository *Settings*
-** Review security scanning configuration
-** Configure vulnerability notification rules
-** Set up image expiration policies
-
-[start=6]
-. Integrate Quay with RHACS:
-** Verify RHACS can pull images from Quay
-** Review image scanning in RHACS
-** Compare vulnerability data between Quay and RHACS
-
-[start=7]
-. Use image signing for supply chain security:
-** Review signing key configuration
-** Verify signed images
-** Understand signing workflow
-
-NOTE: Quay's vulnerability scanning and image signing capabilities provide critical security controls in the supply chain, ensuring that only secure and verified images are used.
 
 [[gitops-integration]]
 
 === OpenShift GitOps/ArgoCD Integration
 
-OpenShift GitOps provides GitOps-based deployment capabilities, ensuring that deployments are traceable, auditable, and policy-compliant.
-
-*Procedure*
-
-[start=1]
-. Access OpenShift GitOps from the OpenShift console:
-** Navigate to *Operators* → *Installed Operators*
-** Find *Red Hat OpenShift GitOps*
-** Access the ArgoCD console
-
-[start=2]
-. Review GitOps applications:
-** List all ArgoCD applications
-** Review application sync status
-** Check application health
-
-[start=3]
-. Explore GitOps security features:
-** Repository access controls
-** RBAC configuration
-** Sync policy enforcement
-** Application health monitoring
-
-[start=4]
-. Review application manifests in Git:
-** Navigate to application source repository
-** Review Kubernetes manifests
-** Check for security best practices
-
-[start=5]
-. Configure GitOps policies:
-** Set sync policies (auto-sync, manual sync)
-** Configure sync windows
-** Set up sync hooks
-** Configure retry policies
-
-[start=6]
-. Integrate GitOps with RHACM:
-** Review RHACM application management
-** Verify ArgoCD server integration
-** Check application placement rules
-
-[start=7]
-. Use GitOps for supply chain traceability:
-** Review Git commit history
-** Track application changes
-** Audit deployment history
-** Verify manifest integrity
-
-[start=8]
-. Configure GitOps with policy enforcement:
-** Integrate with RHACM policies
-** Use RHACS deploy-time policies
-** Enforce security policies in GitOps workflow
-
-NOTE: GitOps provides declarative, version-controlled deployment workflows that enhance supply chain security through traceability and auditability.
-
 [[slsa-framework]]
 
 == Redeploy Workloads Following SLSA Framework
-
-The SLSA (Supply-chain Levels for Software Artifacts) framework provides a security framework for software supply chains, ensuring that artifacts are built and deployed with integrity and authenticity.
 
 [[slsa-overview]]
 
 === SLSA Framework Overview
 
-SLSA defines four levels of supply chain security, each building on the previous level:
-
-*Level 1: Documentation*
-- Build process must be scripted
-- Provenance must be available
-
-*Level 2: Version Control and Hosted Builds*
-- Source code in version control
-- Builds run on hosted build service
-- Provenance includes build instructions
-
-*Level 3: Hardened Builds*
-- Source and build platforms meet specific requirements
-- Non-falsifiable provenance
-- Dependencies are fully verified
-
-*Level 4: Highest Levels of Confidence*
-- Two-person review of all changes
-- Cryptographic signatures for provenance
-- Service is publicly auditable
-
-*Procedure*
-
-[start=1]
-. Understand SLSA requirements for your workloads:
-** Review SLSA documentation
-** Identify current supply chain level
-** Plan improvements to reach higher levels
-
-[start=2]
-. Review existing workload deployment process:
-** Source code management
-** Build process
-** Image storage
-** Deployment process
-
-[start=3]
-. Map current process to SLSA levels:
-** Identify gaps
-** Plan improvements
-** Prioritize enhancements
-
-NOTE: SLSA provides a clear framework for improving supply chain security, with each level providing additional security guarantees.
-
 [[redeploy-workloads]]
 
 === Redeploy Earlier Workloads
-
-Redeploy existing workloads following SLSA framework principles, ensuring improved security and traceability.
-
-*Procedure*
-
-[start=1]
-. Identify workloads to redeploy:
-** Navigate to RHACM → *Applications*
-** Review existing applications
-** Select application for redeployment
-
-[start=2]
-. Review current deployment configuration:
-** Check application manifests in Git
-** Review image sources
-** Verify build process documentation
-
-[start=3]
-. Improve build process for SLSA compliance:
-** Ensure builds are scripted and automated
-** Document build process
-** Store build scripts in version control
-
-[start=4]
-. Update image build process:
-** Use Quay for image storage
-** Enable vulnerability scanning
-** Configure image signing (if available)
-** Document image provenance
-
-[start=5]
-. Update GitOps configuration:
-** Ensure all manifests are in Git
-** Review manifest structure
-** Add provenance information
-** Document deployment process
-
-[start=6]
-. Create SLSA-compliant deployment:
-** Export current application configuration
-** Update manifests with SLSA metadata
-** Add provenance information
-** Update build documentation
-
-[start=7]
-. Redeploy application using GitOps:
-** Update Git repository with new manifests
-** Trigger ArgoCD sync
-** Monitor deployment process
-** Verify application health
-
-[start=8]
-. Verify SLSA compliance:
-** Review provenance information
-** Verify image signatures
-** Check build documentation
-** Validate deployment traceability
-
-[start=9]
-. Document SLSA improvements:
-** Record SLSA level achieved
-** Document security enhancements
-** Update compliance documentation
-
-[start=10]
-. Monitor redeployed workloads:
-** Review application health
-** Check security posture
-** Monitor compliance status
-** Track improvements
-
-NOTE: Redeploying workloads with SLSA compliance improves supply chain security and provides better traceability and auditability.
-
-== Summary
-
-In this module, you've learned how to:
-
-* Understand Red Hat's Secure Supply Chain components
-* Integrate Quay for secure container image management
-* Use OpenShift GitOps for secure, traceable deployments
-* Redeploy workloads following SLSA framework principles
-
-These capabilities enable you to build a secure, traceable software supply chain that meets industry standards and provides confidence in your software artifacts from build to deployment.
-
