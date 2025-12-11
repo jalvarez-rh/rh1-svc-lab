@@ -10,7 +10,7 @@
 
 NOTE: The Red Hat Advanced Cluster Management for Kubernetes (RHACM) Console is now integrated with OpenShift Console, to access it please select *All Clusters* from the dropdown menu once you log in. 
 
-Your OpenShift cluster console is available at: {openshift_console_url}
+Your OpenShift cluster console is available in the right panel. In case you want to open it in another window it is here: {openshift_cluster_console_url}[window=blank]
 
 Administrator login is available with:
 
@@ -23,7 +23,7 @@ Administrator login is available with:
 [[acs]]
 === RHACS console access
 
-Your RHACS Console is available at: {acs_route}[window=blank]
+Your RHACS Console is available in the right panel. In case you want to open it in another window it is here:  {acs_route}[window=blank]
 
 Administrator login is available with:
 
