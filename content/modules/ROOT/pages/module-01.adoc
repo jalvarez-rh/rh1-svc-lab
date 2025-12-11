@@ -16,8 +16,8 @@ Administrator login is available with:
 
 [cols="1,1"]
 |===
-| *Username:* | kubeadmin
-| *Password:* | {openshift_kubeadmin_password}
+| *Username:* | {openshift_cluster_admin_username}
+| *Password:* | {openshift_cluster_admin_password}
 |===
 
 [[acs]]
