@@ -2,19 +2,128 @@
 
 [[multi-env-clusters]]
 
-== Multi-environment Cluster Creation, Management, and Observability
+== Multi-environment OCP Cluster & Virtual Machine Creation & Management.
 
-[[hub-cluster-overview]]
+*Need intro blurb here* 
 
-=== RHACM Management Cluster Overview & import
+== Create and Manage Kubernetes Clusters
 
-[[vm-workloads]]
+Red Hat Advanced Cluster Management for Kubernetes (RHACM) simplifies the deployment and management of additional clusters. While Red Hat OpenShift offers easy deployment methods like IPI and the Assisted Installer, RHACM takes it a step further, allowing you to deploy new clusters with just a few clicks using the cluster creation wizard.
 
-=== Virtual Machine Workloads
+From the Clusters screen, you can quickly see how simple it is to deploy a new cluster.
 
-Deploy onto hub cluster
+*Procedure*
 
-[[container-workloads]]
+[start=1]
+. Click on the *Create cluster* button in the center of the screen:
+
+image::103-create-cluster.png[link=self, window=blank, width=100%, Create Cluster]
+
+NOTE: You’ll notice that the only option already highlighted is Red Hat OpenShift Virtualization, indicating that your credentials are saved. You will use this to deploy the new cluster, but feel free to explore the window to see other available cluster types.
+
+[start=2]
+. Click on the Red Hat OpenShift Virtualization button.
+
+image::104-aws-credentials.png[link=self, window=blank, width=100%, AWS Credentials]
+
+You will see one options for the control plane type: 
+
+* Hosted
+
+
+[start=3]
+. Click on the *hosted* option.
+. Leave the infrastructure Provider Credentials as *hcp* 
+. Name your cluster *hcp-emea*, and verify that is on the *clusters* space for the hosted cluster namespace
+. Select *default* for the Cluster Set
+. Next, select the release image *OpenShift 4.19.21*. 
+. Sekect *single replica* for both the Controller availability policy and the Infrastructure availability policy. 
+. Create a label called *location=emea* - we will use this later on for other exercises.
+. Click on *Next* to continue.
+
+image::105-create-cluster-details.png[link=self, window=blank, width=100%, Create Cluster Details]
+
+On the next screen You can customize the name for the node pools, the amount of pool replicas, cores and memory, enter the name *hcp-emea* for the Node pool name and leave the other details as default.
+
+[start=11]
+. Click on *Next* to proceed.
+
+image::106-create-cluster-nodepools.png[link=self, window=blank, width=100%, Create Cluster NodePools]
+
+The next screen allows you to configure storage mappings type to use and it's associated variables, we will leave these as default as these have already been configured on the backend.
+
+[start=12]
+. Click on *Next* to proceed.
+
+image::107-create-cluster-networking.png[link=self, window=blank, width=100%, Create Cluster Networking]
+
+[start=13]
+. Click *Next* on each screen to proceed to the final *Review and Create* screen.
+
+You will see a description of the cluster you are creating.
+
+[start=14]
+. Click the blue *Create* button to start the deployment process.
+
+image::108-create-cluster-summary-create.png[link=self, window=blank, width=100%, Create Cluster Summary Page]
+
+[start=15]
+. Let the UI do it's thing. You should see the Cluster creation process starting in the UI.
+
+image::03-cluster-creation.png[link=self, window=blank, width=100%, View New Cluster]
+
+NOTE: Deploying this Hosted Control Plane (HCP) cluster will take about 5 to 10 minutes. You’ll continue the lab while waiting for this cluster to provision, we will use it later on.
+
+[[create-manage-vms]]
+
+== Create and Manage Virtual Machine
+
+In traditional environments, administrators often struggle with context switching—jumping between virtualization hypervisors to manage legacy workloads and Kubernetes consoles to manage modern applications. This fragmentation slows down operations and complicates governance.
+
+In this exercise, you will bridge that divide. You will utilize Red Hat Advanced Cluster Management (RHACM) to interact with a managed OpenShift cluster enabled with OpenShift Virtualization. Rather than logging directly into the managed cluster, you will orchestrate the VM lifecycle from the central Hub.
+
+By the end of this exercise, you will:
+
+. Navigate the RHACM Search interface to locate Virtual Machine resources across the fleet.
+. Provision a new Virtual Machine using the RHACM Creation Wizard.
+. Perform Day 2 operations (Stop, Start, Migrate) directly from the multi-cluster view.
+
+
+=== Deploy a Virtual Machines Using the RHACM console
+
+*Procedure*
+
+[start=1]
+. On the left switcher use the drop down to select *Fleet Virtualization*
+
+image::1-dropdown-menu.png[link=self, window=blank, width=100%, Create VM]
+
+. Click the *create* dropdown select *From Template*
+
+image::1-create-menu.png[link=self, window=blank, width=100%, Create VM]
+
+. Under default template select *Red Hat Enterprise Linux 9 VM* 
+
+image::1-template-menu.png[link=self, window=blank, width=100%, Create VM]
+
+NOTE: Notice all of the avaiable templates to use, Windows VMs are fully supported as well.
+
+. Under Virtual machine name, enter *rhel9-lab-vm* and Leave all the options as Disk size, Disk Source.
+
+image::1-vm-name.png[link=self, window=blank, width=100%, Create VM]
+
+NOTE: Please notice all of the avaiable options to configure the VM with, these will change depending on your operating system
+
+. Click *Quick create Virtual Machine* and watch for progress, this should take a couple of minutes to complete. 
+
+. Once completed you will see the live console as well as stats about your VM.
+
+image::1-vm-finish.png[link=self, window=blank, width=100%, Create VM]
+
+Feel free to explore the avaiable management screens for VMs, from Metrics to Console to Snapshots and more! 
+
+NOTE: *UI or GitOps—The Choice is Yours* While this lab focuses on the graphical capabilities of the RHACM console, remember that Virtual Machines in OpenShift are fundamentally Kubernetes objects.You can just as easily define your VMs as code (YAML) and deploy them using Red Hat OpenShift GitOps (ArgoCD). RHACM supports both workflows: use the UI for quick administration and discovery, or use GitOps for a fully declarative, audit-ready production pipeline.
+
 
 === Container Workloads (Deploy via argocd onto hub cluster)
 
