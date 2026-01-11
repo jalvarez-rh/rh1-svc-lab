@@ -161,18 +161,16 @@ SCAN_CONFIG_RESPONSE=$(curl -k -s -w "\n%{http_code}" --connect-timeout 15 --max
         \"profiles\": [
             \"ocp4-cis\",
             \"ocp4-cis-node\",
-            \"ocp4-moderate\",
-            \"ocp4-moderate-node\",
             \"ocp4-e8\",
             \"ocp4-high\",
             \"ocp4-high-node\",
+            \"ocp4-moderate\",
+            \"ocp4-moderate-node\",
             \"ocp4-nerc-cip\",
             \"ocp4-nerc-cip-node\",
             \"ocp4-pci-dss\",
             \"ocp4-pci-dss-node\",
             \"ocp4-stig\",
-            \"ocp4-bsi\",
-            \"ocp4-pci-dss-4-0\"
         ],
         \"scanSchedule\": {
             \"intervalType\": \"DAILY\",
