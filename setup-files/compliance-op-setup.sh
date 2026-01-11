@@ -27,8 +27,10 @@ error() {
 
 # Load ROX_API_TOKEN and ROX_CENTRAL_ADDRESS from ~/.bashrc
 if [ -f ~/.bashrc ]; then
-    # Source bashrc to get the variables
+    # Temporarily disable unbound variable check when sourcing bashrc
+    set +u
     source ~/.bashrc
+    set -u
 fi
 
 # Verify required variables are set
@@ -176,7 +178,7 @@ fi
 # Create compliance scan configuration
 log "Creating compliance scan configuration 'acs-catch-all'..."
 set +e
-SCAN_CONFIG_RESPONSE=$(curl -k -s --connect-timeout 15 --max-time 120 -X POST \
+SCAN_CONFIG_RESPONSE=$(curl -k -s -w "\n%{http_code}" --connect-timeout 15 --max-time 120 -X POST \
     -H "Authorization: Bearer $ROX_API_TOKEN" \
     -H "Content-Type: application/json" \
     --data-raw "{
@@ -214,49 +216,84 @@ SCAN_CONFIG_RESPONSE=$(curl -k -s --connect-timeout 15 --max-time 120 -X POST \
 SCAN_CREATE_EXIT_CODE=$?
 set -e
 
+# Extract HTTP status code (last line) and response body (all but last line)
+HTTP_CODE=$(echo "$SCAN_CONFIG_RESPONSE" | tail -1)
+SCAN_CONFIG_BODY=$(echo "$SCAN_CONFIG_RESPONSE" | sed '$d')
+
 if [ $SCAN_CREATE_EXIT_CODE -ne 0 ]; then
-    error "Failed to create compliance scan configuration (exit code: $SCAN_CREATE_EXIT_CODE). Response: ${SCAN_CONFIG_RESPONSE:0:500}"
+    error "Failed to create compliance scan configuration (exit code: $SCAN_CREATE_EXIT_CODE). HTTP Code: ${HTTP_CODE}. Response: ${SCAN_CONFIG_BODY:0:500}"
 fi
 
-if [ -z "$SCAN_CONFIG_RESPONSE" ]; then
-    error "Empty response from scan configuration creation API"
+if [ -z "$SCAN_CONFIG_BODY" ]; then
+    error "Empty response from scan configuration creation API. HTTP Code: ${HTTP_CODE}"
 fi
 
-# Check for errors
-if echo "$SCAN_CONFIG_RESPONSE" | grep -qi "ProfileBundle.*still being processed"; then
+# Log the full response for debugging
+log "API Response (HTTP ${HTTP_CODE}): ${SCAN_CONFIG_BODY:0:500}"
+
+# Check HTTP status code
+if [ "$HTTP_CODE" -lt 200 ] || [ "$HTTP_CODE" -ge 300 ]; then
+    error "Failed to create scan configuration. HTTP Status: ${HTTP_CODE}. Response: ${SCAN_CONFIG_BODY:0:500}"
+fi
+
+# Check for errors in response
+if echo "$SCAN_CONFIG_BODY" | grep -qi "ProfileBundle.*still being processed"; then
     warning "Scan creation failed: ProfileBundle is still being processed"
     log "Please wait for ProfileBundles to be ready and retry."
     log "Check status: oc get profilebundle -n openshift-compliance"
     error "Cannot create scan: ProfileBundles are still being processed."
 fi
 
-if ! echo "$SCAN_CONFIG_RESPONSE" | jq . >/dev/null 2>&1; then
-    if echo "$SCAN_CONFIG_RESPONSE" | grep -qi "ProfileBundle"; then
+if echo "$SCAN_CONFIG_BODY" | grep -qi "error\|failed\|invalid"; then
+    warning "API returned an error response:"
+    echo "$SCAN_CONFIG_BODY" | head -20
+    error "Scan creation failed. See error above."
+fi
+
+if ! echo "$SCAN_CONFIG_BODY" | jq . >/dev/null 2>&1; then
+    if echo "$SCAN_CONFIG_BODY" | grep -qi "ProfileBundle"; then
         warning "Scan creation failed with ProfileBundle-related error:"
-        echo "$SCAN_CONFIG_RESPONSE" | head -20
+        echo "$SCAN_CONFIG_BODY" | head -20
         error "ProfileBundle error detected. See above for details."
     else
-        error "Invalid JSON response from scan configuration creation API. Response: ${SCAN_CONFIG_RESPONSE:0:300}"
+        warning "Response is not valid JSON. Full response:"
+        echo "$SCAN_CONFIG_BODY"
+        error "Invalid JSON response from scan configuration creation API."
     fi
 fi
 
 log "✓ Compliance scan configuration created successfully"
 
-# Get the scan configuration ID
-SCAN_CONFIG_ID=$(echo "$SCAN_CONFIG_RESPONSE" | jq -r '.id // .configuration.id // empty' 2>/dev/null)
+# Get the scan configuration ID from response
+SCAN_CONFIG_ID=$(echo "$SCAN_CONFIG_BODY" | jq -r '.id // .configuration.id // empty' 2>/dev/null)
 
-if [ -z "$SCAN_CONFIG_ID" ] || [ "$SCAN_CONFIG_ID" = "null" ]; then
-    # Try to get it from the configurations list
-    sleep 2
-    set +e
-    CONFIGS_RESPONSE=$(curl -k -s --connect-timeout 15 --max-time 120 -X GET \
-        -H "Authorization: Bearer $ROX_API_TOKEN" \
-        -H "Content-Type: application/json" \
-        "$ROX_ENDPOINT/v2/compliance/scan/configurations" 2>&1)
-    set -e
+# Verify the scan was actually created by checking the list
+log "Verifying scan configuration was created..."
+sleep 2
+set +e
+VERIFY_RESPONSE=$(curl -k -s --connect-timeout 15 --max-time 120 -X GET \
+    -H "Authorization: Bearer $ROX_API_TOKEN" \
+    -H "Content-Type: application/json" \
+    "$ROX_ENDPOINT/v2/compliance/scan/configurations" 2>&1)
+VERIFY_EXIT_CODE=$?
+set -e
+
+if [ $VERIFY_EXIT_CODE -eq 0 ] && echo "$VERIFY_RESPONSE" | jq . >/dev/null 2>&1; then
+    VERIFY_SCAN=$(echo "$VERIFY_RESPONSE" | jq -r '.configurations[]? | select(.scanName == "acs-catch-all") | .id' 2>/dev/null | head -1)
     
-    if echo "$CONFIGS_RESPONSE" | jq . >/dev/null 2>&1; then
-        SCAN_CONFIG_ID=$(echo "$CONFIGS_RESPONSE" | jq -r '.configurations[]? | select(.scanName == "acs-catch-all") | .id' 2>/dev/null | head -1)
+    if [ -n "$VERIFY_SCAN" ] && [ "$VERIFY_SCAN" != "null" ]; then
+        SCAN_CONFIG_ID="$VERIFY_SCAN"
+        log "✓ Scan configuration verified (ID: $SCAN_CONFIG_ID)"
+    else
+        warning "Scan configuration 'acs-catch-all' not found in verification check"
+        warning "Available scan configurations:"
+        echo "$VERIFY_RESPONSE" | jq -r '.configurations[]? | "  - \(.scanName) (ID: \(.id))"' 2>/dev/null || echo "  (none found)"
+        error "Scan configuration was not created successfully. Please check the API response above."
+    fi
+else
+    warning "Could not verify scan configuration (this may be non-fatal)"
+    if [ -n "$SCAN_CONFIG_ID" ] && [ "$SCAN_CONFIG_ID" != "null" ]; then
+        log "Using scan configuration ID from creation response: $SCAN_CONFIG_ID"
     fi
 fi
 
