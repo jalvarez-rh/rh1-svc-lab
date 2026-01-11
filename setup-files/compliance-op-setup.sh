@@ -158,16 +158,10 @@ SCAN_CONFIG_PAYLOAD=$(jq -n \
             oneTimeScan: false,
             profiles: [
                 "ocp4-cis",
-                "ocp4-cis-node",
                 "ocp4-e8",
-                "ocp4-high",
-                "ocp4-high-node",
                 "ocp4-moderate",
-                "ocp4-moderate-node",
                 "ocp4-nerc-cip",
-                "ocp4-nerc-cip-node",
                 "ocp4-pci-dss",
-                "ocp4-pci-dss-node",
                 "ocp4-stig"
             ],
             scanSchedule: {
