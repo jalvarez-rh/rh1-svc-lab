@@ -92,25 +92,22 @@ if ! echo "$CLUSTER_RESPONSE" | jq . >/dev/null 2>&1; then
     error "Invalid JSON response from cluster API. Response: ${CLUSTER_RESPONSE:0:300}"
 fi
 
-# Get all available cluster IDs
+# Get all available cluster IDs and build JSON array directly
 set +e
-CLUSTER_IDS=$(echo "$CLUSTER_RESPONSE" | jq -r '.clusters[]? | .id' 2>/dev/null | grep -v "^null$" | grep -v "^$" || echo "")
+CLUSTER_IDS_JSON=$(echo "$CLUSTER_RESPONSE" | jq -c '[.clusters[]? | .id]' 2>/dev/null)
 CLUSTER_NAMES=$(echo "$CLUSTER_RESPONSE" | jq -r '.clusters[]? | "\(.name) (\(.id))"' 2>/dev/null | grep -v "^null" || echo "")
 set -e
 
-if [ -z "$CLUSTER_IDS" ]; then
+if [ -z "$CLUSTER_IDS_JSON" ] || [ "$CLUSTER_IDS_JSON" = "[]" ] || [ "$CLUSTER_IDS_JSON" = "null" ]; then
     error "Failed to find any valid cluster IDs. Available clusters: $(echo "$CLUSTER_RESPONSE" | jq -r '.clusters[]? | "\(.name): \(.id)"' 2>/dev/null | tr '\n' ' ' || echo "none")"
 fi
 
-# Count clusters and build JSON array
-CLUSTER_COUNT=$(echo "$CLUSTER_IDS" | wc -l | tr -d '[:space:]')
+# Count clusters
+CLUSTER_COUNT=$(echo "$CLUSTER_RESPONSE" | jq '.clusters | length' 2>/dev/null || echo "0")
 log "✓ Found $CLUSTER_COUNT cluster(s):"
 echo "$CLUSTER_NAMES" | while read -r line; do
     log "  - $line"
 done
-
-# Build JSON array of cluster IDs for the API payload
-CLUSTER_IDS_JSON=$(echo "$CLUSTER_IDS" | jq -R . | jq -s .)
 
 # Check for existing scan configuration and delete it
 log "Checking for existing 'acs-catch-all' scan configuration..."
@@ -150,37 +147,44 @@ fi
 
 # Create compliance scan configuration
 log "Creating compliance scan configuration 'acs-catch-all' for $CLUSTER_COUNT cluster(s)..."
+
+# Build the complete JSON payload using jq to ensure proper formatting
+SCAN_CONFIG_PAYLOAD=$(jq -n \
+    --arg scanName "acs-catch-all" \
+    --argjson clusters "$CLUSTER_IDS_JSON" \
+    '{
+        scanName: $scanName,
+        scanConfig: {
+            oneTimeScan: false,
+            profiles: [
+                "ocp4-cis",
+                "ocp4-cis-node",
+                "ocp4-e8",
+                "ocp4-high",
+                "ocp4-high-node",
+                "ocp4-moderate",
+                "ocp4-moderate-node",
+                "ocp4-nerc-cip",
+                "ocp4-nerc-cip-node",
+                "ocp4-pci-dss",
+                "ocp4-pci-dss-node",
+                "ocp4-stig"
+            ],
+            scanSchedule: {
+                intervalType: "DAILY",
+                hour: 12,
+                minute: 0
+            },
+            description: "Daily compliance scan for all profiles"
+        },
+        clusters: $clusters
+    }')
+
 set +e
 SCAN_CONFIG_RESPONSE=$(curl -k -s -w "\n%{http_code}" --connect-timeout 15 --max-time 120 -X POST \
     -H "Authorization: Bearer $ROX_API_TOKEN" \
     -H "Content-Type: application/json" \
-    --data-raw "{
-    \"scanName\": \"acs-catch-all\",
-    \"scanConfig\": {
-        \"oneTimeScan\": false,
-        \"profiles\": [
-            \"ocp4-cis\",
-            \"ocp4-cis-node\",
-            \"ocp4-e8\",
-            \"ocp4-high\",
-            \"ocp4-high-node\",
-            \"ocp4-moderate\",
-            \"ocp4-moderate-node\",
-            \"ocp4-nerc-cip\",
-            \"ocp4-nerc-cip-node\",
-            \"ocp4-pci-dss\",
-            \"ocp4-pci-dss-node\",
-            \"ocp4-stig\",
-        ],
-        \"scanSchedule\": {
-            \"intervalType\": \"DAILY\",
-            \"hour\": 12,
-            \"minute\": 0
-        },
-        \"description\": \"Daily compliance scan for all profiles\"
-    },
-    \"clusters\": $CLUSTER_IDS_JSON
-}" \
+    --data-raw "$SCAN_CONFIG_PAYLOAD" \
     "$ROX_ENDPOINT/v2/compliance/scan/configurations" 2>&1)
 SCAN_CREATE_EXIT_CODE=$?
 set -e
