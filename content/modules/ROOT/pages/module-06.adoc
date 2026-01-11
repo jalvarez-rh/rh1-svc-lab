@@ -2,15 +2,119 @@
 
 [[cluster-conformance]]
 
+Assurance is critical for sovereignty, ensuring that applications operate in a compliant manner and that clusters maintain compliance across diverse regions and geographies. It is essential to have confidence that compliance reports are accurate, testable, and auditable, thereby supporting and advancing key business objectives. Additionally, enabling teams to collaborate effectively through the use of appropriate tools and technologies helps drive organizational success.
+
+Achieving this level of assurance requires a practical and structured approach.
+
+So let's get practical in our example of an EMEA environment and a US environment. Let's look at practical ways that we can Observe audit Police and manage our clusters and application applications. We will start by looking at the security, compliance and environment insights that we can get from Red Hat Advanced Cluster Security for Kubernetes (RHACS).
+
 == Security and Environment Insights
 
 [[rhacs-insights]]
 
-== ACS Compliance Operator Installation and Compliance Checks
+=== *RHACS Basics*
+RHACS provides developers and administrators with tools to meet the security needs of cloud-native development on Kubernetes. Its features address primary security concerns across various environments, including datacenters, private clouds, and public clouds running Kubernetes clusters. With RHACS, you can achieve comprehensive security, covering key areas such as:
+
+*Vulnerability Management*  
+Protect nodes, platforms, and applications from vulnerabilities using prioritization and impact-based filters.
+
+*Network Security*  
+Gain real-time visibility, enforce network policies, detect anomalies, and manage app-centric network access controls.
+
+*Security Policy Guardrails*  
+Ensure consistent, compliant, and secure configurations with RHACS' built-in policy guardrails.
+
+*Compliance*  
+Make sure clusters meet regulatory and contractual requirements, such as DISA-STIG and PCI-DSS, with simple audit capabilities.
+
+*Risk Profiling*  
+Identify and prioritize security risks using key impact and severity metrics for OpenShift and Kubernetes clusters.
+
+*Threat Detection and Response*
+Implement process and network controls to detect malicious runtime incidents and respond using Kubernetes-native enforcement.
+
+=== RHACS console access
+
+Your RHACS Console is available in the showroom environment. In case you want to open it in another window it is here:  {acs_route}[window=blank]
+
+Administrator login is available with:
+
+[cols="1,1"]
+|===
+| *RHACS Console Username:* | {acs_portal_username} 
+| *RHACS Console Password:* | {acs_portal_password} 
+|===
+
+== RHACS Compliance Operator Installation and Compliance Checks
 
 [[conformance-tests]]
 
+Before making changes to your cluster, it’s essential to understand your current compliance posture. Red Hat Advanced Cluster Security (RHACS) seamlessly integrates with the OpenShift Compliance Operator to provide out-of-the-box compliance checks—including industry standards such as E8 and DISA STIG. You can also define custom profiles that combine multiple standards into one, streamlining your audit processes and allowing you to easily tailor compliance requirements to your organization or region. This flexibility enables you to create global profiles and maintain consistent, auditable compliance across all OpenShift environments.
+
+=== Checking your compliance posture
+
+The first step to any changes in a cluster is to analyze what you need to change RHACS integrates with the compliance operator to bring you a variety of compliance checks from the E8 to DISA STIG and more. RHACS can also set up custom compliance checks so you can create profiles that have both DISA STIG and E8 standards together for easier auditing and to create a profile that can become global if necessary.
+
+[start=1]
+. Click on the *Compliance* -> *OpenShift Schedules*tab.
+
+image::assurance-01.png[link=self, window=blank, width=100%]
+
+[start=2]
+. Next, click on the *Create scan schdule*.
+
+image::assurance-02.png[link=self, window=blank, width=100%]
+
+[start=3]
+. Next, fill in the form with the following information:
+
+* Name: *acs-catch-all*
+* Description: **
+* Frequency: *Daily*
+* Time: 12:00=
+
+. Click Next
+. Select the two clusters: *emea-production* and *us-production*
+. Click Next
+. Add the following profiles (in order):
+    * ocp4-cis (99 rules, Platform, Version 1.5.0)
+    * ocp4-cis-node (100 rules, Node, Version 1.5.0)
+    * ocp4-e8 (14 rules, Platform)
+    * ocp4-moderate (136 rules, Platform, Revision 4)
+    * ocp4-moderate-node (120 rules, Node, Revision 4)
+    * ocp4-nerc-cip (133 rules, Platform)
+    * ocp4-nerc-cip-node (120 rules, Node)
+    * ocp4-pci-dss (120 rules, Platform, Version 3.2.1)
+    * ocp4-pci-dss-node (114 rules, Node, Version 3.2.1)
+    * ocp4-stig (50 rules, Platform, Version V2R1)
+
+
+NOTE: There are many profiles to select but here we are selecting the most common profiles that are used in most organizations. If you want to only add the ones necessary for the lab. Select ......
+
+. Click Next
+
+NOTE: We will not add a delivery destination so we will skip this step. However you can send notifications via email, get details via API or download reports via the console.
+
+. Click Next
+. Review your masterpiece and click *Save*
+
+image::assurance-05.png[link=self, window=blank, width=100%]
+
+You should see the new schedule in the list and it will be performing it's first scan. If you click the 3 dots on the right side of the schedule you can trigger a manual scan, download the report or delete the schedule.
+
+image::assurance-06.png[link=self, window=blank, width=100%]
+
+[start=11]
+.Now it's time to head over to the open shift coverage section where you can view all of the details from the scan
+
+image::assurance-07.png[link=self, window=blank, width=100%]
+
+[start=3]
+. Next, fill in the form with the following information:
+
 === Analyze Compliance Results
+
+Managing multi-region and multi-geo environments presents specific challenges. Typically, changes are initiated by the operations team, who are responsible for provisioning and managing the infrastructure. They also oversee any modifications needed to enhance security or ensure compliance with applicable standards. Establishing clear processes and leveraging automation can help maintain consistency and compliance across all environments. In OpenShift, cluster changes are done by the administrator or the operations team through the OpenShift console with Red Hat Advanced Cluster Management for Kubernetes (RHACM) providing the governance and policy capabilities.
 
 [[create-policies]]
 

@@ -127,6 +127,149 @@ NOTE: *UI or GitOps—The Choice is Yours* While this lab focuses on the graphic
 
 === Container Workloads (Deploy via argocd onto hub cluster)
 
+==== Integrate ArgoCD with RHACM
+
+*Procedure*
+
+. Navigate to *Applications* from the left side menu.
+. Click *Create application, select ArgoCD AppicationSet-Push Model*.
+. Under the Argo server select *Add Argo Server* 
+. Enter the following information:
+* *Name:* openshift-gitops
+* *Namespace:* openshift-gitops
+* *ClusterSet:* default
+
+image::03-argoconfig.png[link=self, window=blank, width=100%, ArgoCD Config]
+
+Perfect! Next you will use ArgoCD to deploy a Virtual Machine
+
+= Deploy Applications Using OpenShift GitOps
+
+You've deployed your clusters and VMs, and now it's time to create some containerized applications, starting with the Python application from the Quay module.
+
+*Procedure*
+
+. Navigate to *Applications* from the left side menu.
+. Click *Create application*, select *ArgoCD AppicationSet-Push Model*.
+. Enter the following information:
+* *Name:* skupper-patient-demo
+* *Argo Server:* openshift-gitops
+. Click *NEXT*
+
+image::03-app-gitops.png[link=self, window=blank, width=100%, App GitOps]
+
+[start=5]
+. Under repository types, select the GIT repository
+. enter the URL: https://github.com/mfosterrox/skupper-security-demo.git
+. Set Revision: main
+. Set Path: skupper-demo
+. Set Destination: patient-portal
+. Then click *NEXT TWICE*
+
+image::03-app-gitops-2.png[link=self, window=blank, width=100%, App ACM GitOps]
+
+[start=11]
+. Under *Sync Policy* uncheck *Automaticaly sync when cluster state changes* and check *Replace resources instead of applying changes from the source repository* 
+
+image::03-app-gitops-3.png[link=self, window=blank, width=100%, App ACM GitOps]
+
+NOTE: These changes are only required as you will be modifying the application YAML on RHACM and you don't want it to sync to a Git Repo, you normaly wouldn't uncheck these in a real production enviroment.
+
+[start=12]
+. Under *Placement* for application deployment, verify that *New Placement* is selected.
+* Cluster set: default
+. Under *Label expressions* click *add label* and select the following
+* *Label:* name
+* *Operator:* equals any off
+* *Values:* local-cluster
+
+image::03-app-placement.png[link=self, window=blank, width=100%, ACM App Placement]
+
+[start=14]
+. Verify all of the information is correct and click *Submit*.
+
+NOTE: It will take a few minutes to deploy the application
+
+[start=15]
+. Click on the *Topology Tab* to view and verify that *all of the circles are green*.
+
+image::03-application-topology-git.png[link=self, window=blank, width=100%, Application Topology]
+
+[start=16]
+. Under the topology view, Select the *Route* and click on the *Launch Route URL*
+
+NOTE: This will take you to the Front end for the Patient Portal application, which is now running in our Hosted Controlled Plane (HCP) CLuster.
+
+IMPORTANT: If you get a "Application is not available" page change the URL to use http:// and that should fix the issue. 
+
+image::03-application-route-git.png[link=self, window=blank, width=100%, Application Route]
+
+Congratulations! 
+
+You have successfully deployed an application using RHACM and OpenShift GitOps. This approach utilized a Git repository containing the manifests that defined your application. RHACM took those manifests and used them as deployables, which were then deployed to the target cluster.
+
+[[updating-an-application]]
+
+=== Updating the Frontend Application
+
+Let's now use your local Quay repo that contains the frontend image you built earlier. This image includes a few key security issues that you will explore in more detail during the ACS module later on.
+
+*Procedure*
+
+. Navigate to *Applications* from the left side menu.
+. Click on *Filter* and under *type* select *Application Set* 
+. Click on the *patient-demo* App and Click *Topology*
+. Click on *deployment* then find *frontend* Click on *frontend*
+
+image::03-deployment-patient.png[link=self, window=blank, width=100%, Application Deployment]
+
+[start=5]
+. Click *Launch resource in Search* a new window will pop up
+
+image::03-frontend-search.png[link=self, window=blank, width=100%, Application Frontend]
+
+[start=6]
+. Under Deployment find *frontend* and click it
+
+image::03-frontend-search2.png[link=self, window=blank, width=100%, Application Frontend Search]
+
+[start=7]
+. Click on the *YAML* tab and under spec:containers find the *image* field
+
+image::03-frontend-search3.png[link=self, window=blank, width=100%, Application Frontend Search Image]
+
+[start=8]
+. Navigate back the Terminal screen and execute the following command
+
+[source,sh,subs="attributes",role=execute]
+----
+echo $QUAY_URL/$QUAY_USER/frontend:0.1
+----
+
+[start=9]
+. Copy the Quay repo URL below
+
+[source,sh,subs="attributes",role=execute]
+----
+$QUAY_URL/$QUAY_USER/frontend:0.1
+----
+
+[start=10]
+. Navigate back to Search and replace the *image* with the URL you just copy from the terminal. Click *Save*
+
+image::03-frontend-image.png[link=self, window=blank, width=100%, Application Frontend Image New]
+
+[start=11]
+. Navigate back to ACM / Application / Topology View 
+. Click on Deployment / Frontend. Verify that the image url has changed
+
+image::03-frontend-image2.png[link=self, window=blank, width=100%, Application Frontend Image Toplogy]
+
+IMPORTANT: The Pod in the Topology View should turn RED. This is expected because you're making changes on the ACM side but not on the GitOps side, causing a reporting difference. In a real production environment, you wouldn't make such changes manually, but this is done for educational purposes only.
+
+[[acm-conclusion]]
+
+
 [[cross-cloud-migration]]
 
 == Cross-cloud Migration
