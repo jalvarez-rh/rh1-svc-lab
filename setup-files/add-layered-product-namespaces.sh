@@ -80,8 +80,6 @@ make_api_call() {
     local data="${3:-}"
     local description="${4:-API call}"
     
-    log "Making $description: $method $endpoint" >&2
-    
     local temp_file=""
     local curl_cmd="curl -k -s -w \"\n%{http_code}\" -X $method"
     curl_cmd="$curl_cmd -H \"Authorization: Bearer $ROX_API_TOKEN\""
@@ -126,6 +124,7 @@ make_api_call() {
 NAMESPACES_TO_ADD=(
     "cert-manager"
     "open-cluster-management-hub"
+    "open-cluster-management-agent"
     "open-cluster-management-agent-addon"
     "openshift-gitops"
     "quay"
@@ -136,26 +135,15 @@ NAMESPACES_TO_ADD=(
     "openshift-cluster-olm-operator"
 )
 
-log "========================================================="
 log "Adding Layered Product Namespaces to RHACS Configuration"
-log "========================================================="
-log ""
-log "Namespaces to add:"
-for ns in "${NAMESPACES_TO_ADD[@]}"; do
-    log "  - $ns"
-done
-log ""
 
 # Get current configuration
-log "Retrieving current RHACS configuration..."
 CURRENT_CONFIG=$(make_api_call "GET" "config" "" "Get current configuration")
-log "✓ Configuration retrieved"
 
 # Extract current layered products regex
 CURRENT_REGEX=$(echo "$CURRENT_CONFIG" | jq -r '.config.platformComponentConfig.rules[]? | select(.name == "red hat layered products") | .namespaceRule.regex' 2>/dev/null || echo "")
 
 if [ -z "$CURRENT_REGEX" ] || [ "$CURRENT_REGEX" = "null" ]; then
-    log "Could not find 'red hat layered products' rule in current configuration."
     log "Initializing configuration with default layered products rule..."
     
     # Prepare default configuration payload with layered products rule
@@ -255,9 +243,7 @@ EOF
     fi
     
     # Update configuration with default payload
-    log "Creating initial configuration with default layered products rule..."
     CONFIG_RESPONSE=$(make_api_call "PUT" "config" "$DEFAULT_CONFIG_PAYLOAD" "Create initial RHACS configuration")
-    log "✓ Initial configuration created successfully"
     
     # Use the regex we sent in the payload (we know it's correct)
     CURRENT_REGEX="$DEFAULT_REGEX"
@@ -268,17 +254,11 @@ EOF
     
     if [ -n "$VERIFIED_REGEX" ] && [ "$VERIFIED_REGEX" != "null" ] && [ "$VERIFIED_REGEX" != "" ]; then
         CURRENT_REGEX="$VERIFIED_REGEX"
-        log "✓ Verified configuration contains layered products rule"
     else
         # Fallback: use the regex from the payload and the payload as current config
         CURRENT_REGEX="$DEFAULT_REGEX"
         CURRENT_CONFIG="$DEFAULT_CONFIG_PAYLOAD"
-        log "Using regex from configuration payload (could not parse from GET response, but this is OK)"
     fi
-    
-    log "✓ Initial configuration created with layered products rule (length: ${#CURRENT_REGEX} chars)"
-else
-    log "✓ Current layered products regex found (length: ${#CURRENT_REGEX} chars)"
 fi
 
 # Build new regex by appending namespaces that aren't already present
@@ -293,21 +273,15 @@ for ns in "${NAMESPACES_TO_ADD[@]}"; do
         # Append to regex with | separator
         NEW_REGEX="${NEW_REGEX}|^${ns}\$"
         NAMESPACES_ADDED=$((NAMESPACES_ADDED + 1))
-        log "  ✓ Added $ns to regex"
-    else
-        log "  - $ns: already configured"
     fi
 done
 
 if [ $NAMESPACES_ADDED -eq 0 ]; then
-    log ""
-    log "All specified namespaces are already configured in the layered products rule."
-    log "No changes needed."
+    log "All specified namespaces are already configured. No changes needed."
     exit 0
 fi
 
-log ""
-log "Updated regex will add $NAMESPACES_ADDED namespace(s)"
+log "Adding $NAMESPACES_ADDED namespace(s) to layered products rule..."
 
 # Validate CURRENT_CONFIG is valid JSON before proceeding
 if ! echo "$CURRENT_CONFIG" | jq . >/dev/null 2>&1; then
@@ -315,7 +289,6 @@ if ! echo "$CURRENT_CONFIG" | jq . >/dev/null 2>&1; then
 fi
 
 # Build updated configuration payload using jq to update just the regex
-log "Building updated configuration payload..."
 UPDATED_CONFIG=$(echo "$CURRENT_CONFIG" | jq --arg new_regex "$NEW_REGEX" '
     .config.platformComponentConfig.rules = (
         .config.platformComponentConfig.rules | map(
@@ -333,14 +306,8 @@ if [ $? -ne 0 ] || [ -z "$UPDATED_CONFIG" ]; then
 fi
 
 # Update configuration
-log "Updating RHACS configuration..."
 CONFIG_RESPONSE=$(make_api_call "PUT" "config" "$UPDATED_CONFIG" "Update RHACS configuration")
-log "✓ Configuration updated successfully"
-
-# Validate configuration changes
-log "Validating configuration changes..."
 VALIDATED_CONFIG=$(make_api_call "GET" "config" "" "Validate configuration")
-log "✓ Configuration validated"
 
 # Verify VALIDATED_CONFIG is valid JSON
 if ! echo "$VALIDATED_CONFIG" | jq . >/dev/null 2>&1; then
@@ -348,7 +315,6 @@ if ! echo "$VALIDATED_CONFIG" | jq . >/dev/null 2>&1; then
     VERIFIED_REGEX="$NEW_REGEX"
 else
     # Verify the changes
-    log "Verifying updated layered products regex..."
     VERIFIED_REGEX=$(echo "$VALIDATED_CONFIG" | jq -r '.config.platformComponentConfig.rules[]? | select(.name == "red hat layered products") | .namespaceRule.regex' 2>/dev/null || echo "")
     
     if [ -z "$VERIFIED_REGEX" ] || [ "$VERIFIED_REGEX" = "null" ] || [ "$VERIFIED_REGEX" = "" ]; then
@@ -358,44 +324,8 @@ else
         if [ -z "$VERIFIED_REGEX" ] || [ "$VERIFIED_REGEX" = "null" ] || [ "$VERIFIED_REGEX" = "" ]; then
             # Use the regex we just sent as fallback (we know it's correct)
             VERIFIED_REGEX="$NEW_REGEX"
-            warning "Could not extract regex from validated config, using regex from update payload"
-            warning "This is OK - the configuration was updated successfully, verification just couldn't parse the response"
         fi
     fi
 fi
 
-log "✓ Verified updated regex (length: ${#VERIFIED_REGEX} chars)"
-
-# Check that all namespaces are now present
-log ""
-log "Verifying all namespaces are configured..."
-ALL_PRESENT=true
-for ns in "${NAMESPACES_TO_ADD[@]}"; do
-    ESCAPED_NS=$(echo "$ns" | sed 's/[.*+?^${}()|[]/\\&/g')
-    if echo "$VERIFIED_REGEX" | grep -q "\\^${ESCAPED_NS}\\$"; then
-        log "  ✓ $ns: configured"
-    else
-        log "  ✗ $ns: NOT found in configuration"
-        ALL_PRESENT=false
-    fi
-done
-
-if [ "$ALL_PRESENT" = false ]; then
-    warning "Some namespaces were not found in the verified configuration"
-    warning "This may indicate a configuration issue"
-fi
-
-log ""
-log "========================================================="
-log "Layered Product Namespaces Configuration Completed"
-log "========================================================="
-log ""
-log "Summary:"
-log "  - Added $NAMESPACES_ADDED namespace(s) to layered products rule"
-log "  - Configuration updated and validated"
-log "  - All specified namespaces are now marked as platform components"
-log ""
-log "The following namespaces are now configured as layered products:"
-for ns in "${NAMESPACES_TO_ADD[@]}"; do
-    log "  - $ns"
-done
+log "Configuration updated successfully. Added $NAMESPACES_ADDED namespace(s) to layered products rule."
