@@ -153,10 +153,115 @@ log "✓ Configuration retrieved"
 CURRENT_REGEX=$(echo "$CURRENT_CONFIG" | jq -r '.config.platformComponentConfig.rules[]? | select(.name == "red hat layered products") | .namespaceRule.regex' 2>/dev/null || echo "")
 
 if [ -z "$CURRENT_REGEX" ] || [ "$CURRENT_REGEX" = "null" ]; then
-    error "Could not find 'red hat layered products' rule in current configuration. Please run 11-configure-rhacs-settings.sh first to initialize the configuration."
+    log "Could not find 'red hat layered products' rule in current configuration."
+    log "Initializing configuration with default layered products rule..."
+    
+    # Prepare default configuration payload with layered products rule
+    DEFAULT_CONFIG_PAYLOAD=$(cat <<'EOF'
+{
+  "config": {
+    "publicConfig": {
+      "loginNotice": { "enabled": false, "text": "" },
+      "header": { "enabled": false, "text": "", "size": "UNSET", "color": "#000000", "backgroundColor": "#FFFFFF" },
+      "footer": { "enabled": false, "text": "", "size": "UNSET", "color": "#000000", "backgroundColor": "#FFFFFF" },
+      "telemetry": { "enabled": true, "lastSetTime": null }
+    },
+    "privateConfig": {
+      "alertConfig": {
+        "resolvedDeployRetentionDurationDays": 7,
+        "deletedRuntimeRetentionDurationDays": 7,
+        "allRuntimeRetentionDurationDays": 30,
+        "attemptedDeployRetentionDurationDays": 7,
+        "attemptedRuntimeRetentionDurationDays": 7
+      },
+      "imageRetentionDurationDays": 7,
+      "expiredVulnReqRetentionDurationDays": 90,
+      "decommissionedClusterRetention": {
+        "retentionDurationDays": 0,
+        "ignoreClusterLabels": {},
+        "lastUpdated": "2025-11-26T15:02:32.522230327Z",
+        "createdAt": "2025-11-26T15:02:32.522229766Z"
+      },
+      "reportRetentionConfig": {
+        "historyRetentionDurationDays": 7,
+        "downloadableReportRetentionDays": 7,
+        "downloadableReportGlobalRetentionBytes": 524288000
+      },
+      "vulnerabilityExceptionConfig": {
+        "expiryOptions": {
+          "dayOptions": [
+            { "numDays": 14, "enabled": true },
+            { "numDays": 30, "enabled": true },
+            { "numDays": 60, "enabled": true },
+            { "numDays": 90, "enabled": true }
+          ],
+          "fixableCveOptions": { "allFixable": true, "anyFixable": true },
+          "customDate": false,
+          "indefinite": false
+        }
+      },
+      "administrationEventsConfig": { "retentionDurationDays": 4 },
+      "metrics": {
+        "imageVulnerabilities": {
+          "gatheringPeriodMinutes": 1,
+          "descriptors": {
+            "cve_severity": { "labels": ["Cluster","CVE","IsPlatformWorkload","IsFixable","Severity"] },
+            "deployment_severity": { "labels": ["Cluster","Namespace","Deployment","IsPlatformWorkload","IsFixable","Severity"] },
+            "namespace_severity": { "labels": ["Cluster","Namespace","IsPlatformWorkload","IsFixable","Severity"] }
+          }
+        },
+        "policyViolations": {
+          "gatheringPeriodMinutes": 1,
+          "descriptors": {
+            "deployment_severity": { "labels": ["Cluster","Namespace","Deployment","IsPlatformComponent","Action","Severity"] },
+            "namespace_severity": { "labels": ["Cluster","Namespace","IsPlatformComponent","Action","Severity"] }
+          }
+        },
+        "nodeVulnerabilities": {
+          "gatheringPeriodMinutes": 1,
+          "descriptors": {
+            "component_severity": { "labels": ["Cluster","Node","Component","IsFixable","Severity"] },
+            "cve_severity": { "labels": ["Cluster","CVE","IsFixable","Severity"] },
+            "node_severity": { "labels": ["Cluster","Node","IsFixable","Severity"] }
+          }
+        }
+      }
+    },
+    "platformComponentConfig": {
+      "rules": [
+        {
+          "name": "red hat layered products",
+          "namespaceRule": { "regex": "^aap$|^ack-system$|^aws-load-balancer-operator$|^cert-manager-operator$|^cert-utils-operator$|^costmanagement-metrics-operator$|^external-dns-operator$|^metallb-system$|^mtr$|^multicluster-engine$|^multicluster-global-hub$|^node-observability-operator$|^open-cluster-management$|^openshift-adp$|^openshift-apiserver-operator$|^openshift-authentication$|^openshift-authentication-operator$|^openshift-builds$|^openshift-cloud-controller-manager$|^openshift-cloud-controller-manager-operator$|^openshift-cloud-credential-operator$|^openshift-cloud-network-config-controller$|^openshift-cluster-csi-drivers$|^openshift-cluster-machine-approver$|^openshift-cluster-node-tuning-operator$|^openshift-cluster-observability-operator$|^openshift-cluster-samples-operator$|^openshift-cluster-storage-operator$|^openshift-cluster-version$|^openshift-cnv$|^openshift-compliance$|^openshift-config$|^openshift-config-managed$|^openshift-config-operator$|^openshift-console$|^openshift-console-operator$|^openshift-console-user-settings$|^openshift-controller-manager$|^openshift-controller-manager-operator$|^openshift-dbaas-operator$|^openshift-distributed-tracing$|^openshift-dns$|^openshift-dns-operator$|^openshift-dpu-network-operator$|^openshift-dr-system$|^openshift-etcd$|^openshift-etcd-operator$|^openshift-file-integrity$|^openshift-gitops-operator$|^openshift-host-network$|^openshift-image-registry$|^openshift-infra$|^openshift-ingress$|^openshift-ingress-canary$|^openshift-ingress-node-firewall$|^openshift-ingress-operator$|^openshift-insights$|^openshift-keda$|^openshift-kmm$|^openshift-kmm-hub$|^openshift-kni-infra$|^openshift-kube-apiserver$|^openshift-kube-apiserver-operator$|^openshift-kube-controller-manager$|^openshift-kube-controller-manager-operator$|^openshift-kube-scheduler$|^openshift-kube-scheduler-operator$|^openshift-kube-storage-version-migrator$|^openshift-kube-storage-version-migrator-operator$|^openshift-lifecycle-agent$|^openshift-local-storage$|^openshift-logging$|^openshift-machine-api$|^openshift-machine-config-operator$|^openshift-marketplace$|^openshift-migration$|^openshift-monitoring$|^openshift-mta$|^openshift-mtv$|^openshift-multus$|^openshift-netobserv-operator$|^openshift-network-diagnostics$|^openshift-network-node-identity$|^openshift-network-operator$|^openshift-nfd$|^openshift-nmstate$|^openshift-node$|^openshift-nutanix-infra$|^openshift-oauth-apiserver$|^openshift-openstack-infra$|^openshift-opentelemetry-operator$|^openshift-operator-lifecycle-manager$|^openshift-operators$|^openshift-operators-redhat$|^openshift-ovirt-infra$|^openshift-ovn-kubernetes$|^openshift-ptp$|^openshift-route-controller-manager$|^openshift-sandboxed-containers-operator$|^openshift-security-profiles$|^openshift-serverless$|^openshift-serverless-logic$|^openshift-service-ca$|^openshift-service-ca-operator$|^openshift-sriov-network-operator$|^openshift-storage$|^openshift-tempo-operator$|^openshift-update-service$|^openshift-user-workload-monitoring$|^openshift-vertical-pod-autoscaler$|^openshift-vsphere-infra$|^openshift-windows-machine-config-operator$|^openshift-workload-availability$|^redhat-ods-operator$|^rhacs-operator$|^rhdh-operator$|^service-telemetry$|^stackrox$|^submariner-operator$|^tssc-acs$|^openshift-devspaces$" }
+        },
+        {
+          "name": "system rule",
+          "namespaceRule": { "regex": "^openshift$|^openshift-apiserver$|^openshift-operators$|^kube-.*" }
+        }
+      ],
+      "needsReevaluation": false
+    }
+  }
+}
+EOF
+)
+    
+    # Update configuration with default payload
+    log "Creating initial configuration with default layered products rule..."
+    CONFIG_RESPONSE=$(make_api_call "PUT" "config" "$DEFAULT_CONFIG_PAYLOAD" "Create initial RHACS configuration")
+    log "✓ Initial configuration created successfully"
+    
+    # Get the updated configuration to extract the regex
+    CURRENT_CONFIG=$(make_api_call "GET" "config" "" "Get updated configuration")
+    CURRENT_REGEX=$(echo "$CURRENT_CONFIG" | jq -r '.config.platformComponentConfig.rules[]? | select(.name == "red hat layered products") | .namespaceRule.regex' 2>/dev/null || echo "")
+    
+    if [ -z "$CURRENT_REGEX" ] || [ "$CURRENT_REGEX" = "null" ]; then
+        error "Failed to create initial configuration. Could not find 'red hat layered products' rule after creation."
+    fi
+    
+    log "✓ Initial configuration created with layered products rule (length: ${#CURRENT_REGEX} chars)"
+else
+    log "✓ Current layered products regex found (length: ${#CURRENT_REGEX} chars)"
 fi
-
-log "✓ Current layered products regex found (length: ${#CURRENT_REGEX} chars)"
 
 # Build new regex by appending namespaces that aren't already present
 NEW_REGEX="$CURRENT_REGEX"
