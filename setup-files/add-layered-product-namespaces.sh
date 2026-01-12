@@ -132,6 +132,8 @@ NAMESPACES_TO_ADD=(
     "openshift-pipelines"
     "openshift-operator-controller"
     "openshift-catalogd"
+    "openshift-frr-k8s"
+    "openshift-cluster-olm-operator"
 )
 
 log "========================================================="
