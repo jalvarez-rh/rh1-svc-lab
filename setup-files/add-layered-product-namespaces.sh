@@ -1,6 +1,7 @@
 #!/bin/bash
 # Add Layered Product Namespaces Script for RHACS
 # Adds specified namespaces to the Red Hat layered products platform component rule
+# Uses the same approach as 11-configure-rhacs-settings.sh
 
 # Exit immediately on error, show exact error message
 set -euo pipefail
@@ -149,43 +150,29 @@ CURRENT_CONFIG=$(make_api_call "GET" "config" "" "Get current configuration")
 log "✓ Configuration retrieved"
 
 # Extract current layered products regex
-CURRENT_REGEX=$(echo "$CURRENT_CONFIG" | jq -r '.config.platformComponentConfig.rules[] | select(.name == "red hat layered products") | .namespaceRule.regex' 2>/dev/null || echo "")
+CURRENT_REGEX=$(echo "$CURRENT_CONFIG" | jq -r '.config.platformComponentConfig.rules[]? | select(.name == "red hat layered products") | .namespaceRule.regex' 2>/dev/null || echo "")
 
 if [ -z "$CURRENT_REGEX" ] || [ "$CURRENT_REGEX" = "null" ]; then
-    error "Could not find 'red hat layered products' rule in current configuration"
+    error "Could not find 'red hat layered products' rule in current configuration. Please run 11-configure-rhacs-settings.sh first to initialize the configuration."
 fi
 
 log "✓ Current layered products regex found (length: ${#CURRENT_REGEX} chars)"
-
-# Check which namespaces are already in the regex
-log "Checking which namespaces are already configured..."
-for ns in "${NAMESPACES_TO_ADD[@]}"; do
-    # Escape namespace for regex check
-    ESCAPED_NS=$(echo "$ns" | sed 's/[.*+?^${}()|[]/\\&/g')
-    if echo "$CURRENT_REGEX" | grep -q "\\^${ESCAPED_NS}\\$"; then
-        log "  - $ns: already configured"
-    else
-        log "  - $ns: needs to be added"
-    fi
-done
 
 # Build new regex by appending namespaces that aren't already present
 NEW_REGEX="$CURRENT_REGEX"
 NAMESPACES_ADDED=0
 
 for ns in "${NAMESPACES_TO_ADD[@]}"; do
-    # Escape namespace for regex
+    # Escape namespace for regex check
     ESCAPED_NS=$(echo "$ns" | sed 's/[.*+?^${}()|[]/\\&/g')
     # Check if namespace is already in regex (format: ^namespace$)
     if ! echo "$NEW_REGEX" | grep -q "\\^${ESCAPED_NS}\\$"; then
         # Append to regex with | separator
-        if [ "$NEW_REGEX" != "${NEW_REGEX%|}" ]; then
-            NEW_REGEX="${NEW_REGEX}|^${ns}\$"
-        else
-            NEW_REGEX="${NEW_REGEX}|^${ns}\$"
-        fi
+        NEW_REGEX="${NEW_REGEX}|^${ns}\$"
         NAMESPACES_ADDED=$((NAMESPACES_ADDED + 1))
         log "  ✓ Added $ns to regex"
+    else
+        log "  - $ns: already configured"
     fi
 done
 
@@ -199,7 +186,7 @@ fi
 log ""
 log "Updated regex will add $NAMESPACES_ADDED namespace(s)"
 
-# Build updated configuration payload
+# Build updated configuration payload using jq to update just the regex
 log "Building updated configuration payload..."
 UPDATED_CONFIG=$(echo "$CURRENT_CONFIG" | jq --arg new_regex "$NEW_REGEX" '
     .config.platformComponentConfig.rules = (
