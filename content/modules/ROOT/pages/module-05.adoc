@@ -127,7 +127,25 @@ NOTE: *UI or GitOps—The Choice is Yours* While this lab focuses on the graphic
 
 === Container Workloads (Deploy via argocd onto hub cluster)
 
-==== Integrate ArgoCD with RHACM
+Red Hat® OpenShift® GitOps is an operator that streamlines workflows by integrating git repositories, CI/CD tools, and Kubernetes. This enables faster, more secure, and scalable software development while maintaining quality.
+
+OpenShift GitOps builds declarative, Git-driven CD workflows directly into the application development platform. It automates infrastructure and deployment requirements by pushing updates and changes through declarative code.
+
+OpenShift® GitOps uses Argo CD, integrated with Red Hat Advanced Cluster Management for Kubernetes (RHACM), to provide a consistent and fully supported Kubernetes platform for GitOps principles.
+
+With RHACM, users can enable the optional Argo CD pull model architecture, which is ideal for scenarios where the centralized cluster cannot reach remote clusters, but the remote clusters can communicate with the centralized one. In these cases, the pull model is more feasible than the push model.
+
+Argo CD typically uses a push model where the workload is pushed from a centralized cluster to remote clusters. The pull model, however, allows the Argo CD Application CR to be distributed to remote clusters, where each cluster independently reconciles and deploys the application. The application status is reported back to the centralized cluster, mimicking the push model UX.
+
+The pull model offers decentralized control, where each cluster manages its own configuration and independently pulls updates. This reduces the need for centralized management, making the system more scalable and easier to manage. However, the hub cluster can still be a single point of failure, so redundancy should be considered.
+
+The pull model also provides more flexibility, allowing clusters to pull updates on their own schedule, which helps avoid conflicts or disruptions.
+
+For this exercise, you will use the Push Model.
+
+NOTE: ArgoCD has been deployed in your enviroment however you will need to configure it in RHACM.
+
+=== Integrate ArgoCD with RHACM
 
 *Procedure*
 
@@ -137,13 +155,13 @@ NOTE: *UI or GitOps—The Choice is Yours* While this lab focuses on the graphic
 . Enter the following information:
 * *Name:* openshift-gitops
 * *Namespace:* openshift-gitops
-* *ClusterSet:* default
+* *ClusterSet:* managed
 
 image::03-argoconfig.png[link=self, window=blank, width=100%, ArgoCD Config]
 
-Perfect! Next you will use ArgoCD to deploy a Virtual Machine
+Perfect! Next you will use ArgoCD to deploy an Application
 
-= Deploy Applications Using OpenShift GitOps
+== Deploy Applications Using OpenShift GitOps
 
 You've deployed your clusters and VMs, and now it's time to create some containerized applications, starting with the Python application from the Quay module.
 
@@ -267,17 +285,5 @@ image::03-frontend-image2.png[link=self, window=blank, width=100%, Application F
 
 IMPORTANT: The Pod in the Topology View should turn RED. This is expected because you're making changes on the ACM side but not on the GitOps side, causing a reporting difference. In a real production environment, you wouldn't make such changes manually, but this is done for educational purposes only.
 
-[[acm-conclusion]]
 
 
-[[cross-cloud-migration]]
-
-== Cross-cloud Migration
-
-Duplicate VM and container workloads onto AWS SNO cluster
-
-[[workload-observability]]
-
-=== Workload Observability
-
-Observe workloads on hub cluster and AWS SNO cluster
