@@ -64,8 +64,6 @@ if ! command -v jq >/dev/null 2>&1; then
         error "jq is required for this script to work correctly. Please install jq manually."
     fi
     log "✓ jq installed successfully"
-else
-    log "✓ jq is already installed"
 fi
 
 # Prepare API base URL

@@ -243,194 +243,75 @@ The numbers may be different in your environments. Changes to the lab enviornmen
 
 . Click the *Vulnerability Management -> Workload CVEs* tab
 
-By default, you brought into the user workload tab now this contains all of the workloads that are considered your workloads. If you click on the deployment tab, you'll see Apache struts back on Atlas cart service other applications that we deployed. You'll also see some that slipped through the cracks for for example, example CERT manager or cluster manager add-on these are currently services that were not added to ACS as part of the platform workloads now not to worry a simple command and API call can change this or or you can go to the platform configuration -> system configuration tab to change these details. For now, i've put together a quick script to move all of the services that are not part of the platform workloads into the user workload tab and vice versa
+By default, you brought into the user workload tab now this contains all of the workloads that are considered your workloads. If you click on the deployment tab, you'll see Apache struts back on Atlas cart service other applications that we deployed. You'll also see some that slipped through the cracks for for example, example CERT manager or cluster manager add-on these are currently services that were not added to RHACS as part of the platform workloads now not to worry a simple command and API call can change this or or you can go to the platform configuration -> system configuration tab to change these details. For now, i've put together a quick script to move all of the services that are not part of the platform workloads into the user workload tab and vice versa
+
+[IMPORTANT]
+====
+But default RHACS shows you critical and important vulnerabilities you can change this default in platform configuration or remove the filter. First, we recommend a quick read on https://www.redhat.com/en/blog/do-all-vulnerabilities-really-matter[Do all vulnerabilities really matter?]
+====
 
 [start=1]
-. You can use the following `curl` command to classify a workload (e.g., mark a deployment as a *user* workload):
+. Run the following command to move some platform workloads into the correct tab.
 
 [source,sh,role=execute]
 ----
-curl -k -X PATCH \
-  "$ROX_CENTRAL_ADDRESS/v1/deployments/bulkclassify" \
-  -H "Authorization: Bearer $ROX_API_TOKEN" \
-  -H "Content-Type: application/json" \
-  -d '{
-        "classification": "USER",               # or "PLATFORM"
-        "deploymentIds": ["<deployment_id_1>", "<deployment_id_2>"]
-      }'
+~/rh1-svc-lab/setup-files/add-layered-product-namespaces.sh
 ----
 
-- To get `deployment_id`, you can list deployments via the API:
-[source,sh,role=execute]
+**OUTPUT**
+[source,sh]
 ----
-curl -k -X GET "$ACS_CENTRAL/v1/deployments" \
-  -H "Authorization: Bearer $ACS_API_TOKEN"
+[LAYERED-PRODUCTS] Configuration updated successfully. Added 11 namespace(s) to layered products rule.
 ----
-This will return a list of deployments and their IDs.
 
-Replace the `classification` value with `USER` or `PLATFORM` as needed.
-====
-
-You can use the above method (or `roxctl deployment classify`) to reorganize workloads in your lab similarly to the steps seen in *11-configure-rhacs-settings*. This is particularly useful in large environments where workloads move between platform and user responsibility over time.
-
-
-
-
-. Click the dropdown and select deployment.
-
-image::04-workload-2.png[link=self, window=blank, width=100%]
-
-[start=2]
-. Click the second dropdown and select name.
-
-image::04-workload-3.png[link=self, window=blank, width=100%]
-
-[start=2]
-. Then, filter for the *frontend* deployment.
-
-image::04-workload-4.png[link=self, window=blank, width=100%]
-
-You will notice that an extra filter was added to the default filters, showing only the single deployment that the "Developer" built in the Quay module.
-
-[start=3]
-. Click the *CVE* tab
-
-image::04-workload-5.png[link=self, window=blank, width=100%]
-
-From here you can analyze the vulnerabilites that the devoplers have introduced into the environment. 
-
-====
-CVE-2017-18342 & CVE-2020-14343 both are critical and are specific to the PyYAML package. This package is a high impact fix for the developers to focus on. 
-====
-
-image::04-workload-6.png[link=self, window=blank, width=100%]
-
-IMPORTANT: Container OS age and the age of its components are a massive correlating factor to the number of vulnerabilites present. Speed is security when it comes to containers. 
-
-[start=4]
-. Click the *CVE-2020-14343* blue link.
-
-image::04-workload-7.png[link=self, window=blank, width=100%]
-
-If you're focused on a specific vulnerability, it's very helpful to see all the components it affects. With this dashboard you can see that our response to this vulnerability needs to be targeted, you should reach out directly to the development team that needs that PyYAML package.
-
-
-IMPORTANT: As a security team our next step is to inform the development team about these vulnerabilities. Luckily, they should have already seen these issues in Quay. 
-
-=== Vulnerability Reporting
-
-Internal vulnerability reporting improves software security by helping teams fix issues early, lowering the risk of breaches and failures. It promotes a security-focused mindset and ensures critical vulnerabilities are prioritized and resolved quickly, resulting in a more reliable product and increased user trust.
-
-In the next part of the module, you will create a vulnerability report for a specific application deployment that would be sent to the development team.
-
-.Procedure
-
-[start=1]
-. Click on the *Vulnerability Reporting* tab. 
+Now when you look at the workloads CVEs, they should contain all of the workloads that we deployed earlier in the lab. And they contain A LOT of critical and important vulnerabilities.
 
 image::vuln-report-01.png[link=self, window=blank, width=100%]
 
+Whereas the Platform CVEs contain only the platform workloads and their vulnerabilities and contain significantly less vulnerabilities.
+
+Let's take a look at image signatures.
+
 [start=2]
-. Click the *Create report* button.
+. Click the *Platform* tab, in the results section of Vulnerability Management. 
+. Select the *Images* tab.
 
 image::vuln-report-02.png[link=self, window=blank, width=100%]
 
-You will see that creating a report is a three step process. It requires you to configure the report parameters and the delivery destination, and then you have to review and create your report.
-
-The configurable parameters are the following:
-
-- Report name
-- Report description
-- CVE severity
-- CVE status
-- Image type
-- CVEs discovered since (with a date)
-- And a Report scope.
-
-[start=3]
-. Fill out the information specific to your target deployment.
-
-- Report name: `application-vulnerability-report`
-- Report description (Optional): `Vulnerability report for application workloads`
-- CVE severity: Critical + Important
-- CVE status: Fixable + Unfixable
-- Image type: Deployed + Watched
-- CVEs discovered since: All time
-- Include NVD CVSS
+You should see a *Verified Signatures* label on every Red Hat image. This is because RHACS is verifying the signatures of the images that are pulled into the cluster. Since all Red Hat builds meet SLSA level 3 and are signed by Red Hat, they are verified by RHACS. Whereas the user workloads are not signed by Red Hat and are therefore not verified.
 
 image::vuln-report-03.png[link=self, window=blank, width=100%]
 
-====
-You now have a vulnerability report configuration but you haven't targeted it to a specific deployment. That's what collections are for.
-====
+Lastly, an easy way to export reports is to click the *Create report* button on the right side of the page and export what you are searching as a CSV.Try it out;
 
 [start=4]
-. Click on the "Select a collection" dropdown then select *Create collection*.
+. Click the *Create report* button on the right side of the page.
 
 image::vuln-report-04.png[link=self, window=blank, width=100%]
 
-You can create collection rules by deployment, namespace and cluster. The collections are setup this way so that you can easily attach policies, vulnerability reports and notifications by the logical groupings of your organization. 
-
 [start=5]
-. Give the collection a name (e.g., `application-workloads`)
-. Click the dropdown and select *Deployments with names matching* then enter your deployment name pattern
+. Click *Export report as CSV*
 
 image::vuln-report-05.png[link=self, window=blank, width=100%]
 
 [start=6]
-. Add a namespace rule. Select *Namespace with names matching* then enter your target namespace
-
-====
-If you do this correctly the deployment you are targeting should appear in the "collection results" information on the right of the screen.
-====
+. Click *Generate report*
 
 image::vuln-report-06.png[link=self, window=blank, width=100%]
 
 [start=7]
-. Review the collection
-. Scroll down and hit *Save*
-. Click *Next* once you are back in the *Configure report parameters* tab
+. Click *View status in reports table*
 
-Next, create an example email notifier that will send an email on a schedule to remind the development team about the vulnerabilities in the deployment.
-
-====
-This notifier configuration demonstrates what is possible with RHACS. In a production environment, you would configure this with your actual SMTP server settings.
-====
+image::vuln-report-07.png[link=self, window=blank, width=100%]
 
 [start=8]
-. Click *Add delivery destination -> Create email notifier* and enter the following
-
-- Integration name: `application-security-notifier`
-- Email server: `smtp.example.com:465`
-- Click *Enable unauthenticated SMTP* (for lab purposes)
-- From: `security team`
-- Sender: `rhacs@example.com`
-- Default recipient: `dev-team@example.com`
+. Download your generated report.
 
 image::vuln-report-08.png[link=self, window=blank, width=100%]
 
-NOTE: Don't worry if you don't want to enable the notification. The exercise is about going through the workflow. 
+Our goal is to make discussing vulnerabilities easy we recognize how many vulnerabilities there are in a container environment, and we want to limit that from a Red Hat platform standpoint and give you the tools to limit the vulnerabilities that you're deploying.
 
-[start=9]
-. Select a frequency. For example, weekly on Monday.
-. Hit *Next*
-. Review your configuration and click *Create*
-
-image::vuln-report-09.png[link=self, window=blank, width=100%]
-
-However, you don't have to wait until the scheduled time to view the report.
-
-[start=10]
-. Click the vertical ellipses on the right side of the UI and click *Generate Download*
-
-image::vuln-report-10.png[link=self, window=blank, width=100%]
-
-[start=11]
-. Download the report and review the findings.
-
-Excellent! You have successfully created a vulnerability report with automated delivery scheduling.
-
-Now that the development team will receive regular reports about their vulnerabilities, it's time to create some guardrails for the application's behavior. 
+One of the ways we're doing that is with the new project hummingbird which designed to deliver modern software as hardened, verifiable container images. You can learn more about it here: https://www.redhat.com/en/technologies/linux-platforms/enterprise-linux/hummingbird[Project Hummingbird].
 
 == Policy Creation and Updates Based on Compliance Results (RHACS)
 
@@ -439,7 +320,6 @@ Now that the development team will receive regular reports about their vulnerabi
 === Update Policies Based on Results (namespace scoped)
 
 [[update-policies]]
-
 
 === Roxctl Installation
 
