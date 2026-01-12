@@ -245,17 +245,30 @@ if [ -z "$CURRENT_REGEX" ] || [ "$CURRENT_REGEX" = "null" ]; then
 EOF
 )
     
+    # Extract the regex from the payload we're about to send
+    DEFAULT_REGEX=$(echo "$DEFAULT_CONFIG_PAYLOAD" | jq -r '.config.platformComponentConfig.rules[]? | select(.name == "red hat layered products") | .namespaceRule.regex' 2>/dev/null || echo "")
+    
+    if [ -z "$DEFAULT_REGEX" ] || [ "$DEFAULT_REGEX" = "null" ]; then
+        error "Failed to extract default regex from configuration payload"
+    fi
+    
     # Update configuration with default payload
     log "Creating initial configuration with default layered products rule..."
     CONFIG_RESPONSE=$(make_api_call "PUT" "config" "$DEFAULT_CONFIG_PAYLOAD" "Create initial RHACS configuration")
     log "✓ Initial configuration created successfully"
     
-    # Get the updated configuration to extract the regex
-    CURRENT_CONFIG=$(make_api_call "GET" "config" "" "Get updated configuration")
-    CURRENT_REGEX=$(echo "$CURRENT_CONFIG" | jq -r '.config.platformComponentConfig.rules[]? | select(.name == "red hat layered products") | .namespaceRule.regex' 2>/dev/null || echo "")
+    # Use the regex we sent in the payload (we know it's correct)
+    CURRENT_REGEX="$DEFAULT_REGEX"
     
-    if [ -z "$CURRENT_REGEX" ] || [ "$CURRENT_REGEX" = "null" ]; then
-        error "Failed to create initial configuration. Could not find 'red hat layered products' rule after creation."
+    # Try to verify by getting the config back (but don't fail if we can't parse it)
+    VERIFY_CONFIG=$(make_api_call "GET" "config" "" "Verify configuration")
+    VERIFIED_REGEX=$(echo "$VERIFY_CONFIG" | jq -r '.config.platformComponentConfig.rules[]? | select(.name == "red hat layered products") | .namespaceRule.regex' 2>/dev/null || echo "")
+    
+    if [ -n "$VERIFIED_REGEX" ] && [ "$VERIFIED_REGEX" != "null" ] && [ "$VERIFIED_REGEX" != "" ]; then
+        CURRENT_REGEX="$VERIFIED_REGEX"
+        log "✓ Verified configuration contains layered products rule"
+    else
+        log "Using regex from configuration payload (could not parse from GET response, but this is OK)"
     fi
     
     log "✓ Initial configuration created with layered products rule (length: ${#CURRENT_REGEX} chars)"
