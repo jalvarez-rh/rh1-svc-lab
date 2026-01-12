@@ -260,14 +260,17 @@ EOF
     # Use the regex we sent in the payload (we know it's correct)
     CURRENT_REGEX="$DEFAULT_REGEX"
     
-    # Try to verify by getting the config back (but don't fail if we can't parse it)
-    VERIFY_CONFIG=$(make_api_call "GET" "config" "" "Verify configuration")
-    VERIFIED_REGEX=$(echo "$VERIFY_CONFIG" | jq -r '.config.platformComponentConfig.rules[]? | select(.name == "red hat layered products") | .namespaceRule.regex' 2>/dev/null || echo "")
+    # Get the full configuration back to use for future updates
+    CURRENT_CONFIG=$(make_api_call "GET" "config" "" "Get created configuration")
+    VERIFIED_REGEX=$(echo "$CURRENT_CONFIG" | jq -r '.config.platformComponentConfig.rules[]? | select(.name == "red hat layered products") | .namespaceRule.regex' 2>/dev/null || echo "")
     
     if [ -n "$VERIFIED_REGEX" ] && [ "$VERIFIED_REGEX" != "null" ] && [ "$VERIFIED_REGEX" != "" ]; then
         CURRENT_REGEX="$VERIFIED_REGEX"
         log "✓ Verified configuration contains layered products rule"
     else
+        # Fallback: use the regex from the payload and the payload as current config
+        CURRENT_REGEX="$DEFAULT_REGEX"
+        CURRENT_CONFIG="$DEFAULT_CONFIG_PAYLOAD"
         log "Using regex from configuration payload (could not parse from GET response, but this is OK)"
     fi
     
@@ -304,6 +307,11 @@ fi
 log ""
 log "Updated regex will add $NAMESPACES_ADDED namespace(s)"
 
+# Validate CURRENT_CONFIG is valid JSON before proceeding
+if ! echo "$CURRENT_CONFIG" | jq . >/dev/null 2>&1; then
+    error "CURRENT_CONFIG is not valid JSON. Cannot proceed with update."
+fi
+
 # Build updated configuration payload using jq to update just the regex
 log "Building updated configuration payload..."
 UPDATED_CONFIG=$(echo "$CURRENT_CONFIG" | jq --arg new_regex "$NEW_REGEX" '
@@ -317,6 +325,10 @@ UPDATED_CONFIG=$(echo "$CURRENT_CONFIG" | jq --arg new_regex "$NEW_REGEX" '
         )
     )
 ')
+
+if [ $? -ne 0 ] || [ -z "$UPDATED_CONFIG" ]; then
+    error "Failed to build updated configuration payload. Check that CURRENT_CONFIG has the correct structure."
+fi
 
 # Update configuration
 log "Updating RHACS configuration..."
