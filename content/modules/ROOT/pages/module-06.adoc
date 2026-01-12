@@ -163,6 +163,7 @@ spec:
       - registry.access.redhat.com
       - image-registry.openshift-image-registry.svc:5000
       - gcr.io
+      - docker.io
 EOF
 ----
 
@@ -222,96 +223,6 @@ Well done! Updating allowed image registries is a great example of a quick compl
 
 It’s important for Security and Operations teams to collaborate and ensure that clusters are provisioned with these baseline controls in place. Using the Compliance Operator and RHACS, you were able to test these configuration changes safely in our lab, validate that workloads continue to function as expected, and then propagate approved fixes into our broader operations and deployment workflows. This helps maintain continuous compliance across all environments.
 
-== Who's Fixing What?
-
-Managing on-premises and cloud environments can get complicated when determining responsibility for patching and maintaining platform components versus workload components. This separation of duties is critical for security operations and requires clear understanding of who owns what.
-
-With cloud providers, they typically handle platform patching behind the scenes, which can obscure visibility into what's happening in your cluster. Their managed Kubernetes offerings are often minimal, meaning you're responsible for maintaining many components yourself. 
-
-With OpenShift environments, Red Hat provides comprehensive operator-based management. Red Hat manages the operators and core platform components that you install, while you manage your application workloads. In general, vulnerabilities affecting Red Hat software components follow Red Hat's SLA for patching and remediation. This clear separation helps you understand exactly who is responsible for fixing what, enabling better coordination between platform and application teams.
-
-=== The Workloads—Workload CVE Dashboard
-
-More critical than fixing individual vulnerabilities is establishing a process to keep container images updated and prevent serious, fixable vulnerabilities from advancing through the pipeline.
-
-Now it's time to focus on what matters most.
-
-[IMPORTANT]
-====
-The numbers may be different in your environments. Changes to the lab enviornment and it's applications as well as vulnerabuility updates will alter the numbers.  
-====
-
-. Click the *Vulnerability Management -> Workload CVEs* tab
-
-By default, you brought into the user workload tab now this contains all of the workloads that are considered your workloads. If you click on the deployment tab, you'll see Apache struts back on Atlas cart service other applications that we deployed. You'll also see some that slipped through the cracks for for example, example CERT manager or cluster manager add-on these are currently services that were not added to RHACS as part of the platform workloads now not to worry a simple command and API call can change this or or you can go to the platform configuration -> system configuration tab to change these details. For now, i've put together a quick script to move all of the services that are not part of the platform workloads into the user workload tab and vice versa
-
-[IMPORTANT]
-====
-But default RHACS shows you critical and important vulnerabilities you can change this default in platform configuration or remove the filter. First, we recommend a quick read on https://www.redhat.com/en/blog/do-all-vulnerabilities-really-matter[Do all vulnerabilities really matter?]
-====
-
-[start=1]
-. Run the following command to move some platform workloads into the correct tab.
-
-[source,sh,role=execute]
-----
-~/rh1-svc-lab/setup-files/add-layered-product-namespaces.sh
-----
-
-**OUTPUT**
-[source,sh]
-----
-[LAYERED-PRODUCTS] Configuration updated successfully. Added 11 namespace(s) to layered products rule.
-----
-
-Now when you look at the workloads CVEs, they should contain all of the workloads that we deployed earlier in the lab. And they contain A LOT of critical and important vulnerabilities.
-
-image::vuln-report-01.png[link=self, window=blank, width=100%]
-
-Whereas the Platform CVEs contain only the platform workloads and their vulnerabilities and contain significantly less vulnerabilities.
-
-Let's take a look at image signatures.
-
-[start=2]
-. Click the *Platform* tab, in the results section of Vulnerability Management. 
-. Select the *Images* tab.
-
-image::vuln-report-02.png[link=self, window=blank, width=100%]
-
-You should see a *Verified Signatures* label on every Red Hat image. This is because RHACS is verifying the signatures of the images that are pulled into the cluster. Since all Red Hat builds meet SLSA level 3 and are signed by Red Hat, they are verified by RHACS. Whereas the user workloads are not signed by Red Hat and are therefore not verified.
-
-image::vuln-report-03.png[link=self, window=blank, width=100%]
-
-Lastly, an easy way to export reports is to click the *Create report* button on the right side of the page and export what you are searching as a CSV.Try it out;
-
-[start=4]
-. Click the *Create report* button on the right side of the page.
-
-image::vuln-report-04.png[link=self, window=blank, width=100%]
-
-[start=5]
-. Click *Export report as CSV*
-
-image::vuln-report-05.png[link=self, window=blank, width=100%]
-
-[start=6]
-. Click *Generate report*
-
-image::vuln-report-06.png[link=self, window=blank, width=100%]
-
-[start=7]
-. Click *View status in reports table*
-
-image::vuln-report-07.png[link=self, window=blank, width=100%]
-
-[start=8]
-. Download your generated report.
-
-image::vuln-report-08.png[link=self, window=blank, width=100%]
-
-Our goal is to make discussing vulnerabilities easy we recognize how many vulnerabilities there are in a container environment, and we want to limit that from a Red Hat platform standpoint and give you the tools to limit the vulnerabilities that you're deploying.
-
-One of the ways we're doing that is with the new project hummingbird which designed to deliver modern software as hardened, verifiable container images. You can learn more about it here: https://www.redhat.com/en/technologies/linux-platforms/enterprise-linux/hummingbird[Project Hummingbird].
 
 == Policy Creation and Updates Based on Compliance Results (RHACS)
 
