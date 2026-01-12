@@ -412,3 +412,36 @@ Now that the development team will receive regular reports about their vulnerabi
 [[update-policies]]
 
 
+=== Roxctl installation
+
+Roxctl is a command-line tool used to interact with Red Hat Advanced Cluster Security (RHACS) platform resources.
+
+*Procedure*
+
+. Download the latest roxctl binary for your operating system:
+
+[source,sh,role=execute]
+----
+curl -LO "https://mirror.openshift.com/pub/rhacs/assets/4.9.0/bin/linux/roxctl"
+----
+
+. Make the binary executable:
+
+[source,sh,role=execute]
+----
+chmod +x roxctl
+----
+
+. Move it to a location in your `$PATH` (such as `/usr/local/bin`):
+
+[source,sh,role=execute]
+----
+sudo mv roxctl /usr/local/bin/
+----
+
+. Verify installation:
+
+[source,sh,role=execute]
+----
+roxctl version
+----
