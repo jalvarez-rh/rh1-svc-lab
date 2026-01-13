@@ -1,16 +1,53 @@
 = {lab_name}
 
-== Introduction press it in front
+LB6535 - Sovereign Cloud Architecture with OpenShift: Multi-Cluster Data Residency and Compliance Management
+
+== Introduction
+
+Customers today want flexibility. They want to do more, with less, while accelerating AI adoption to stay ahead of the market. Geographic specific compliance standards, petabytes of data in restricted environments, and increasing provider costs are all pushing organizations to reevaluate their technology strategies. Customers are seeking Sovereign Cloud solutions to provide the flexibility necessary to be adaptive in the age of AI and geographic specific requirements.
+
+Red Hat is perfectly positioned to take advantage of these customer needs. With Red Hat's existing hybrid cloud approach, setting up an automated sovereign cloud architecture is simple. Red Hat has the tools to manage data privacy and compliance concerns, bringing simplified management of OpenShift clusters, containers, virtual machines, and AI applications, while providing hardened authorization, authentication, data controls, encryption, vulnerability management, and more.
+
+In this lab, you will progress through a simplified migration process where you, the customer, will bring your workflows and applications to an on premise and cloud environment, bringing your platform, to your data, in a compliant, secure, and repeatable manner.
+
+== What You'll Learn
+
+This lab demonstrates how Red Hat Solutions can empower enterprises to manage their own sovereign cloud architectures enabling application and data mobility and policy enforcement.
+
+Through hands-on activities, you will:
+
+* Configure geographically-distributed OpenShift clusters with automated compliance policies
+* Implement workload placement strategies that enforce data residency requirements
+* Deploy applications with built-in sovereignty enforcement
+* Establish audit trails and compliance reporting for regulatory demonstrations
+* Design disaster recovery scenarios that maintain geographic data constraints
+
+== Prerequisites
+
+Before beginning this lab, you should have:
+
+* Solid OpenShift administration experience
+* Familiarity with multi-cluster concepts
+
+== Lab Modules
+
+This lab is organized into four modules:
+
+* xref:module-01.adoc[Module 1: Operations & Security] - Multi-environment cluster and workload management
+* xref:module-02.adoc[Module 2: Assurance] - Cluster conformance, compliance, and security insights
+* xref:module-03.adoc[Module 3: Technology & Supply Chain] - Secure supply chain and SLSA framework
+* xref:module-04.adoc[Module 4: Data & AI] - Data pipelines and AI compute capabilities
+
+== Getting Started
 
 [[openshift-acm]]
+=== OpenShift Console Access
 
-===  OpenShift console access & RHACM console access
-
-NOTE: The Red Hat Advanced Cluster Management for Kubernetes (RHACM) Console is now integrated with OpenShift Console, to access it please select *All Clusters* from the dropdown menu once you log in. 
+The Red Hat Advanced Cluster Management for Kubernetes (RHACM) Console is now integrated with OpenShift Console. To access it, select *All Clusters* from the dropdown menu once you log in.
 
 Your OpenShift cluster console is available in the right panel. In case you want to open it in another window it is here: {openshift_cluster_console_url}[window=blank]
 
-Administrator login is available with:
+Administrator login credentials:
 
 [cols="1,1"]
 |===
@@ -19,37 +56,104 @@ Administrator login is available with:
 |===
 
 [[acs]]
-=== RHACS console access
+=== RHACS Console Access
 
-Your RHACS Console is available in the right panel. In case you want to open it in another window it is here:  {acs_route}[window=blank]
+Your RHACS Console is available in the right panel. In case you want to open it in another window it is here: {acs_route}[window=blank]
 
-Administrator login is available with:
+Administrator login credentials:
 
 [cols="1,1"]
 |===
-| *RHACS Console Username:* | {acs_portal_username} 
-| *RHACS Console Password:* | {acs_portal_password} 
+| *RHACS Console Username:* | {acs_portal_username}
+| *RHACS Console Password:* | {acs_portal_password}
 |===
 
-=== roxctl CLI verification
+=== Lab Environment Setup
 
-Since roxctl hasn't been installed yet, we will install it now. along with a few other key pieces of software. (I know, blame the Ops team :) )
+Before proceeding with the lab modules, you'll need to configure kubectl contexts for the clusters and install the roxctl CLI tool.
+
+==== Configure kubectl Contexts
+
+This lab uses two OpenShift clusters. You'll need to set up kubectl contexts to easily switch between them.
 
 *Procedure*
 
 [start=1]
-. Run the following command.
+. Log in to the AWS cluster and create the `aws-us` context and rename the existing `admin` context to `local-cluster`
+
+[source,sh,subs="attributes",role=execute]
+----
+oc config rename-context admin local-cluster
+oc login -u kubeadmin -p {aws_openshift_kubeadmin_password} {aws_openshift_api_url} --insecure-skip-tls-verify
+oc config rename-context $(oc config current-context) aws-us
+----
+
+[start=2]
+. Verify that the changes have occured and the context is configured:
+
+[source,sh,role=execute]
+----
+oc config  get-contexts
+----
+
+**OUTPUT**
+
+[source,sh]
+----
+[lab-user@bastion ~]$ oc config  get-contexts
+CURRENT   NAME            CLUSTER            AUTHINFO                                                  
+*         aws-us          api-ocp-...:6443   kube:admin/...:6443   
+          local-cluster   ocp                admin  
+----
+
+Now you are able to switch between contexts as needed
+
+[source,sh,role=execute]
+----
+# Switch to AWS cluster
+oc config use-context aws-us
+
+# Switch to local cluster
+oc config use-context local-cluster
+----
+
+IMPORTANT: You will need to switch between contexts as needed throughout the lab. Please ensure you have access to both clusters before proceeding. Otherwise contact the instructor.
+
+==== roxctl CLI and RHACS setup
+
+Before proceeding with the lab modules, you'll need to install the roxctl CLI tool and verify connectivity to RHACS.
+
+*Procedure*
+
+[start=1]
+. Add the RHACS environment variables to your ~/.bashrc file:
+
+[source,sh,subs="attributes",role=execute]
+----
+cat >> ~/.bashrc << 'EOF'
+export ROX_CENTRAL_ADDRESS="{acs_route}"
+export ACS_PORTAL_USERNAME="{acs_portal_username}"
+export ACS_PORTAL_PASSWORD="{acs_portal_password}"
+EOF
+source ~/.bashrc
+----
+
+. Source the ~/.bashrc file:
+[source,sh]
+----
+source ~/.bashrc
+----
+
+
+. Run the following command to verify roxctl is installed and can connect to RHACS:
 
 [source,sh,subs="attributes",role=execute]
 ----
 roxctl --insecure-skip-tls-verify -e "$ROX_CENTRAL_ADDRESS:443" central whoami
 ----
 
-== Lab Modules
+== What's Next?
 
-* xref:module-01.adoc[Module 1: Operations & Security]
-* xref:module-02.adoc[Module 2: Assurance]
-* xref:module-03.adoc[Module 3: Technology & Supply Chain]
-* xref:module-04.adoc[Module 4: Data & AI]
+Click on any module above to begin. We recommend starting with Module 1 and proceeding sequentially, as each module builds upon concepts from previous modules.
 
-Click next to get started.
+*Customer Value:* Upon completing this lab, you will be equipped to propose and implement sovereign cloud solutions that enable organizations to pursue digital transformation while meeting strict regulatory requirements—turning compliance from a barrier into a competitive advantage.
