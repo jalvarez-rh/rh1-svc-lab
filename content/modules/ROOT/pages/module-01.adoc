@@ -1,223 +1,289 @@
-= Setup
+= Operations & Security
 
-[[access]]
+[[multi-env-clusters]]
 
-== Environment Setup and Access
+== Multi-environment OCP Cluster & Virtual Machine Creation & Management.
 
-[[openshift-acm]]
+*Need intro blurb here* 
 
-===  OpenShift console access & RHACM console access
+== Create and Manage Kubernetes Clusters
 
-NOTE: The Red Hat Advanced Cluster Management for Kubernetes (RHACM) Console is now integrated with OpenShift Console, to access it please select *All Clusters* from the dropdown menu once you log in. 
+Red Hat Advanced Cluster Management for Kubernetes (RHACM) simplifies the deployment and management of additional clusters. While Red Hat OpenShift offers easy deployment methods like IPI and the Assisted Installer, RHACM takes it a step further, allowing you to deploy new clusters with just a few clicks using the cluster creation wizard.
 
-Your OpenShift cluster console is available in the right panel. In case you want to open it in another window it is here: {openshift_cluster_console_url}[window=blank]
-
-Administrator login is available with:
-
-[cols="1,1"]
-|===
-| *Username:* | {openshift_cluster_admin_username}
-| *Password:* | {openshift_cluster_admin_password}
-|===
-
-[[acs]]
-=== RHACS console access
-
-Your RHACS Console is available in the right panel. In case you want to open it in another window it is here:  {acs_route}[window=blank]
-
-Administrator login is available with:
-
-[cols="1,1"]
-|===
-| *RHACS Console Username:* | {acs_portal_username} 
-| *RHACS Console Password:* | {acs_portal_password} 
-|===
-
-[[quay]]
-=== Quay console access
-
-Your Red Hat Quay console is available at: {quay_console_url}[window=blank]
-
-Administrator login is available with:
-
-[cols="1,1"]
-|===
-| *Quay Console Username:* | {quay_admin_username} 
-| *Quay Console Password:* | {quay_admin_password} 
-|===
-
-=== roxctl CLI verification 
-
-Next, verify that you have access to the RHACS Central Service.
+From the Clusters screen, you can quickly see how simple it is to deploy a new cluster.
 
 *Procedure*
 
 [start=1]
-. Run the following command.
+. Click on the *Create cluster* button in the center of the screen:
 
-====
-This command uses variables saved in the ~/.bashrc file to authenticate with the RHACS Central Service.
-====
+image::103-create-cluster.png[link=self, window=blank, width=100%, Create Cluster]
 
-[source,sh,subs="attributes",role=execute]
-----
-roxctl --insecure-skip-tls-verify -e "$ROX_CENTRAL_ADDRESS:443" central whoami
-----
+NOTE: You’ll notice that the only option already highlighted is Red Hat OpenShift Virtualization, indicating that your credentials are saved. You will use this to deploy the new cluster, but feel free to explore the window to see other available cluster types.
 
-[.console-output]
-[source,bash,subs="+macros,+attributes"]
-----
-UserID:
-	auth-token:718744a9-9548-488b-a8b9-07b2c59ea5e6
-User name:
-	anonymous bearer token "pipelines-ci-token" with roles [Admin] (jti: 718744a9-9548-488b-a8b9-07b2c59ea5e6, expires: 2025-04-03T15:15:06Z)
-Roles:
-	- Admin
-Access:
-	rw Access
-	rw Administration
-	rw Alert
-	rw CVE
-	rw Cluster
-	rw Compliance
-	rw Deployment
-	rw DeploymentExtension
-	rw Detection
-	rw Image
-	rw Integration
-	rw K8sRole
-	rw K8sRoleBinding
-	rw K8sSubject
-	rw Namespace
-	rw NetworkGraph
-	rw NetworkPolicy
-	rw Node
-	rw Secret
-	rw ServiceAccount
-	rw VulnerabilityManagementApprovals
-	rw VulnerabilityManagementRequests
-	rw WatchedImage
-	rw WorkflowAdministration
-----
+[start=2]
+. Click on the Red Hat OpenShift Virtualization button.
 
-NOTE: This output indicates you have full access to the RHACS product. You can check these permissions in the RHACS Access Control tab, which you'll review later.
+image::104-aws-credentials.png[link=self, window=blank, width=100%, AWS Credentials]
 
-If you have full access, you're all set!
+You will see one options for the control plane type: 
 
-== Deploy the workshop applications
+* Hosted
 
-You now have access to the core OPP applications. Next, you'll deploy several insecure apps into the OpenShift cluster. These demo apps come from public GitHub repositories and cover various vulnerabilities, including well-known Capture the Flag (CTF) apps, Log4Shell, and Apache Struts.
 
-After deployment, you'll use the roxctl CLI to scan some containers, giving you a preview of what to expect during the security section with Red Hat Advanced Cluster Security.
+[start=3]
+. Click on the *hosted* option.
+. Leave the infrastructure Provider Credentials as *hcp* 
+. Name your cluster *hcp-emea*, and verify that is on the *clusters* space for the hosted cluster namespace
+. Select *default* for the Cluster Set
+. Next, select the release image *OpenShift 4.19.21*. 
+. Sekect *single replica* for both the Controller availability policy and the Infrastructure availability policy. 
+. Create a label called *location=emea* - we will use this later on for other exercises.
+. Click on *Next* to continue.
 
-=== Time to deploy
+image::105-create-cluster-details.png[link=self, window=blank, width=100%, Create Cluster Details]
+
+On the next screen You can customize the name for the node pools, the amount of pool replicas, cores and memory, enter the name *hcp-emea* for the Node pool name and leave the other details as default.
+
+[start=11]
+. Click on *Next* to proceed.
+
+image::106-create-cluster-nodepools.png[link=self, window=blank, width=100%, Create Cluster NodePools]
+
+The next screen allows you to configure storage mappings type to use and it's associated variables, we will leave these as default as these have already been configured on the backend.
+
+[start=12]
+. Click on *Next* to proceed.
+
+image::107-create-cluster-networking.png[link=self, window=blank, width=100%, Create Cluster Networking]
+
+[start=13]
+. Click *Next* on each screen to proceed to the final *Review and Create* screen.
+
+You will see a description of the cluster you are creating.
+
+[start=14]
+. Click the blue *Create* button to start the deployment process.
+
+image::108-create-cluster-summary-create.png[link=self, window=blank, width=100%, Create Cluster Summary Page]
+
+[start=15]
+. Let the UI do it's thing. You should see the Cluster creation process starting in the UI.
+
+image::03-cluster-creation.png[link=self, window=blank, width=100%, View New Cluster]
+
+NOTE: Deploying this Hosted Control Plane (HCP) cluster will take about 5 to 10 minutes. You’ll continue the lab while waiting for this cluster to provision, we will use it later on.
+
+[[create-manage-vms]]
+
+== Create and Manage Virtual Machine
+
+In traditional environments, administrators often struggle with context switching—jumping between virtualization hypervisors to manage legacy workloads and Kubernetes consoles to manage modern applications. This fragmentation slows down operations and complicates governance.
+
+In this exercise, you will bridge that divide. You will utilize Red Hat Advanced Cluster Management (RHACM) to interact with a managed OpenShift cluster enabled with OpenShift Virtualization. Rather than logging directly into the managed cluster, you will orchestrate the VM lifecycle from the central Hub.
+
+By the end of this exercise, you will:
+
+. Navigate the RHACM Search interface to locate Virtual Machine resources across the fleet.
+. Provision a new Virtual Machine using the RHACM Creation Wizard.
+. Perform Day 2 operations (Stop, Start, Migrate) directly from the multi-cluster view.
+
+
+=== Deploy a Virtual Machines Using the RHACM console
 
 *Procedure*
 
 [start=1]
-. Run the following commands in the terminal, one after the other.
+. On the left switcher use the drop down to select *Fleet Virtualization*
 
-====
-This command downloads a repository container dockerfiles, attack scripts, and Kubernetes manifests that you will use to deploy the containerized applications to OpenShift.  
-====
+image::1-dropdown-menu.png[link=self, window=blank, width=100%, Create VM]
+
+. Click the *create* dropdown select *From Template*
+
+image::1-create-menu.png[link=self, window=blank, width=100%, Create VM]
+
+. Under default template select *Red Hat Enterprise Linux 9 VM* 
+
+image::1-template-menu.png[link=self, window=blank, width=100%, Create VM]
+
+NOTE: Notice all of the avaiable templates to use, Windows VMs are fully supported as well.
+
+. Under Virtual machine name, enter *rhel9-lab-vm* and Leave all the options as Disk size, Disk Source.
+
+image::1-vm-name.png[link=self, window=blank, width=100%, Create VM]
+
+NOTE: Please notice all of the avaiable options to configure the VM with, these will change depending on your operating system
+
+. Click *Quick create Virtual Machine* and watch for progress, this should take a couple of minutes to complete. 
+
+. Once completed you will see the live console as well as stats about your VM.
+
+image::1-vm-finish.png[link=self, window=blank, width=100%, Create VM]
+
+Feel free to explore the avaiable management screens for VMs, from Metrics to Console to Snapshots and more! 
+
+NOTE: *UI or GitOps—The Choice is Yours* While this lab focuses on the graphical capabilities of the RHACM console, remember that Virtual Machines in OpenShift are fundamentally Kubernetes objects.You can just as easily define your VMs as code (YAML) and deploy them using Red Hat OpenShift GitOps (ArgoCD). RHACM supports both workflows: use the UI for quick administration and discovery, or use GitOps for a fully declarative, audit-ready production pipeline.
+
+
+=== Container Workloads (Deploy via argocd onto hub cluster)
+
+Red Hat® OpenShift® GitOps is an operator that streamlines workflows by integrating git repositories, CI/CD tools, and Kubernetes. This enables faster, more secure, and scalable software development while maintaining quality.
+
+OpenShift GitOps builds declarative, Git-driven CD workflows directly into the application development platform. It automates infrastructure and deployment requirements by pushing updates and changes through declarative code.
+
+OpenShift® GitOps uses Argo CD, integrated with Red Hat Advanced Cluster Management for Kubernetes (RHACM), to provide a consistent and fully supported Kubernetes platform for GitOps principles.
+
+With RHACM, users can enable the optional Argo CD pull model architecture, which is ideal for scenarios where the centralized cluster cannot reach remote clusters, but the remote clusters can communicate with the centralized one. In these cases, the pull model is more feasible than the push model.
+
+Argo CD typically uses a push model where the workload is pushed from a centralized cluster to remote clusters. The pull model, however, allows the Argo CD Application CR to be distributed to remote clusters, where each cluster independently reconciles and deploys the application. The application status is reported back to the centralized cluster, mimicking the push model UX.
+
+The pull model offers decentralized control, where each cluster manages its own configuration and independently pulls updates. This reduces the need for centralized management, making the system more scalable and easier to manage. However, the hub cluster can still be a single point of failure, so redundancy should be considered.
+
+The pull model also provides more flexibility, allowing clusters to pull updates on their own schedule, which helps avoid conflicts or disruptions.
+
+For this exercise, you will use the Push Model.
+
+NOTE: ArgoCD has been deployed in your enviroment however you will need to configure it in RHACM.
+
+=== Integrate ArgoCD with RHACM
+
+*Procedure*
+
+. Navigate to *Applications* from the left side menu.
+. Click *Create application, select ArgoCD AppicationSet-Push Model*.
+. Under the Argo server select *Add Argo Server* 
+. Enter the following information:
+* *Name:* openshift-gitops
+* *Namespace:* openshift-gitops
+* *ClusterSet:* managed
+
+image::03-argoconfig.png[link=self, window=blank, width=100%, ArgoCD Config]
+
+Perfect! Next you will use ArgoCD to deploy an Application
+
+== Deploy Applications Using OpenShift GitOps
+
+You've deployed your clusters and VMs, and now it's time to create some containerized applications, starting with the Python application from the Quay module.
+
+*Procedure*
+
+. Navigate to *Applications* from the left side menu.
+. Click *Create application*, select *ArgoCD AppicationSet-Push Model*.
+. Enter the following information:
+* *Name:* skupper-patient-demo
+* *Argo Server:* openshift-gitops
+. Click *NEXT*
+
+image::03-app-gitops.png[link=self, window=blank, width=100%, App GitOps]
+
+[start=5]
+. Under repository types, select the GIT repository
+. enter the URL: https://github.com/mfosterrox/skupper-security-demo.git
+. Set Revision: main
+. Set Path: skupper-demo
+. Set Destination: patient-portal
+. Then click *NEXT TWICE*
+
+image::03-app-gitops-2.png[link=self, window=blank, width=100%, App ACM GitOps]
+
+[start=11]
+. Under *Sync Policy* uncheck *Automaticaly sync when cluster state changes* and check *Replace resources instead of applying changes from the source repository* 
+
+image::03-app-gitops-3.png[link=self, window=blank, width=100%, App ACM GitOps]
+
+NOTE: These changes are only required as you will be modifying the application YAML on RHACM and you don't want it to sync to a Git Repo, you normaly wouldn't uncheck these in a real production enviroment.
+
+[start=12]
+. Under *Placement* for application deployment, verify that *New Placement* is selected.
+* Cluster set: default
+. Under *Label expressions* click *add label* and select the following
+* *Label:* name
+* *Operator:* equals any off
+* *Values:* local-cluster
+
+image::03-app-placement.png[link=self, window=blank, width=100%, ACM App Placement]
+
+[start=14]
+. Verify all of the information is correct and click *Submit*.
+
+NOTE: It will take a few minutes to deploy the application
+
+[start=15]
+. Click on the *Topology Tab* to view and verify that *all of the circles are green*.
+
+image::03-application-topology-git.png[link=self, window=blank, width=100%, Application Topology]
+
+[start=16]
+. Under the topology view, Select the *Route* and click on the *Launch Route URL*
+
+NOTE: This will take you to the Front end for the Patient Portal application, which is now running in our Hosted Controlled Plane (HCP) CLuster.
+
+IMPORTANT: If you get a "Application is not available" page change the URL to use http:// and that should fix the issue. 
+
+image::03-application-route-git.png[link=self, window=blank, width=100%, Application Route]
+
+Congratulations! 
+
+You have successfully deployed an application using RHACM and OpenShift GitOps. This approach utilized a Git repository containing the manifests that defined your application. RHACM took those manifests and used them as deployables, which were then deployed to the target cluster.
+
+[[updating-an-application]]
+
+=== Updating the Frontend Application
+
+Let's now use your local Quay repo that contains the frontend image you built earlier. This image includes a few key security issues that you will explore in more detail during the ACS module later on.
+
+*Procedure*
+
+. Navigate to *Applications* from the left side menu.
+. Click on *Filter* and under *type* select *Application Set* 
+. Click on the *patient-demo* App and Click *Topology*
+. Click on *deployment* then find *frontend* Click on *frontend*
+
+image::03-deployment-patient.png[link=self, window=blank, width=100%, Application Deployment]
+
+[start=5]
+. Click *Launch resource in Search* a new window will pop up
+
+image::03-frontend-search.png[link=self, window=blank, width=100%, Application Frontend]
+
+[start=6]
+. Under Deployment find *frontend* and click it
+
+image::03-frontend-search2.png[link=self, window=blank, width=100%, Application Frontend Search]
+
+[start=7]
+. Click on the *YAML* tab and under spec:containers find the *image* field
+
+image::03-frontend-search3.png[link=self, window=blank, width=100%, Application Frontend Search Image]
+
+[start=8]
+. Navigate back the Terminal screen and execute the following command
 
 [source,sh,subs="attributes",role=execute]
 ----
-git clone https://github.com/mfosterrox/demo-apps.git demo-apps
+echo $QUAY_URL/$QUAY_USER/frontend:0.1
 ----
 
-====
-This command sets the variable TUTORIAL_HOME to equal the working directory, allowing you to make references to various files easily.
-====
+[start=9]
+. Copy the Quay repo URL below
 
 [source,sh,subs="attributes",role=execute]
 ----
-echo export GRPC_ENFORCE_ALPN_ENABLED=FALSE >> ~/.bashrc
-echo export TUTORIAL_HOME="$(pwd)/demo-apps" >> ~/.bashrc
-export TUTORIAL_HOME="$(pwd)/demo-apps"
+$QUAY_URL/$QUAY_USER/frontend:0.1
 ----
 
-====
-This command applies the manifests into the OpenShift environment.
-====
+[start=10]
+. Navigate back to Search and replace the *image* with the URL you just copy from the terminal. Click *Save*
 
-[source,sh,subs="attributes",role=execute]
-----
-oc apply -f $TUTORIAL_HOME/kubernetes-manifests/ --recursive
-----
+image::03-frontend-image.png[link=self, window=blank, width=100%, Application Frontend Image New]
 
-[.console-output]
-[source,bash,subs="+macros,+attributes"]
-----
-[demo-user@bastion ~]$ oc apply -f $TUTORIAL_HOME/kubernetes-manifests/ --recursive
-namespace/operations created
-namespace/backend created
-....
-route.route.openshift.io/webgoat created
-configmap/webgoat-config created
-----
+[start=11]
+. Navigate back to ACM / Application / Topology View 
+. Click on Deployment / Frontend. Verify that the image url has changed
 
-NOTE: You may see warnings like: Warning: would violate PodSecurity "baseline:latest": privileged (container "proxy" must not set securityContext.privileged=true). These warnings appear because you are deploying containers with flawed configurations and known vulnerabilities into the OpenShift cluster.
+image::03-frontend-image2.png[link=self, window=blank, width=100%, Application Frontend Image Toplogy]
 
-====
-The following command will display what applciations have been deployed to the cluster
-====
+IMPORTANT: The Pod in the Topology View should turn RED. This is expected because you're making changes on the ACM side but not on the GitOps side, causing a reporting difference. In a real production environment, you wouldn't make such changes manually, but this is done for educational purposes only.
 
-[source,bash,role="execute"]
-----
-oc get deployments -l demo=roadshow -A
-----
 
-[.console-output]
-[source,bash,subs="+macros,+attributes"]
-----
-[demo-user@bastion ~]$ oc get deployments -l demo=roadshow -A -w
-NAMESPACE    NAME                  READY   UP-TO-DATE   AVAILABLE   AGE
-backend      api-server            1/1     1            1           18s
-default      dvma                  1/1     1            1           76s
-default      juice-shop            1/1     1            1           73s
-default      log4shell             1/1     1            1           70s
-default      open-api-server       1/1     1            1           39s
-default      reporting             1/1     1            1           42s
-default      vulnerable-node-app   1/1     1            1           36s
-default      webgoat               1/1     1            1           33s
-frontend     asset-cache           1/1     1            1           66s
-medical      reporting             1/1     1            1           58s
-operations   jump-host             1/1     1            1           54s
-payments     visa-processor        1/1     1            1           52s
-----
 
-IMPORTANT: Please ensure the deploy application are deployed and available before moving onto the next module. 
-
-====
-The following command triggers a vulnerability scan by RHACS, roxctl filters the results into a table. The severity flag means only the critical vulnerabilities will be shown. This image is known as the "Damn Vulnerable Wed Application" and it contains A LOT of vulnerabilities.
-====
-
-[source,sh,subs="attributes",role=execute]
-----
-roxctl --insecure-skip-tls-verify -e "$ROX_CENTRAL_ADDRESS:443" image scan --image=quay.io/mfoster/dvwa --force -o table
-----
-
-TIP: The following output can be configured using flags. You can configure different outputs (table, CSV, JSON, and sarif.) and filter for specific severities.
-
-[.console-output]
-[source,bash,subs="+macros,+attributes"]
-----
-[demo-user@bastion ~]$ roxctl --insecure-skip-tls-verify -e "$ROX_CENTRAL_ADDRESS:443" image scan --image=quay.io/mfoster/dvwa --force -o table 
-Scan results for image: quay.io/mfoster/dvwa
-
----------------------------------+------------------+
-|          zlib1g           |     1:1.2.13.dfsg-1     |   CVE-2023-45853    | CRITICAL  |         https://nvd.nist.gov/vuln/detail/CVE-2023-45853         |       -       |
-+---------------------------+                         +---------------------+-----------+-----------------------------------------------------------------+---------------+
-|        zlib1g-dev         |                         |   CVE-2023-45853    | CRITICAL  |         https://nvd.nist.gov/vuln/detail/CVE-2023-45853         |       -       |
-+---------------------------+-------------------------+---------------------+-----------+-----------------------------------------------------------------+---------------+
-WARN:   A total of 881 unique vulnerabilities were found in 97 components
-----
-
-image::https://media.giphy.com/media/v1.Y2lkPTc5MGI3NjExbnY0NDA0ZnJqNXh6cGNqeHNxZGd5Zm5qMnlpOHhrbm1hY2pwcG5ydSZlcD12MV9pbnRlcm5hbF9naWZfYnlfaWQmY3Q9Zw/p18ohAgD3H60LSoI1C/giphy.gif[link=self, window=blank, width=100%, class="center"]
-
-== Summary
-
-In this module, you gained access to all the lab UIs and interfaces, including the Showroom lab environment (where you are reading this). You downloaded and deployed insecure applications, setting up the lab with various examples to explore.
-
-*Time to test out your developer skills!*

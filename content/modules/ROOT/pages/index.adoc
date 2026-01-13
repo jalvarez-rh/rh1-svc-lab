@@ -1,63 +1,55 @@
 = {lab_name}
 
-== Introduction
+== Introduction press it in front
 
-Lab Overview
-In this lab, we will demonstrate how OpenShift Platform Plus helps manage and secure multi-cluster deployments. OpenShift Platform Plus includes the core features of OpenShift Container Platform and adds four key components for better management and security:
+[[openshift-acm]]
 
-* Red Hat Advanced Cluster Management (RHACM)
-* Red Hat Advanced Cluster Security (RHACS)
-* Red Hat Quay (Quay)
-* Red Hat OpenShift Data Foundation (RHODF)
+===  OpenShift console access & RHACM console access
 
-Participants will learn how to:
+NOTE: The Red Hat Advanced Cluster Management for Kubernetes (RHACM) Console is now integrated with OpenShift Console, to access it please select *All Clusters* from the dropdown menu once you log in. 
 
-* *Developers:* Build, deploy and scan applications with Quay
-* *Operations:* Deploy Clusters, Virtual Machines, and applications with RHACM
-* *Security:* Secure applications with RHACS
+Your OpenShift cluster console is available in the right panel. In case you want to open it in another window it is here: {openshift_cluster_console_url}[window=blank]
 
-== OpenShift Platform Plus Applications
+Administrator login is available with:
 
-=== Red Hat Advanced Cluster Management for Kubernetes (RHACM)
+[cols="1,1"]
+|===
+| *Username:* | {openshift_cluster_admin_username}
+| *Password:* | {openshift_cluster_admin_password}
+|===
 
-RHACM helps manage Kubernetes clusters across hybrid and multicloud environments. It provides a unified console for policy-based governance, observability, and automation.
+[[acs]]
+=== RHACS console access
 
-In this workshop, we’ll show how to:
+Your RHACS Console is available in the right panel. In case you want to open it in another window it is here:  {acs_route}[window=blank]
 
-* Deploy clusters in the cloud
-* Manage Virtual Machines
-* Set governance policies for cluster security
-* Apply application deployment policies across clusters*
+Administrator login is available with:
 
-=== Red Hat Advanced Cluster Security for Kubernetes (RHACS)
-RHACS enhances security for Kubernetes workloads in any cloud, including OpenShift, AWS EKS, Azure AKS, and Google GKE.
+[cols="1,1"]
+|===
+| *RHACS Console Username:* | {acs_portal_username} 
+| *RHACS Console Password:* | {acs_portal_password} 
+|===
 
-In this workshop, we’ll cover:
+=== roxctl CLI verification
 
-* Exploring the RHACS console to identify vulnerable workloads
-* Viewing network graphs and metrics
-* Applying deployment and runtime security policies
+Since roxctl hasn't been installed yet, we will install it now. along with a few other key pieces of software. (I know, blame the Ops team :) )
 
-=== Red Hat Quay
-Red Hat Quay is a private, secure, and scalable container image registry. It stores containerized software across distributed datacenters and cloud environments.
+*Procedure*
 
-In this workshop, we’ll demonstrate:
+[start=1]
+. Run the following command.
 
-* Download, build and store a Python application in Quay
-* Uploading and exploring container images in the registry
+[source,sh,subs="attributes",role=execute]
+----
+roxctl --insecure-skip-tls-verify -e "$ROX_CENTRAL_ADDRESS:443" central whoami
+----
 
-=== Red Hat OpenShift Data Foundation (RHODF)
-RHODF provides software-defined storage for containers. It supports rapid application development and deployment across cloud environments.
+== Lab Modules
 
-NOTE: While we won’t use RHODF directly in this workshop, it will be used as the primary storage for our Quay registry and other applications needing persistent storage.
+* xref:module-01.adoc[Module 1: Operations & Security]
+* xref:module-02.adoc[Module 2: Assurance]
+* xref:module-03.adoc[Module 3: Technology & Supply Chain]
+* xref:module-04.adoc[Module 4: Data & AI]
 
-== Environment architecture and useful information
-The OpenShift 4 cluster for this lab is hosted on AWS and will be your central hub for tasks. The cluster setup includes:
-
-1. One OpenShift cluster (Named: "local-cluster") containing:
-* Three control-plane nodes
-* Three worker nodes
-
-2. The secondary cluster in AWS (Named: "development"), using Hosted Control Planes (HCP)
-
-3. You will "provision" a new cluster in the ACM module that will fail during deployment. 
+Click next to get started.

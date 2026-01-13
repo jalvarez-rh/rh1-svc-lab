@@ -1,543 +1,267 @@
-= Store, Scan and Deploy Applications with Red Hat Quay
+= Assurance
 
-In this module, you'll act as the developer, selecting a base image to build your application on. You’ll start by downloading and storing a Python "Golden image," then add your application code to create a deployable app. In the next module, we'll hand off this app to the Operations team to deploy it to the OpenShift cluster.
+[[cluster-conformance]]
 
-[[build-app]]
+Assurance is critical for sovereignty, ensuring that applications operate in a compliant manner and that clusters maintain compliance across diverse regions and geographies. It is essential to have confidence that compliance reports are accurate, testable, and auditable, thereby supporting and advancing key business objectives. Additionally, enabling teams to collaborate effectively through the use of appropriate tools and technologies helps drive organizational success.
 
-[[quay-login]]
+Achieving this level of assurance requires a practical and structured approach.
 
-== Login to Quay from the CLI
+So let's get practical in our example of an EMEA environment and a US environment. Let's look at practical ways that we can Observe audit Police and manage our clusters and application applications. We will start by looking at the security, compliance and environment insights that we can get from Red Hat Advanced Cluster Security for Kubernetes (RHACS).
 
-*Procedure*
+== Security and Environment Insights
 
-[start=1]
-. Run the following command.
+[[rhacs-insights]]
 
-====
-Let’s export a few variables to simplify the process. These variables will be saved in the .bashrc file, so they persist even if you need to refresh the terminal.
-====
+=== *RHACS Basics*
+RHACS provides developers and administrators with tools to meet the security needs of cloud-native development on Kubernetes. Its features address primary security concerns across various environments, including datacenters, private clouds, and public clouds running Kubernetes clusters. With RHACS, you can achieve comprehensive security, covering key areas such as:
 
-[source,sh,subs="attributes",role=execute]
-----
-echo export QUAY_USER={quay_admin_username} >> ~/.bashrc
-QUAY_USER={quay_admin_username}
-echo export QUAY_URL=$(oc -n quay get route quay-quay -o jsonpath='{.spec.host}') >> ~/.bashrc
-QUAY_URL=$(oc -n quay get route quay-quay -o jsonpath='{.spec.host}')
-----
+*Vulnerability Management*  
+Protect nodes, platforms, and applications from vulnerabilities using prioritization and impact-based filters.
 
-[start=2]
+*Network Security*  
+Gain real-time visibility, enforce network policies, detect anomalies, and manage app-centric network access controls.
 
-Verify that the variables are correct, by running the command below.
+*Security Policy Guardrails*  
+Ensure consistent, compliant, and secure configurations with RHACS' built-in policy guardrails.
 
-[source,sh,subs="attributes",role=execute]
-----
-echo $QUAY_USER
-echo $QUAY_URL
-----
+*Compliance*  
+Make sure clusters meet regulatory and contractual requirements, such as DISA-STIG and PCI-DSS, with simple audit capabilities.
 
-[.console-output]
-[source,bash,subs="+macros,+attributes"]
-----
-[lab-user@bastion ~]$ echo $QUAY_USER
-echo $QUAY_URL
-quayadmin
-quay-bq65l.apps.cluster-bq65l.bq65l.sandbox209.opentlc.com
-----
+*Risk Profiling*  
+Identify and prioritize security risks using key impact and severity metrics for OpenShift and Kubernetes clusters.
 
-[start=3]
-. Using the terminal on the bastion host, login to quay using the Podman CLI as shown below:
+*Threat Detection and Response*
+Implement process and network controls to detect malicious runtime incidents and respond using Kubernetes-native enforcement.
 
-[source,sh,subs="attributes",role=execute]
-----
-podman login $QUAY_URL
-----
+=== RHACS Console Access
 
-NOTE: Use the quay admin credentials to sign in. 
-
-[cols="2,2"]
-|===
-| *Quay Username:* | *{quay_admin_username}* 
-*Quay Password:* | *{quay_admin_password}* 
-|===
-
-[.console-output]
-[source,bash,subs="+macros,+attributes"]
-----
-Username: quayadmin
-Password:
-Login Succeeded!
-----
-
-Beautiful! We're logged in. Now you can download build and push images directly to your quay repository.
-
-[[golden-image]]
-
-=== Create our developer golden image
-
-A base image is like a blank canvas, offering a solid foundation such as a minimal operating system or runtime environment. Developers then add the necessary configurations, libraries, and tools for their application. By tagging this customized setup as a golden image, developers ensure consistency across deployments, streamlining workflows and avoiding unexpected issues.
-
-*Procedure*
-
-. Run the following commands in succession
-
-[source,sh,subs="attributes",role=execute]
-----
-podman pull python:3.12-alpine
-----
-
-[.console-output]
-[source,bash,subs="+macros,+attributes"]
-----
-[demo-user@bastion ~]$ podman pull python:3.12-alpine
-Trying to pull docker.io/library/python:3.12-alpine...
-Getting image source signatures
-Copying blob e846654b130a skipped: already exists  
-Copying blob 00bb69fc5235 skipped: already exists  
-Copying blob 1f3e46996e29 skipped: already exists  
-Copying blob 7b104e645578 skipped: already exists  
-Copying config 451fdb03e1 done   | 
-Writing manifest to image destination
-451fdb03e17285d3263d88f0f3bed692c82556935490d233096974386cd0381b
-----
-
-====
-This command tags the python:3.12-alpine image with your Quay repository and username allowing you to accurately push the image in a later step.
-====
-
-[source,sh,subs="attributes",role=execute]
-----
-podman tag docker.io/library/python:3.12-alpine $QUAY_URL/$QUAY_USER/python-alpine-golden:0.1
-----
-
-====
-This command shows you the local images available
-====
-
-[source,sh,subs="attributes",role=execute]
-----
-podman images
-----
-
-[.console-output]
-[source,bash,subs="+macros,+attributes"]
-----
-[demo-user@bastion ~]$ podman images
-REPOSITORY                                                                                  TAG          IMAGE ID      CREATED      SIZE
-quay-w2t4c.apps.cluster-w2t4c.w2t4c.sandbox1647.opentlc.com/quayadmin/python-alpine-golden  0.1          451fdb03e172  5 weeks ago  50.6 MB
-docker.io/library/python                                                                    3.12-alpine  451fdb03e172  5 weeks ago  50.6 MB
-----
-
-====
-This command pushes the golden image to your repository
-====
-
-[source,sh,subs="attributes",role=execute]
-----
-podman push $QUAY_URL/$QUAY_USER/python-alpine-golden:0.1
-----
-
-[.console-output]
-[source,bash,subs="+macros,+attributes"]
-----
-[demo-user@bastion ~]$ podman push $QUAY_URL/$QUAY_USER/python-alpine-golden:0.1
-Getting image source signatures
-Copying blob c6121fb0c7de done   | 
-Copying blob a0904247e36a done   | 
-Copying blob 5b6d0b88dd08 done   | 
-Copying blob 375bee7d34e2 done   | 
-Copying config 451fdb03e1 done   | 
-Writing manifest to image destination
-----
-
-Perfect! 
-
-[[dev-app]]
-
-=== Create the frontend application, and upload it to Quay
-
-In this section, you'll add the application code to the image, then build, tag, and push the new image to Quay. Later, we'll use this image to deploy the application to the OpenShift cluster.
-
-IMPORTANT: With the variables saved in the ~/.bashrc file you will not have to declare them again in the future. 
-
-*Procedure*
-
-. List the contents of the `frontend` directory inside the `app-images` folder to see the files available for the project.
-
-[source,sh,subs="attributes",role=execute]
-----
-ls $TUTORIAL_HOME/app-images/frontend/
-----
-
-[.console-output]
-[source,bash,subs="+macros,+attributes"]
-----
-[demo-user@bastion ~]$ ls $TUTORIAL_HOME/app-images/frontend/
-Dockerfile  main.py  static
-----
-
-[start=2]
-. Display the contents of the `Dockerfile` to understand how the image is built, including installed dependencies and the copied files.
-
-[source,sh,subs="attributes",role=execute]
-----
-cat $TUTORIAL_HOME/app-images/frontend/Dockerfile
-----
-
-[.console-output]
-[source,bash,subs="+macros,+attributes"]
-----
-[demo-user@bastion ~]$ cat $TUTORIAL_HOME/app-images/frontend/Dockerfile
-FROM python:3.12-alpine AS build
-
-RUN pip install --no-cache-dir httpx psycopg psycopg_binary psycopg_pool starlette sse_starlette uvicorn
-
-#vulnerable packages
-RUN pip install --no-cache-dir setuptools==39.1.0
-RUN pip install --no-cache-dir Flask==0.5
-RUN pip install --no-cache-dir Django==1.11.29
-RUN pip install --no-cache-dir requests==2.19.0
-RUN pip install --no-cache-dir PyYAML==3.12
-
-FROM python:3.12-alpine AS run
-
-RUN adduser -S fritz -G root
-USER fritz
-
-COPY --from=build /usr/local/lib/python3.12/site-packages /usr/local/lib/python3.12/site-packages
-COPY --chown=fritz:root static /home/fritz/static
-COPY --chown=fritz:root main.py /home/fritz/main.py
-
-EXPOSE 8080
-WORKDIR /home/fritz
-ENTRYPOINT ["python", "main.py"]
-----
-
-
-[start=3]
-. Update the `FROM` statement in the Dockerfile to reference a custom base image hosted in a private registry, using `sed` to modify the line.
-
-[source,sh,subs="attributes",role=execute]
-----
-sed -i "s|^FROM python:3\.12-alpine AS \(\w\+\)|FROM $QUAY_URL/$QUAY_USER/python-alpine-golden:0.1 AS \1|" $TUTORIAL_HOME/app-images/frontend/Dockerfile
-----
-
-[start=4]
-. Check the Dockerfile again to verify that the `FROM` statement has been updated correctly.
-
-[source,sh,subs="attributes",role=execute]
-----
-cat $TUTORIAL_HOME/app-images/frontend/Dockerfile
-----
-
-[.console-output]
-[source,bash,subs="+macros,+attributes"]
-----
-[demo-user@bastion ~]$ cat $TUTORIAL_HOME/app-images/frontend/Dockerfile
-FROM quay-w2t4c.apps.cluster-w2t4c.w2t4c.sandbox1647.opentlc.com/quayadmin/python-alpine-golden:0.1 AS build
-
-RUN pip install --no-cache-dir 
-
-....
-----
-
-[start=5]
-. Build the Docker image using `podman` from the `frontend` directory. The `-t` flag tags the image with a version (`0.1`) and a registry URL.
-
-[source,sh,subs="attributes",role=execute]
-----
-cd $TUTORIAL_HOME/app-images/frontend/
-podman build -t $QUAY_URL/$QUAY_USER/frontend:0.1 .
-----
-
-[.console-output]
-[source,bash,subs="+macros,+attributes"]
-----
-[demo-user@bastion frontend]$ podman build -t $QUAY_URL/$QUAY_USER/frontend:0.1 .
-[1/2] STEP 1/2: FROM quay-w2t4c.apps.cluster-w2t4c.w2t4c.sandbox1647.opentlc.com/quayadmin/python-alpine-golden:0.1 AS build
-.
-.
-.
-Successfully tagged quay-w2t4c.apps.cluster-w2t4c.w2t4c.sandbox1647.opentlc.com/quayadmin/frontend:0.1
-46ea42cba3f17c366b0c534164ae088719266df9ab4122532b0bffd1bbefaec9
-----
-
-[start=6]
-. Upload the built image to a remote registry using `podman push`.
-
-[source,sh,subs="attributes",role=execute]
-----
-podman push $QUAY_URL/$QUAY_USER/frontend:0.1 
-----
-
-[.console-output]
-[source,bash,subs="+macros,+attributes"]
-----
-[demo-user@bastion frontend]$ podman push $QUAY_URL/$QUAY_USER/frontend:0.1 
-Copying blob e2adcecab318 done   | 
-Copying blob 9944062081bf done   | 
-Copying blob 83e98ac5789e skipped: already exists  
-Copying blob 32fd82e104c5 skipped: already exists  
-Copying blob 453d5d1264c7 done   | 
-Copying blob 3c37dc31320d done   | 
-Copying blob 210a2ae1a75e skipped: already exists  
-Copying blob 57a6ec527341 skipped: already exists  
-Copying config 46ea42cba3 done   | 
-Writing manifest to image destination
-----
-
-NOTE: Quay will automatically create a private registry to store the application image due to your admin access. To deploy the application, ensure the repository is set to public so you can pull the image without authentication.
-
-The frontend application is ready! Next, we'll review it in Quay and deploy it to OpenShift using ACM and OpenShift GitOps. First, let's make the repository public so we can deploy the application without requiring credentials.
-
-[[quay]]
-
-== Accessing Quay 
-
-Your Red Hat Quay console is available at: {quay_console_url}[window=blank]
+Your RHACS Console is available in the showroom environment. In case you want to open it in another window it is here:  {acs_route}[window=blank]
 
 Administrator login is available with:
 
-[source,sh,subs="attributes",role=execute]
-
 [cols="1,1"]
 |===
-| *Quay Console Username:* | {quay_admin_username} |
-| *Quay Console Password:* | {quay_admin_password} |
+| *RHACS Console Username:* | {acs_portal_username} 
+| *RHACS Console Password:* | {acs_portal_password} 
 |===
 
-[[navigating-the-registry]]
+== RHACS Compliance Operator Installation and Compliance Checks
 
-== Browse the registry
+[[conformance-tests]]
 
-In the setup module, you downloaded, built, and pushed an insecure Java application called frontend. Now, it's time to deploy it to the OpenShift Cluster. To proceed, you'll need to make the registry you created public.
+Before making changes to your cluster, it’s essential to understand your current compliance posture. Red Hat Advanced Cluster Security (RHACS) seamlessly integrates with the OpenShift Compliance Operator to provide out-of-the-box compliance checks—including industry standards such as E8 and DISA STIG. You can also define custom profiles that combine multiple standards into one, streamlining your audit processes and allowing you to easily tailor compliance requirements to your organization or region. This flexibility enables you to create global profiles and maintain consistent, auditable compliance across all OpenShift environments.
 
-Let's take a look at the application in the registry.
+=== Checking Your Compliance Posture
 
-*Procedure*
+The first step to any changes in a cluster is to analyze what you need to change RHACS integrates with the compliance operator to bring you a variety of compliance checks from the E8 to DISA STIG and more. RHACS can also set up custom compliance checks so you can create profiles that have both DISA STIG and E8 standards together for easier auditing and to create a profile that can become global if necessary.
 
-. First, click on the *frontend* repository. 
+[start=1]
+. Click on the *Compliance* -> *OpenShift Schedules*tab.
 
-image::02-quay-login.png[link=self, window=blank, width=100%]
-
-The information tab shows you information such as;
-
-- Podman and Docker commands
-- Repository activity
-- The repository description. 
-
-image::02-frontend-repo.png[link=self, window=blank, width=100%]
-
-====
-On the left hand side of the window you should see the following icons labelled in order from top to bottom,
-====
-
-image::02-quay-sidebar.png[link=self, window=blank, width=100%]
-
-- Information
-- Tags
-- Tag History
-- Usage Logs
-- Settings
-
+image::assurance-01.png[link=self, window=blank, width=100%]
 
 [start=2]
-. Click on the *Tags* icon. 
+. Next, click on the *Create scan schdule*.
 
-image::02-quay-tags.png[link=self, window=blank, width=100%]
-
-This tab shows all the images and tags that have been uploaded, including details like fixable vulnerabilities, image size, and the option to make bulk changes based on the security posture.
-
-We’ll explore this tab in more detail later in the module.
+image::assurance-02.png[link=self, window=blank, width=100%]
 
 [start=3]
-. Click on the *Tags History* icon. 
+. Next, fill in the form with the following information:
 
-image::02-quay-history.png[link=self, window=blank, width=100%]
+* Name: `acs-catch-all`
+* Description: `Daily compliance scan for all profiles covering CIS, E8, Moderate, NERC-CIP, PCI-DSS, and STIG standards for both platform and node-level checks`
+* Frequency: *Daily*
+* Time: 12:00
 
-This tab simply displays the container images history over time. 
+. Click Next
+. Select the two clusters: *emea-production* and *us-production*
+. Click Next
+. Add the following profiles (in order):
+    * ocp4-cis (99 rules, Platform, Version 1.5.0)
+    * ocp4-cis-node (100 rules, Node, Version 1.5.0)
+    * ocp4-e8 (14 rules, Platform)
+    * ocp4-moderate (136 rules, Platform, Revision 4)
+    * ocp4-moderate-node (120 rules, Node, Revision 4)
+    * ocp4-nerc-cip (133 rules, Platform)
+    * ocp4-nerc-cip-node (120 rules, Node)
+    * ocp4-pci-dss (120 rules, Platform, Version 3.2.1)
+    * ocp4-pci-dss-node (114 rules, Node, Version 3.2.1)
+    * ocp4-stig (50 rules, Platform, Version V2R1)
+
+
+NOTE: There are many profiles to select but here we are selecting the most common profiles that are used in most organizations. If you want to only add the ones necessary for the lab. Select ......
+
+[start=8]
+. Click Next
+
+NOTE: We will not add a delivery destination so we will skip this step. However you can send notifications via email, get details via API or download reports via the console.
+
+[start=9]
+. Click Next
+. Review your masterpiece and click *Save*
+
+image::assurance-05.png[link=self, window=blank, width=100%]
+
+You should see the new schedule in the list and it will be performing it's first scan. If you click the 3 dots on the right side of the schedule you can trigger a manual scan, download the report or delete the schedule.
+
+image::assurance-06.png[link=self, window=blank, width=100%]
+
+[start=11]
+
+.Head over to the OpenShift coverage section where you can view all of the details from the scan.
+
+image::assurance-07.png[link=self, window=blank, width=100%]
+
+ The RHACS compliance coverage dashboard provides a comprehensive overview of your scan schedules and results. In the Coverage tab, you can review all scan schedules or filter to view specific schedules such as the "acs-catch-all". Each scan displays coverage across a variety of compliance standards—including CIS, OCP, E8, NERC-CIP, NIST 853, PCI-DSS, and DISA-STIG. You can filter results by specific checks for greater detail. On the right side of the dashboard, you’ll see the cluster’s overall compliance status, along with a breakdown of which checks are passing or failing.
+
+=== Analyze Compliance Results
+
+Managing multi-region and multi-geo environments presents specific challenges. Typically, changes are initiated by the operations team, who are responsible for provisioning and managing the infrastructure. They also oversee any modifications needed to enhance security or ensure compliance with applicable standards. Establishing clear processes and leveraging automation can help maintain consistency and compliance across all environments. In OpenShift, cluster changes are done by the administrator or the operations team through the OpenShift console with Red Hat Advanced Cluster Management for Kubernetes (RHACM) providing the governance and policy capabilities.
+
+=== Make a Simple Cluster Change to Pass the Compliance Check
+
+Let's focus on the ocp4-e8 compliance checks. To pass the `ocp4-e8-ocp-allowed-registries` standard, you need to set an allowlist of container registries that OpenShift can pull images from. 
+
+First let's take a look at the standard;
+
+[start=1]
+. Click on the *Compliance* -> *OpenShift Coverage* -> *E8* tab.
+
+image::compliance-01.png[link=self, window=blank, width=100%]
+
+[start=2]
+Let's first check the failing standards by sorting by compliance status.
+
+image::compliance-02.png[link=self, window=blank, width=100%]
+image::compliance-03.png[link=self, window=blank, width=100%]
+
+[start=3]
+. And then clicking on the failing standard 'ocp4-e8-ocp-allowed-registries'.
+
+Here you will see both the clusters impacted by this failing standard and guidance on how to resolve the issue.
 
 [start=4]
-. Click into the SHA256 hash number. 
+. Click on the *Details* tab next to *Results* and review the findings for the failing check. 
 
-image::02-image-details.png[link=self, window=blank, width=100%]
-
-From this dashboard you will be able to see the image manifest of that container image.
-
-image::02-image-manifest.png[link=self, window=blank, width=100%]
+To address this, limit the set of container registries that OpenShift is allowed to pull images from by configuring the cluster with a new allowlist. We will do this by applying a YAML configuration as an OpenShift administrator, and then re-scan the cluster to verify compliance.
 
 [start=5]
-. Click the *BACK* icon in the top left of the dashboard then click on the *Usage Logs* icon. 
+. Create the Image Configuration YAML by copying and pasting the following into the bastion host terminal.
 
-image::02-quay-back.png[link=self, window=blank, width=100%]
-image::02-quay-usage.png[link=self, window=blank, width=100%]
+[source,sh]
+----
+oc apply -f - <<EOF
+apiVersion: config.openshift.io/v1
+kind: Image
+metadata:
+  name: cluster
+spec:
+  registrySources:
+    allowedRegistries:
+      - quay.io
+      - registry.redhat.io
+      - registry.access.redhat.com
+      - image-registry.openshift-image-registry.svc:5000
+      - gcr.io
+      - docker.io
+EOF
+----
 
-
-This tab displays the usage over time along with details about who/how the images were pushed to the cluster. 
-
+[TIP]
 ====
-You should see that you (The "quayadmin") pushed an image tagged 0.1 to the repository today. 
+- `image-registry.openshift-image-registry.svc:5000` is needed for OpenShift’s own internal image registry.
+- Add/remove registries as needed for your environment.
+- Any registry used in your cluster must be in this list to pass the policy.
 ====
 
 [start=6]
-. Lastly click on the *Settings* icon. 
+. Check that your changes have been accepted:
 
-image::02-quay-settings.png[link=self, window=blank, width=100%]
+[source,sh]
+----
+oc get image.config.openshift.io/cluster -o yaml | grep allowedRegistries -A 10
+----
 
-In this tab you can add/remove users and update permissions, alter the privacy of the repository, and even schedule alerts based on found vulnerabilities.
+**Output**
+[source,sh]
+----
+    allowedRegistries:
+    - quay.io
+    - registry.redhat.io
+    - registry.access.redhat.com
+    - image-registry.openshift-image-registry.svc:5000
+    - my-trusted-registry.internal.example.com
+    - quay.io
+status:
+  internalRegistryHostname: image-registry.openshift-image-registry.svc:5000
+----
 
 [start=7]
-. Make your repository public before deploying our application in the next step by clicking the *Make Public* button under *Repository Visibility*
+**Verification**
 
-image::02-quay-public.png[link=self, window=blank, width=100%]
+. To verify remediation and compliance with the `ocp4-e8-ocp-allowed-registries` requirement:
 
-IMPORTANT: Make sure to make the repository public. Otherwise you will not be able to deploy the application in the ACM section.
+.. Go back to the *RHACS* console.
+.. Navigate to *Compliance* → *Scan Schedules* and locate your schedule (for example, `acs-catch-all`).
+.. Use the menu on the schedule (three dots) and select "Run scan" to trigger a manual scan.
+
+**Check Results**
 
 [start=8]
-. Click OK
 
-image::02-quay-public-yes.png[link=self, window=blank, width=100%]
+.Click on the *Compliance* -> *OpenShift Coverage* -> *E8* tab.
 
-Great! The frontend application can now be deployed with ACM without using pull secrets. 
+- The `ocp4-e8-ocp-allowed-registries` check should now pass, showing your registry restrictions are correctly configured.
+- If the check still fails, double-check your YAML for typos or missing registries in use by workloads.
 
-[[vulnerability-scanning-with-quay]]
+[IMPORTANT]
+====
+Changes to Image configuration may take a few minutes to propagate in OpenShift. If the compliance check still fails after rescanning, wait a few minutes and run the scan again.
+====
 
-== Vulnerability Scanning with Quay
+Well done! Updating allowed image registries is a great example of a quick compliance improvement you can implement in OpenShift. Other common hardening steps include enabling audit log forwarding or host node auditing with Linux auditd. These types of changes can be managed cluster-wide using the MachineConfig Operator, or automated at deployment time so new clusters are compliant out of the box—options include leveraging Ansible, ACM, or similar automation tools.
 
-Red Hat Quay helps secure environments by performing container vulnerability scans on images added to the registry, identifying which vulnerabilities are potentially fixable. This is known as vulnerability scanning at rest.
+It’s important for Security and Operations teams to collaborate and ensure that clusters are provisioned with these baseline controls in place. Using the Compliance Operator and RHACS, you were able to test these configuration changes safely in our lab, validate that workloads continue to function as expected, and then propagate approved fixes into our broader operations and deployment workflows. This helps maintain continuous compliance across all environments.
 
-Follow the procedure below to check the security scan results for the Java container image you've uploaded.
 
-*Procedure*
+== Policy Creation and Updates Based on Compliance Results (RHACS)
 
-. Click on the *Tags* icon on the left side of the screen like before.
+[[analyze-compliance]]
 
-image::02-quay-tags.png[link=self, window=blank, width=100%]
+=== Update Policies Based on Results (namespace scoped)
 
-[start=2]
-. By default, the security scan color codes the vulnerabilities, you can hover over the security scan for more information.
+[[update-policies]]
 
-image::02-quay-scan-hover.png[link=self, window=blank, width=100%]
+=== Roxctl Installation
 
-NOTE: The alpine container image you are using in this lab shows 34 vulnerabilities, with 2 cirtical vulnerabilities. This number will change with time and will be different between container scanners for a variety of reasons such as reporting mechanisms, vulnerability feeds and operating system support. 
-
-[start=3]
-. Click on the list of vulnerabilities to see a more detailed view.
-
-image::02-quay-security.png[link=self, window=blank, width=100%] 
-
-image::02-quay-vuln-overview.png[link=self, window=blank, width=100%]
-
-[start=4]
-. Click on a vulnerable package on the left menu to get more information about the vulnerability and see what you have to do to fix the issue.
-
-image::02-quay-vuln-detailed.png[link=self, window=blank, width=100%]
-
-NOTE: Toggling for fixable/unfixable vulnerabilities is an excellent way for developers to understand what is within their responsibility for fixing. For example, since you are using an older version of Java, many fixes are available for these common issues. 
-
-=== Ensure ACS can pull the image manifest from your Quay instance
-
-There is currently no integration with the Quay repository which means ACS cannot view the manifest layers. You can verify this by running a similar roxctl scan that you ran before.
+Roxctl is a command-line tool used to interact with Red Hat Advanced Cluster Security (RHACS) platform resources.
 
 *Procedure*
 
-. Run the following command to test the RHACS/Quay integration
+. Download the latest roxctl binary for your operating system:
 
-[source,sh,subs="attributes",role=execute]
+[source,sh,role=execute]
 ----
-roxctl --insecure-skip-tls-verify -e "$ROX_CENTRAL_ADDRESS:443" image scan --image=$QUAY_URL/$QUAY_USER/frontend:0.1 --force -o table
-----
-
-[.console-output]
-[source,bash,subs="+macros,+attributes"]
-----
-ERROR:  Scanning image failed: retrieving image scan result: could not scan image: "quay-nhxdx.apps.cluster-nhxdx.nhxdx.sandbox4561.opentlc.com/quayadmin/frontend:0.1": rpc error: code = Internal desc = image enrichment error: error getting metadata for image: quay-nhxdx.apps.cluster-nhxdx.nhxdx.sandbox4561.opentlc.com/quayadmin/frontend:0.1 error: no matching image registries found: please add an image integration for quay-nhxdx.apps.cluster-nhxdx.nhxdx.sandbox4561.opentlc.com. Retrying after 3 seconds...
+curl -LO "https://mirror.openshift.com/pub/rhacs/assets/4.9.0/bin/linux/roxctl"
 ----
 
-[start=2]
-. Next, run the following command in the terminal to add the Quay integration to RHACS via an API call.
+. Make the binary executable:
 
-[source,sh,subs="attributes",role=execute]
+[source,sh,role=execute]
 ----
-# ACS API endpoint used to create the Quay repo integration
-POST_ENDPOINT="https://${ROX_CENTRAL_ADDRESS}/v1/imageintegrations"
-
-# Quay repository payload
-read -r -d '' PAYLOAD << EOM
-{
-  "name": "my-quay-repo",
-  "type": "quay",
-  "categories": [
-    "REGISTRY"
-  ],
-  "quay": {
-    "endpoint": "http://$QUAY_URL",
-    "insecure": true
-  },
-  "autogenerated": false,
-  "skipTestIntegration": false
-}
-EOM
-
-# Make API request to create Quay repository
-curl -k -X POST "${POST_ENDPOINT}" \
-     -H "Authorization: Bearer ${ROX_API_TOKEN}" \
-     -H "Content-Type: application/json" \
-     -d "${PAYLOAD}" \
-     | jq
+chmod +x roxctl
 ----
 
-[.console-output]
-[source,bash,subs="+macros,+attributes"]
+. Move it to a location in your `$PATH` (such as `/usr/local/bin`):
+
+[source,sh,role=execute]
 ----
-  % Total    % Received % Xferd  Average Speed   Time    Time     Time  Current
-                                 Dload  Upload   Total   Spent    Left  Speed
-100   605  100   339  100   266   3459   2714 --:--:-- --:--:-- --:--:--  6237
-{
-  "id": "ad83bd29-864b-4343-a23d-3b606a24210b",
-  "name": "my-quay-repo",
-  "type": "quay",
-  "categories": [
-    "REGISTRY"
-  ],
-  "quay": {
-    "endpoint": "http://quay-nhxdx.apps.cluster-nhxdx.nhxdx.sandbox4561.opentlc.com/quayadmin",
-    "oauthToken": "",
-    "insecure": true,
-    "registryRobotCredentials": null
-  },
-  "autogenerated": false,
-  "clusterId": "",
-  "skipTestIntegration": false,
-  "source": null
-}
+sudo mv roxctl /usr/local/bin/
 ----
 
-[start=3]
-. Lastly, run the following command and to scan the frontend:0.1 container that you built.
+. Verify installation:
 
-[source,sh,subs="attributes",role=execute]
+[source,sh,role=execute]
 ----
-roxctl --insecure-skip-tls-verify -e "$ROX_CENTRAL_ADDRESS:443" image scan --image=$QUAY_URL/$QUAY_USER/frontend:0.1 --force -o table
+roxctl version
 ----
-
-TIP: The following output can be configured using flags. You can configure different outputs (table, CSV, JSON, and sarif.) and filter for specific severities.
-
-[.console-output]
-[source,bash,subs="+macros,+attributes"]
-----
-.
-.
-.
-|            |         | GHSA-r64q-w8jr-g9qp |    LOW    |             https://github.com/urllib3/urllib3/issues/1553              |    1.24.3     |
-+------------+---------+---------------------+-----------+-------------------------------------------------------------------------+---------------+
-WARN:   A total of 34 unique vulnerabilities were found in 7 components
-----
-
-
-image::https://media.giphy.com/media/v1.Y2lkPTc5MGI3NjExYzMyaHRsNTdwZWRlejRycGtpNTkxOGlyMjJsODE4OHFiaWd3NjFpNyZlcD12MV9pbnRlcm5hbF9naWZfYnlfaWQmY3Q9Zw/rVVFWyTINqG7C/giphy.gif[link=self, window=blank, width=100%, class="center"]
-
-=== Summary
-
-Nice job! Developers can now build and push their images to Quay, view their image vulnerabilities, and use roxctl to scan their images.
-
-*Time to hand it off to the Operations team and Red Hat Advanced Cluster Management!*

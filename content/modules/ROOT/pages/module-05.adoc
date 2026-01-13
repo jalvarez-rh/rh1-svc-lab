@@ -30,7 +30,6 @@ You will see one options for the control plane type:
 
 * Hosted
 
-
 [start=3]
 . Click on the *hosted* option.
 . Leave the infrastructure Provider Credentials as *hcp* 
