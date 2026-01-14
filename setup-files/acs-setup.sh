@@ -182,8 +182,15 @@ if [ -z "${ROX_CENTRAL_ADDRESS:-}" ]; then
 fi
 
 if [ -n "${ROX_CENTRAL_ADDRESS:-}" ]; then
+    # Strip protocol and path, keep only host:port
     ROX_ENDPOINT="${ROX_CENTRAL_ADDRESS#https://}"
     ROX_ENDPOINT="${ROX_ENDPOINT#http://}"
+    # Strip any path (everything after first /)
+    ROX_ENDPOINT="${ROX_ENDPOINT%%/*}"
+    # Ensure port is present (default to 443 for HTTPS)
+    if [[ "$ROX_ENDPOINT" != *:* ]]; then
+        ROX_ENDPOINT="${ROX_ENDPOINT}:443"
+    fi
     log "✓ Central endpoint from environment: $ROX_ENDPOINT"
 else
     # Fallback: get from route (check both rhacs-operator and common namespaces)
@@ -199,12 +206,17 @@ else
     log "✓ Central endpoint from route: $ROX_ENDPOINT"
 fi
 
-# Normalize endpoint for API calls
+# Normalize endpoint for API calls (strip protocol, path, ensure port)
 normalize_rox_endpoint() {
     local input="$1"
+    # Strip protocol
     input="${input#https://}"
     input="${input#http://}"
+    # Strip any path (everything after first /)
+    input="${input%%/*}"
+    # Strip trailing slash
     input="${input%/}"
+    # Ensure port is present
     if [[ "$input" != *:* ]]; then
         input="${input}:443"
     fi
@@ -748,19 +760,39 @@ else
     log "Creating SecuredCluster resource in aws-us cluster (optimized for single-node)..."
 fi
 
-# Construct Central endpoint - use the external route since Central is on local-cluster
+# Construct Central endpoint for SecuredCluster - must be in host:port format (no protocol, no path)
 # ROX_ENDPOINT was set earlier when we were on local-cluster context
-# Use normalized endpoint which already has port if needed
+# Ensure it's properly normalized for the SecuredCluster centralEndpoint field
 if [ -z "${ROX_ENDPOINT_NORMALIZED:-}" ]; then
-    # Fallback: normalize ROX_ENDPOINT if normalized version not available
+    # Normalize ROX_ENDPOINT: ensure it's host:port format
     CENTRAL_ENDPOINT="${ROX_ENDPOINT}"
+    # Strip any remaining path (should already be done, but be safe)
+    CENTRAL_ENDPOINT="${CENTRAL_ENDPOINT%%/*}"
+    CENTRAL_ENDPOINT="${CENTRAL_ENDPOINT%/}"
+    # Ensure port is present
     if [[ "$CENTRAL_ENDPOINT" != *:* ]]; then
         CENTRAL_ENDPOINT="${CENTRAL_ENDPOINT}:443"
     fi
 else
     CENTRAL_ENDPOINT="${ROX_ENDPOINT_NORMALIZED}"
 fi
-log "Configuring SecuredCluster to connect to Central at: $CENTRAL_ENDPOINT"
+
+# Final validation: ensure endpoint is in correct format for SecuredCluster (host:port only)
+if [[ "$CENTRAL_ENDPOINT" == *"://"* ]]; then
+    warning "Central endpoint contains protocol, stripping: $CENTRAL_ENDPOINT"
+    CENTRAL_ENDPOINT="${CENTRAL_ENDPOINT#*://}"
+    CENTRAL_ENDPOINT="${CENTRAL_ENDPOINT%%/*}"
+fi
+if [[ "$CENTRAL_ENDPOINT" == *"/"* ]]; then
+    warning "Central endpoint contains path, stripping: $CENTRAL_ENDPOINT"
+    CENTRAL_ENDPOINT="${CENTRAL_ENDPOINT%%/*}"
+fi
+if [[ "$CENTRAL_ENDPOINT" != *:* ]]; then
+    CENTRAL_ENDPOINT="${CENTRAL_ENDPOINT}:443"
+fi
+
+log "Configuring SecuredCluster centralEndpoint: $CENTRAL_ENDPOINT"
+log "  (This is the API endpoint the sensor will use to connect to Central)"
 
 cat <<EOF | $KUBECTL_CMD apply -f -
 apiVersion: platform.stackrox.io/v1alpha1
