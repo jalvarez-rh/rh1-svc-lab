@@ -793,20 +793,7 @@ spec:
   scanner:
     scannerComponent: Disabled
   scannerV4:
-    scannerComponent: Default
-    replicas: 1
-    dbReplicas: 1
-    indexerReplicas: 1
-    tolerations:
-      - key: node-role.kubernetes.io/master
-        operator: Exists
-        effect: NoSchedule
-      - key: node-role.kubernetes.io/control-plane
-        operator: Exists
-        effect: NoSchedule
-      - key: node-role.kubernetes.io/infra
-        operator: Exists
-        effect: NoSchedule
+    scannerComponent: Disabled
   collector:
     collectionMethod: KernelModule
     tolerations:
@@ -933,18 +920,13 @@ else
     warning "Monitor sensor pod logs if connection issues persist: oc logs -n $RHACS_OPERATOR_NAMESPACE -l app=sensor"
 fi
 
-# Verify Scanner V4 configuration for SNO
-log "Verifying Scanner V4 configuration for single-node cluster..."
+# Verify Scanner V4 is disabled (as configured for SNO)
+log "Verifying Scanner V4 configuration..."
 SCANNER_V4_COMPONENT=$($KUBECTL_CMD get securedcluster "$SECURED_CLUSTER_NAME" -n "$RHACS_OPERATOR_NAMESPACE" -o jsonpath='{.spec.scannerV4.scannerComponent}' 2>/dev/null || echo "")
-if [ "$SCANNER_V4_COMPONENT" != "Disabled" ] && [ -n "$SCANNER_V4_COMPONENT" ]; then
-    SCANNER_V4_REPLICAS=$($KUBECTL_CMD get securedcluster "$SECURED_CLUSTER_NAME" -n "$RHACS_OPERATOR_NAMESPACE" -o jsonpath='{.spec.scannerV4.replicas}' 2>/dev/null || echo "")
-    if [ "$SCANNER_V4_REPLICAS" = "1" ]; then
-        log "✓ Scanner V4 is configured with 1 replica (appropriate for SNO)"
-    else
-        warning "Scanner V4 replicas: ${SCANNER_V4_REPLICAS:-unknown} (should be 1 for SNO)"
-    fi
+if [ "$SCANNER_V4_COMPONENT" = "Disabled" ]; then
+    log "✓ Scanner V4 is disabled (appropriate for single-node cluster)"
 else
-    log "Scanner V4 component: ${SCANNER_V4_COMPONENT:-Default} (will use default settings)"
+    warning "Scanner V4 component: ${SCANNER_V4_COMPONENT:-unknown} (expected: Disabled)"
 fi
 
 log "Secured Cluster Services deployment initiated for aws-us cluster"
@@ -953,7 +935,7 @@ log ""
 log "IMPORTANT NOTES:"
 log "  - Init bundle secrets are applied in namespace: $RHACS_OPERATOR_NAMESPACE"
 log "  - Central endpoint configured: $CENTRAL_ENDPOINT"
-log "  - Scanner V4 is configured for single-node (1 replica each)"
+log "  - Scanner V4 is disabled (to reduce resource usage on single-node)"
 log "  - If pods fail to start, check init bundle secrets and sensor connection"
 log "  - Monitor pod logs: oc logs -n $RHACS_OPERATOR_NAMESPACE <pod-name> -c init-tls-certs"
 
