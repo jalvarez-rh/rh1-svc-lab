@@ -562,27 +562,68 @@ if [ ! -d "$MANIFESTS_DIR" ]; then
     error "Manifests directory not found: $MANIFESTS_DIR"
 fi
 
-# Deploy to both clusters sequentially
-log "Deploying applications to aws-us cluster..."
-if ! $KUBECTL_CMD config use-context aws-us >/dev/null 2>&1; then
-    warning "Failed to switch to aws-us context, skipping deployment"
-else
-    if $KUBECTL_CMD apply -R -f "$MANIFESTS_DIR"; then
-        log "✓ Applications deployed successfully to aws-us cluster"
-    else
-        warning "Failed to deploy applications to aws-us cluster"
+# Function to deploy applications, skipping Skupper manifests if CRDs aren't available
+deploy_applications() {
+    local cluster=$1
+    local context=$2
+    
+    log "Deploying applications to $cluster cluster..."
+    if ! $KUBECTL_CMD config use-context "$context" >/dev/null 2>&1; then
+        warning "Failed to switch to $context context, skipping deployment"
+        return 1
     fi
-fi
+    
+    # Check if Skupper CRDs are available
+    SKUPPER_AVAILABLE=false
+    if $KUBECTL_CMD get crd sites.skupper.io >/dev/null 2>&1 && \
+       $KUBECTL_CMD get crd serviceexports.skupper.io >/dev/null 2>&1; then
+        SKUPPER_AVAILABLE=true
+        log "Skupper CRDs detected, will deploy Skupper applications"
+    else
+        log "Skupper CRDs not found, skipping Skupper-related applications"
+    fi
+    
+    # Deploy manifests, excluding Skupper directories if CRDs aren't available
+    if [ "$SKUPPER_AVAILABLE" = "true" ]; then
+        # Deploy all manifests including Skupper
+        if $KUBECTL_CMD apply -R -f "$MANIFESTS_DIR" 2>&1; then
+            log "✓ Applications deployed successfully to $cluster cluster"
+            return 0
+        else
+            warning "Some resources failed to deploy to $cluster cluster"
+            return 1
+        fi
+    else
+        # Deploy all manifests except Skupper directories
+        DEPLOY_ERRORS=0
+        for dir in "$MANIFESTS_DIR"/*; do
+            if [ -d "$dir" ]; then
+                dirname=$(basename "$dir")
+                # Skip Skupper directories
+                if [[ "$dirname" == skupper* ]]; then
+                    log "Skipping $dirname (Skupper CRDs not available)"
+                    continue
+                fi
+                # Deploy this directory
+                if ! $KUBECTL_CMD apply -R -f "$dir" 2>&1; then
+                    warning "Failed to deploy some resources from $dirname"
+                    DEPLOY_ERRORS=$((DEPLOY_ERRORS + 1))
+                fi
+            fi
+        done
+        
+        if [ $DEPLOY_ERRORS -eq 0 ]; then
+            log "✓ Applications deployed successfully to $cluster cluster (Skupper skipped)"
+            return 0
+        else
+            warning "Some resources failed to deploy to $cluster cluster"
+            return 1
+        fi
+    fi
+}
 
-log "Deploying applications to local-cluster..."
-if ! $KUBECTL_CMD config use-context local-cluster >/dev/null 2>&1; then
-    warning "Failed to switch to local-cluster context, skipping deployment"
-else
-    if $KUBECTL_CMD apply -R -f "$MANIFESTS_DIR"; then
-        log "✓ Applications deployed successfully to local-cluster"
-    else
-        warning "Failed to deploy applications to local-cluster"
-    fi
-fi
+# Deploy to both clusters sequentially
+deploy_applications "aws-us" "aws-us"
+deploy_applications "local-cluster" "local-cluster"
 
 log "ACS setup complete"
