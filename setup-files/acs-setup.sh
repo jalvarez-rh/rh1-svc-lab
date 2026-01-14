@@ -226,11 +226,38 @@ fi
 ADMIN_PASSWORD="$ACS_PORTAL_PASSWORD"
 log "✓ Admin password retrieved from environment"
 
-# Check if SecuredCluster already exists in aws-us cluster
-$KUBECTL_CMD config use-context aws-us >/dev/null 2>&1 || error "Failed to switch to aws-us context"
+# Generate init bundle while still on local-cluster
+log "Generating init bundle for cluster: $CLUSTER_NAME (while on local-cluster)..."
+INIT_BUNDLE_OUTPUT=$(roxctl -e "$ROX_ENDPOINT_NORMALIZED" \
+  central init-bundles generate "$CLUSTER_NAME" \
+  --output-secrets cluster_init_bundle.yaml \
+  --password "$ADMIN_PASSWORD" \
+  --insecure-skip-tls-verify 2>&1) || INIT_BUNDLE_EXIT_CODE=$?
 
+if echo "$INIT_BUNDLE_OUTPUT" | grep -q "AlreadyExists"; then
+    log "Init bundle already exists in RHACS Central, using existing bundle"
+    # Try to retrieve existing bundle or create a new one with different name
+    INIT_BUNDLE_OUTPUT=$(roxctl -e "$ROX_ENDPOINT_NORMALIZED" \
+      central init-bundles generate "${CLUSTER_NAME}-$(date +%s)" \
+      --output-secrets cluster_init_bundle.yaml \
+      --password "$ADMIN_PASSWORD" \
+      --insecure-skip-tls-verify 2>&1) || warning "Failed to generate new init bundle"
+fi
+
+if [ ! -f cluster_init_bundle.yaml ]; then
+    error "Failed to generate init bundle. roxctl output: ${INIT_BUNDLE_OUTPUT:0:500}"
+fi
+log "✓ Init bundle generated"
+
+# Now switch to aws-us cluster for deployment
+log "Switching to aws-us context for deployment..."
+$KUBECTL_CMD config use-context aws-us >/dev/null 2>&1 || error "Failed to switch to aws-us context"
+log "✓ Switched to aws-us context"
+
+# Check if SecuredCluster already exists in aws-us cluster
 if $KUBECTL_CMD get securedcluster "$SECURED_CLUSTER_NAME" -n "$RHACS_OPERATOR_NAMESPACE" >/dev/null 2>&1; then
     log "SecuredCluster '$SECURED_CLUSTER_NAME' already exists in aws-us cluster, skipping setup"
+    rm -f cluster_init_bundle.yaml
 else
     # Ensure namespace exists in aws-us cluster
     log "Ensuring namespace '$RHACS_OPERATOR_NAMESPACE' exists in aws-us cluster..."
@@ -240,29 +267,6 @@ else
     else
         log "✓ Namespace exists"
     fi
-
-    # Generate init bundle
-    log "Generating init bundle for cluster: $CLUSTER_NAME"
-    INIT_BUNDLE_OUTPUT=$(roxctl -e "$ROX_ENDPOINT_NORMALIZED" \
-      central init-bundles generate "$CLUSTER_NAME" \
-      --output-secrets cluster_init_bundle.yaml \
-      --password "$ADMIN_PASSWORD" \
-      --insecure-skip-tls-verify 2>&1) || INIT_BUNDLE_EXIT_CODE=$?
-    
-    if echo "$INIT_BUNDLE_OUTPUT" | grep -q "AlreadyExists"; then
-        log "Init bundle already exists in RHACS Central, using existing bundle"
-        # Try to retrieve existing bundle or create a new one with different name
-        INIT_BUNDLE_OUTPUT=$(roxctl -e "$ROX_ENDPOINT_NORMALIZED" \
-          central init-bundles generate "${CLUSTER_NAME}-$(date +%s)" \
-          --output-secrets cluster_init_bundle.yaml \
-          --password "$ADMIN_PASSWORD" \
-          --insecure-skip-tls-verify 2>&1) || warning "Failed to generate new init bundle"
-    fi
-
-    if [ ! -f cluster_init_bundle.yaml ]; then
-        error "Failed to generate init bundle. roxctl output: ${INIT_BUNDLE_OUTPUT:0:500}"
-    fi
-    log "✓ Init bundle generated"
 
     # Apply init bundle secrets to aws-us cluster
     log "Applying init bundle secrets to aws-us cluster..."
