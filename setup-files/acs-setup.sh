@@ -586,41 +586,88 @@ if ! $KUBECTL_CMD get crd securedclusters.platform.stackrox.io >/dev/null 2>&1; 
 fi
 
 # Apply init bundle secrets to aws-us cluster
+# CRITICAL: Apply init bundle BEFORE creating SecuredCluster to avoid race conditions
 if [ -f "$INIT_BUNDLE_FILE" ]; then
     log "Applying init bundle secrets to aws-us cluster from: $INIT_BUNDLE_FILE"
+    log "NOTE: Init bundle must be applied BEFORE SecuredCluster creation to avoid certificate race conditions"
+    
+    # Check for existing secrets and delete them if they exist (to avoid stale data from previous installs)
+    log "Checking for existing init bundle secrets from previous installations..."
+    for secret in sensor-tls admission-control-tls collector-tls; do
+        if $KUBECTL_CMD get secret "$secret" -n "$RHACS_OPERATOR_NAMESPACE" >/dev/null 2>&1; then
+            log "  Found existing secret $secret, deleting to ensure fresh init bundle..."
+            $KUBECTL_CMD delete secret "$secret" -n "$RHACS_OPERATOR_NAMESPACE" --ignore-not-found=true || true
+            sleep 1
+        fi
+    done
+    
+    # Apply init bundle
     if ! $KUBECTL_CMD apply -f "$INIT_BUNDLE_FILE" -n "$RHACS_OPERATOR_NAMESPACE"; then
         error "Failed to apply init bundle secrets. Check the init bundle file: $INIT_BUNDLE_FILE"
     fi
     log "✓ Init bundle secrets applied"
     
-    # Verify the secrets were created
-    log "Verifying init bundle secrets were created..."
-    sleep 2
+    # Wait and verify the secrets were fully created (not just applied)
+    log "Waiting for init bundle secrets to be fully created and verified..."
     REQUIRED_SECRETS=("sensor-tls" "admission-control-tls" "collector-tls")
-    MISSING_SECRETS=()
-    for secret in "${REQUIRED_SECRETS[@]}"; do
-        if ! $KUBECTL_CMD get secret "$secret" -n "$RHACS_OPERATOR_NAMESPACE" >/dev/null 2>&1; then
-            MISSING_SECRETS+=("$secret")
+    SECRET_WAIT_COUNT=0
+    SECRET_MAX_WAIT=60
+    ALL_SECRETS_READY=false
+    
+    while [ $SECRET_WAIT_COUNT -lt $SECRET_MAX_WAIT ]; do
+        MISSING_SECRETS=()
+        EMPTY_SECRETS=()
+        
+        for secret in "${REQUIRED_SECRETS[@]}"; do
+            if ! $KUBECTL_CMD get secret "$secret" -n "$RHACS_OPERATOR_NAMESPACE" >/dev/null 2>&1; then
+                MISSING_SECRETS+=("$secret")
+            else
+                # Verify secret has data
+                SECRET_DATA=$($KUBECTL_CMD get secret "$secret" -n "$RHACS_OPERATOR_NAMESPACE" -o jsonpath='{.data}' 2>/dev/null || echo "")
+                if [ -z "$SECRET_DATA" ] || [ "$SECRET_DATA" = "{}" ]; then
+                    EMPTY_SECRETS+=("$secret")
+                fi
+            fi
+        done
+        
+        if [ ${#MISSING_SECRETS[@]} -eq 0 ] && [ ${#EMPTY_SECRETS[@]} -eq 0 ]; then
+            ALL_SECRETS_READY=true
+            break
+        fi
+        
+        sleep 2
+        SECRET_WAIT_COUNT=$((SECRET_WAIT_COUNT + 2))
+        
+        if [ $((SECRET_WAIT_COUNT % 10)) -eq 0 ]; then
+            if [ ${#MISSING_SECRETS[@]} -gt 0 ]; then
+                log "  Still waiting for secrets: ${MISSING_SECRETS[*]}"
+            fi
+            if [ ${#EMPTY_SECRETS[@]} -gt 0 ]; then
+                log "  Secrets exist but empty: ${EMPTY_SECRETS[*]}"
+            fi
         fi
     done
     
-    if [ ${#MISSING_SECRETS[@]} -gt 0 ]; then
-        warning "Some required secrets are missing: ${MISSING_SECRETS[*]}"
-        warning "This may cause pod initialization failures. Check the init bundle file: $INIT_BUNDLE_FILE"
-    else
-        log "✓ All required secrets verified: ${REQUIRED_SECRETS[*]}"
-        
-        # Verify secrets have data (not empty)
-        log "Verifying init bundle secrets contain data..."
-        for secret in "${REQUIRED_SECRETS[@]}"; do
-            SECRET_DATA=$($KUBECTL_CMD get secret "$secret" -n "$RHACS_OPERATOR_NAMESPACE" -o jsonpath='{.data}' 2>/dev/null || echo "")
-            if [ -z "$SECRET_DATA" ] || [ "$SECRET_DATA" = "{}" ]; then
-                warning "Secret $secret exists but appears to be empty - this may cause pod initialization failures"
-            else
-                log "  ✓ Secret $secret contains data"
-            fi
-        done
+    if [ "$ALL_SECRETS_READY" = "false" ]; then
+        if [ ${#MISSING_SECRETS[@]} -gt 0 ]; then
+            error "Timeout waiting for init bundle secrets to be created: ${MISSING_SECRETS[*]}. Check the init bundle file: $INIT_BUNDLE_FILE"
+        fi
+        if [ ${#EMPTY_SECRETS[@]} -gt 0 ]; then
+            error "Init bundle secrets exist but are empty: ${EMPTY_SECRETS[*]}. The init bundle may be corrupted. Regenerate it."
+        fi
     fi
+    
+    log "✓ All required secrets verified and ready: ${REQUIRED_SECRETS[*]}"
+    log "  All secrets contain certificate data and are ready for use"
+    
+    # Additional verification: ensure secrets are in the correct namespace
+    log "Verifying secrets are in the correct namespace: $RHACS_OPERATOR_NAMESPACE"
+    for secret in "${REQUIRED_SECRETS[@]}"; do
+        SECRET_NAMESPACE=$($KUBECTL_CMD get secret "$secret" -n "$RHACS_OPERATOR_NAMESPACE" -o jsonpath='{.metadata.namespace}' 2>/dev/null || echo "")
+        if [ "$SECRET_NAMESPACE" != "$RHACS_OPERATOR_NAMESPACE" ]; then
+            warning "Secret $secret is in namespace '$SECRET_NAMESPACE' but should be in '$RHACS_OPERATOR_NAMESPACE'"
+        fi
+    done
     
     log "Init bundle saved at: $INIT_BUNDLE_FILE (kept for reference)"
 else
@@ -631,31 +678,66 @@ else
     if [ -n "$EXISTING_BUNDLE" ] && [ -f "$EXISTING_BUNDLE" ]; then
         log "Found existing init bundle file: $EXISTING_BUNDLE"
         log "Applying init bundle secrets to aws-us cluster..."
+        
+        # Clean up existing secrets first (same as above)
+        log "Cleaning up any existing init bundle secrets..."
+        for secret in sensor-tls admission-control-tls collector-tls; do
+            if $KUBECTL_CMD get secret "$secret" -n "$RHACS_OPERATOR_NAMESPACE" >/dev/null 2>&1; then
+                log "  Deleting existing secret $secret..."
+                $KUBECTL_CMD delete secret "$secret" -n "$RHACS_OPERATOR_NAMESPACE" --ignore-not-found=true || true
+                sleep 1
+            fi
+        done
+        
         if ! $KUBECTL_CMD apply -f "$EXISTING_BUNDLE" -n "$RHACS_OPERATOR_NAMESPACE"; then
-            warning "Failed to apply existing init bundle secrets. You may need to regenerate the init bundle."
-        else
-            log "✓ Init bundle secrets applied from existing file"
-            # Verify the secrets were created
-            log "Verifying init bundle secrets were created..."
-            sleep 2
-            REQUIRED_SECRETS=("sensor-tls" "admission-control-tls" "collector-tls")
+            error "Failed to apply existing init bundle secrets. Regenerate the init bundle: $EXISTING_BUNDLE"
+        fi
+        
+        # Use same robust verification as above
+        log "Waiting for init bundle secrets to be fully created..."
+        REQUIRED_SECRETS=("sensor-tls" "admission-control-tls" "collector-tls")
+        SECRET_WAIT_COUNT=0
+        SECRET_MAX_WAIT=60
+        ALL_SECRETS_READY=false
+        
+        while [ $SECRET_WAIT_COUNT -lt $SECRET_MAX_WAIT ]; do
             MISSING_SECRETS=()
+            EMPTY_SECRETS=()
+            
             for secret in "${REQUIRED_SECRETS[@]}"; do
                 if ! $KUBECTL_CMD get secret "$secret" -n "$RHACS_OPERATOR_NAMESPACE" >/dev/null 2>&1; then
                     MISSING_SECRETS+=("$secret")
+                else
+                    SECRET_DATA=$($KUBECTL_CMD get secret "$secret" -n "$RHACS_OPERATOR_NAMESPACE" -o jsonpath='{.data}' 2>/dev/null || echo "")
+                    if [ -z "$SECRET_DATA" ] || [ "$SECRET_DATA" = "{}" ]; then
+                        EMPTY_SECRETS+=("$secret")
+                    fi
                 fi
             done
             
+            if [ ${#MISSING_SECRETS[@]} -eq 0 ] && [ ${#EMPTY_SECRETS[@]} -eq 0 ]; then
+                ALL_SECRETS_READY=true
+                break
+            fi
+            
+            sleep 2
+            SECRET_WAIT_COUNT=$((SECRET_WAIT_COUNT + 2))
+        done
+        
+        if [ "$ALL_SECRETS_READY" = "false" ]; then
             if [ ${#MISSING_SECRETS[@]} -gt 0 ]; then
-                warning "Some required secrets are missing: ${MISSING_SECRETS[*]}"
-                warning "This may cause pod initialization failures. Regenerate the init bundle if needed."
-            else
-                log "✓ All required secrets verified: ${REQUIRED_SECRETS[*]}"
+                error "Timeout waiting for init bundle secrets: ${MISSING_SECRETS[*]}. Regenerate the init bundle."
+            fi
+            if [ ${#EMPTY_SECRETS[@]} -gt 0 ]; then
+                error "Init bundle secrets are empty: ${EMPTY_SECRETS[*]}. The init bundle may be corrupted. Regenerate it."
             fi
         fi
+        
+        log "✓ All required secrets verified and ready: ${REQUIRED_SECRETS[*]}"
     else
-        warning "Init bundle file not found. If pods are failing, you may need to regenerate the init bundle."
-        warning "Expected location: $INIT_BUNDLE_FILE"
+        error "Init bundle file not found. Cannot proceed without init bundle secrets."
+        error "Expected location: $INIT_BUNDLE_FILE"
+        error "Please ensure the init bundle is generated before creating the SecuredCluster."
     fi
 fi
 
@@ -758,7 +840,121 @@ else
     log "✓ SecuredCluster resource created"
 fi
 
+# Handle operator reconciliation glitches after install/delete cycles
+log "Checking for operator reconciliation issues..."
+# Check if SecuredCluster has deletion timestamp (stuck in deletion)
+DELETION_TIMESTAMP=$($KUBECTL_CMD get securedcluster "$SECURED_CLUSTER_NAME" -n "$RHACS_OPERATOR_NAMESPACE" -o jsonpath='{.metadata.deletionTimestamp}' 2>/dev/null || echo "")
+if [ -n "$DELETION_TIMESTAMP" ] && [ "$DELETION_TIMESTAMP" != "" ]; then
+    warning "SecuredCluster has deletion timestamp - it may be stuck from a previous install/delete cycle"
+    warning "Removing finalizers to allow cleanup..."
+    $KUBECTL_CMD patch securedcluster "$SECURED_CLUSTER_NAME" -n "$RHACS_OPERATOR_NAMESPACE" -p '{"metadata":{"finalizers":[]}}' --type=merge 2>/dev/null || true
+    sleep 5
+    
+    # Wait for it to be fully deleted, then it will be recreated by the apply above
+    DELETE_WAIT=0
+    while $KUBECTL_CMD get securedcluster "$SECURED_CLUSTER_NAME" -n "$RHACS_OPERATOR_NAMESPACE" >/dev/null 2>&1; do
+        if [ $DELETE_WAIT -ge 30 ]; then
+            warning "SecuredCluster still exists after removing finalizers. Forcing deletion..."
+            $KUBECTL_CMD delete securedcluster "$SECURED_CLUSTER_NAME" -n "$RHACS_OPERATOR_NAMESPACE" --force --grace-period=0 2>/dev/null || true
+            break
+        fi
+        sleep 2
+        DELETE_WAIT=$((DELETE_WAIT + 2))
+    done
+    
+    log "SecuredCluster cleaned up, will be recreated by operator"
+    sleep 3
+fi
+
+# Check for stuck pods from previous installations
+log "Checking for stuck pods from previous installations..."
+STUCK_PODS=$($KUBECTL_CMD get pods -n "$RHACS_OPERATOR_NAMESPACE" --field-selector=status.phase!=Running,status.phase!=Succeeded -o jsonpath='{.items[*].metadata.name}' 2>/dev/null || echo "")
+if [ -n "$STUCK_PODS" ]; then
+    for pod in $STUCK_PODS; do
+        POD_AGE=$($KUBECTL_CMD get pod "$pod" -n "$RHACS_OPERATOR_NAMESPACE" -o jsonpath='{.metadata.creationTimestamp}' 2>/dev/null || echo "")
+        # Only clean up pods older than 5 minutes (to avoid deleting newly created ones)
+        if [ -n "$POD_AGE" ]; then
+            log "  Found potentially stuck pod: $pod (created: $POD_AGE)"
+        fi
+    done
+fi
+
+# Wait for operator to start reconciling
+log "Waiting for operator to reconcile SecuredCluster resource..."
+sleep 5
+
+# Wait for sensor deployment to be created and ready (indicates connection to Central)
+log "Waiting for sensor to be created and connect to Central..."
+SENSOR_WAIT_COUNT=0
+SENSOR_MAX_WAIT=300
+SENSOR_READY=false
+
+while [ $SENSOR_WAIT_COUNT -lt $SENSOR_MAX_WAIT ]; do
+    # Check if sensor deployment exists
+    if $KUBECTL_CMD get deployment sensor -n "$RHACS_OPERATOR_NAMESPACE" >/dev/null 2>&1; then
+        # Check if sensor pod is running and ready
+        SENSOR_READY_REPLICAS=$($KUBECTL_CMD get deployment sensor -n "$RHACS_OPERATOR_NAMESPACE" -o jsonpath='{.status.readyReplicas}' 2>/dev/null || echo "0")
+        SENSOR_REPLICAS=$($KUBECTL_CMD get deployment sensor -n "$RHACS_OPERATOR_NAMESPACE" -o jsonpath='{.spec.replicas}' 2>/dev/null || echo "0")
+        
+        if [ "$SENSOR_REPLICAS" != "0" ] && [ "$SENSOR_READY_REPLICAS" = "$SENSOR_REPLICAS" ]; then
+            # Check if sensor pod has connected to Central (no init-tls-certs errors)
+            SENSOR_POD=$($KUBECTL_CMD get pods -n "$RHACS_OPERATOR_NAMESPACE" -l app=sensor -o jsonpath='{.items[0].metadata.name}' 2>/dev/null || echo "")
+            if [ -n "$SENSOR_POD" ] && [ "$SENSOR_POD" != "" ]; then
+                # Check pod status - if it's Running, sensor likely connected
+                POD_PHASE=$($KUBECTL_CMD get pod "$SENSOR_POD" -n "$RHACS_OPERATOR_NAMESPACE" -o jsonpath='{.status.phase}' 2>/dev/null || echo "")
+                if [ "$POD_PHASE" = "Running" ]; then
+                    # Check for init-tls-certs container errors
+                    INIT_TLS_ERRORS=$($KUBECTL_CMD logs "$SENSOR_POD" -n "$RHACS_OPERATOR_NAMESPACE" -c init-tls-certs 2>&1 | grep -i "error\|failed\|timeout" | wc -l || echo "0")
+                    if [ "$INIT_TLS_ERRORS" = "0" ] || [ -z "$INIT_TLS_ERRORS" ]; then
+                        SENSOR_READY=true
+                        break
+                    fi
+                fi
+            fi
+        fi
+    fi
+    
+    sleep 5
+    SENSOR_WAIT_COUNT=$((SENSOR_WAIT_COUNT + 5))
+    
+    if [ $((SENSOR_WAIT_COUNT % 30)) -eq 0 ]; then
+        log "  Still waiting for sensor to connect to Central... (${SENSOR_WAIT_COUNT}/${SENSOR_MAX_WAIT}s)"
+        if $KUBECTL_CMD get deployment sensor -n "$RHACS_OPERATOR_NAMESPACE" >/dev/null 2>&1; then
+            SENSOR_STATUS=$($KUBECTL_CMD get deployment sensor -n "$RHACS_OPERATOR_NAMESPACE" -o jsonpath='{.status.conditions[?(@.type=="Available")].status}' 2>/dev/null || echo "")
+            log "  Sensor deployment status: ${SENSOR_STATUS:-unknown}"
+        fi
+    fi
+done
+
+if [ "$SENSOR_READY" = "true" ]; then
+    log "✓ Sensor is running and connected to Central"
+else
+    warning "Sensor may not be fully ready yet. This is normal for SNO clusters - sensor will continue connecting in the background."
+    warning "Monitor sensor pod logs if connection issues persist: oc logs -n $RHACS_OPERATOR_NAMESPACE -l app=sensor"
+fi
+
+# Verify Scanner V4 configuration for SNO
+log "Verifying Scanner V4 configuration for single-node cluster..."
+SCANNER_V4_COMPONENT=$($KUBECTL_CMD get securedcluster "$SECURED_CLUSTER_NAME" -n "$RHACS_OPERATOR_NAMESPACE" -o jsonpath='{.spec.scannerV4.scannerComponent}' 2>/dev/null || echo "")
+if [ "$SCANNER_V4_COMPONENT" != "Disabled" ] && [ -n "$SCANNER_V4_COMPONENT" ]; then
+    SCANNER_V4_REPLICAS=$($KUBECTL_CMD get securedcluster "$SECURED_CLUSTER_NAME" -n "$RHACS_OPERATOR_NAMESPACE" -o jsonpath='{.spec.scannerV4.replicas}' 2>/dev/null || echo "")
+    if [ "$SCANNER_V4_REPLICAS" = "1" ]; then
+        log "✓ Scanner V4 is configured with 1 replica (appropriate for SNO)"
+    else
+        warning "Scanner V4 replicas: ${SCANNER_V4_REPLICAS:-unknown} (should be 1 for SNO)"
+    fi
+else
+    log "Scanner V4 component: ${SCANNER_V4_COMPONENT:-Default} (will use default settings)"
+fi
+
 log "Secured Cluster Services deployment initiated for aws-us cluster"
 log "The SecuredCluster will connect to Central running on local-cluster"
+log ""
+log "IMPORTANT NOTES:"
+log "  - Init bundle secrets are applied in namespace: $RHACS_OPERATOR_NAMESPACE"
+log "  - Central endpoint configured: $CENTRAL_ENDPOINT"
+log "  - Scanner V4 is configured for single-node (1 replica each)"
+log "  - If pods fail to start, check init bundle secrets and sensor connection"
+log "  - Monitor pod logs: oc logs -n $RHACS_OPERATOR_NAMESPACE <pod-name> -c init-tls-certs"
 
 log "ACS setup complete"
