@@ -46,55 +46,51 @@ if ! $KUBECTL_CMD config use-context "$CLUSTER_CONTEXT" >/dev/null 2>&1; then
 fi
 log "✓ Switched to $CLUSTER_CONTEXT context"
 
-# Delete SecuredCluster resource
-log "Deleting SecuredCluster resources..."
+# Delete SecuredCluster resource (force delete)
+log "Force deleting SecuredCluster resources..."
 if $KUBECTL_CMD get securedcluster -n "$RHACS_OPERATOR_NAMESPACE" >/dev/null 2>&1; then
-    $KUBECTL_CMD delete securedcluster --all -n "$RHACS_OPERATOR_NAMESPACE" --ignore-not-found=true || warning "Failed to delete some SecuredCluster resources"
-    log "✓ SecuredCluster resources deleted"
+    $KUBECTL_CMD delete securedcluster --all -n "$RHACS_OPERATOR_NAMESPACE" --ignore-not-found=true --force --grace-period=0 || warning "Failed to delete some SecuredCluster resources"
+    log "✓ SecuredCluster resources force deleted"
 else
     log "No SecuredCluster resources found"
 fi
 
-# Wait for SecuredCluster to be fully deleted (pods may take time to terminate)
-log "Waiting for SecuredCluster resources to be fully removed..."
-wait_count=0
-max_wait=120
-while $KUBECTL_CMD get securedcluster -n "$RHACS_OPERATOR_NAMESPACE" >/dev/null 2>&1; do
-    if [ $wait_count -ge $max_wait ]; then
-        warning "Timeout waiting for SecuredCluster to be deleted"
-        break
-    fi
-    sleep 2
-    wait_count=$((wait_count + 1))
-    if [ $((wait_count % 10)) -eq 0 ]; then
-        log "  Still waiting for SecuredCluster deletion... ($wait_count/${max_wait}s)"
-    fi
-done
+# Delete all deployments, daemonsets, statefulsets (force delete)
+log "Force deleting all workloads..."
+$KUBECTL_CMD delete deployment --all -n "$RHACS_OPERATOR_NAMESPACE" --ignore-not-found=true --force --grace-period=0 2>/dev/null || true
+$KUBECTL_CMD delete daemonset --all -n "$RHACS_OPERATOR_NAMESPACE" --ignore-not-found=true --force --grace-period=0 2>/dev/null || true
+$KUBECTL_CMD delete statefulset --all -n "$RHACS_OPERATOR_NAMESPACE" --ignore-not-found=true --force --grace-period=0 2>/dev/null || true
+log "✓ Workloads force deleted"
 
-# Delete operator subscription
-log "Deleting RHACS operator subscription..."
+# Delete all pods (force delete)
+log "Force deleting all pods in $RHACS_OPERATOR_NAMESPACE namespace..."
+$KUBECTL_CMD delete pods --all -n "$RHACS_OPERATOR_NAMESPACE" --ignore-not-found=true --force --grace-period=0 2>/dev/null || true
+log "✓ Pods force deleted"
+
+# Delete operator subscription (force delete)
+log "Force deleting RHACS operator subscription..."
 if $KUBECTL_CMD get subscription rhacs-operator -n "$RHACS_OPERATOR_NAMESPACE" >/dev/null 2>&1; then
-    $KUBECTL_CMD delete subscription rhacs-operator -n "$RHACS_OPERATOR_NAMESPACE" --ignore-not-found=true || warning "Failed to delete subscription"
-    log "✓ Subscription deleted"
+    $KUBECTL_CMD delete subscription rhacs-operator -n "$RHACS_OPERATOR_NAMESPACE" --ignore-not-found=true --force --grace-period=0 || warning "Failed to delete subscription"
+    log "✓ Subscription force deleted"
 else
     log "No subscription found"
 fi
 
-# Delete OperatorGroup
-log "Deleting OperatorGroup..."
+# Delete OperatorGroup (force delete)
+log "Force deleting OperatorGroup..."
 if $KUBECTL_CMD get operatorgroup rhacs-operator-group -n "$RHACS_OPERATOR_NAMESPACE" >/dev/null 2>&1; then
-    $KUBECTL_CMD delete operatorgroup rhacs-operator-group -n "$RHACS_OPERATOR_NAMESPACE" --ignore-not-found=true || warning "Failed to delete OperatorGroup"
-    log "✓ OperatorGroup deleted"
+    $KUBECTL_CMD delete operatorgroup rhacs-operator-group -n "$RHACS_OPERATOR_NAMESPACE" --ignore-not-found=true --force --grace-period=0 || warning "Failed to delete OperatorGroup"
+    log "✓ OperatorGroup force deleted"
 else
     log "No OperatorGroup found"
 fi
 
-# Delete CSV (ClusterServiceVersion)
-log "Deleting ClusterServiceVersion..."
+# Delete CSV (ClusterServiceVersion) (force delete)
+log "Force deleting ClusterServiceVersion..."
 CSV_NAME=$($KUBECTL_CMD get csv -n "$RHACS_OPERATOR_NAMESPACE" 2>/dev/null | grep -v "^NAME" | grep -E "rhacs-operator\." | awk '{print $1}' | head -1 || echo "")
 if [ -n "$CSV_NAME" ] && [ "$CSV_NAME" != "" ]; then
-    $KUBECTL_CMD delete csv "$CSV_NAME" -n "$RHACS_OPERATOR_NAMESPACE" --ignore-not-found=true || warning "Failed to delete CSV"
-    log "✓ CSV deleted: $CSV_NAME"
+    $KUBECTL_CMD delete csv "$CSV_NAME" -n "$RHACS_OPERATOR_NAMESPACE" --ignore-not-found=true --force --grace-period=0 || warning "Failed to delete CSV"
+    log "✓ CSV force deleted: $CSV_NAME"
 else
     log "No CSV found"
 fi
@@ -108,35 +104,47 @@ for secret in collector-tls sensor-tls admission-control-tls; do
 done
 log "✓ Init bundle secrets deleted"
 
-# Delete all pods in the namespace (they should be cleaned up by the operator, but just in case)
-log "Deleting remaining pods in $RHACS_OPERATOR_NAMESPACE namespace..."
-if $KUBECTL_CMD get pods -n "$RHACS_OPERATOR_NAMESPACE" >/dev/null 2>&1; then
-    $KUBECTL_CMD delete pods --all -n "$RHACS_OPERATOR_NAMESPACE" --ignore-not-found=true --grace-period=30 || warning "Failed to delete some pods"
-    log "✓ Pods deleted"
-fi
+# Delete all remaining resources (services, configmaps, etc.)
+log "Deleting all remaining resources..."
+$KUBECTL_CMD delete all --all -n "$RHACS_OPERATOR_NAMESPACE" --ignore-not-found=true --force --grace-period=0 2>/dev/null || true
+$KUBECTL_CMD delete configmap --all -n "$RHACS_OPERATOR_NAMESPACE" --ignore-not-found=true --force --grace-period=0 2>/dev/null || true
+$KUBECTL_CMD delete service --all -n "$RHACS_OPERATOR_NAMESPACE" --ignore-not-found=true --force --grace-period=0 2>/dev/null || true
+log "✓ Remaining resources deleted"
 
-# Delete the namespace (this will delete all remaining resources)
-log "Deleting $RHACS_OPERATOR_NAMESPACE namespace..."
+# Force delete the namespace (this will delete all remaining resources)
+log "Force deleting $RHACS_OPERATOR_NAMESPACE namespace..."
 if $KUBECTL_CMD get namespace "$RHACS_OPERATOR_NAMESPACE" >/dev/null 2>&1; then
-    $KUBECTL_CMD delete namespace "$RHACS_OPERATOR_NAMESPACE" --ignore-not-found=true || warning "Failed to delete namespace"
-    log "✓ Namespace deletion initiated"
+    # First, try to remove finalizers from all resources in the namespace
+    log "Removing finalizers from resources in namespace..."
     
-    # Wait for namespace to be deleted
-    log "Waiting for namespace to be fully deleted..."
-    wait_count=0
-    max_wait=180
-    while $KUBECTL_CMD get namespace "$RHACS_OPERATOR_NAMESPACE" >/dev/null 2>&1; do
-        if [ $wait_count -ge $max_wait ]; then
-            warning "Timeout waiting for namespace to be deleted"
-            break
-        fi
-        sleep 2
-        wait_count=$((wait_count + 1))
-        if [ $((wait_count % 20)) -eq 0 ]; then
-            log "  Still waiting for namespace deletion... ($wait_count/${max_wait}s)"
+    # Remove finalizers from SecuredCluster
+    $KUBECTL_CMD patch securedcluster --all -n "$RHACS_OPERATOR_NAMESPACE" -p '{"metadata":{"finalizers":[]}}' --type=merge 2>/dev/null || true
+    
+    # Remove finalizers from CSV
+    for csv in $($KUBECTL_CMD get csv -n "$RHACS_OPERATOR_NAMESPACE" -o name 2>/dev/null || echo ""); do
+        if [ -n "$csv" ]; then
+            $KUBECTL_CMD patch "$csv" -n "$RHACS_OPERATOR_NAMESPACE" -p '{"metadata":{"finalizers":[]}}' --type=merge 2>/dev/null || true
         fi
     done
-    log "✓ Namespace deleted"
+    
+    # Force delete namespace
+    $KUBECTL_CMD delete namespace "$RHACS_OPERATOR_NAMESPACE" --ignore-not-found=true --force --grace-period=0 || warning "Failed to delete namespace"
+    log "✓ Namespace force deletion initiated"
+    
+    # Wait briefly and check if namespace is gone
+    sleep 5
+    if $KUBECTL_CMD get namespace "$RHACS_OPERATOR_NAMESPACE" >/dev/null 2>&1; then
+        # If still exists, try to patch finalizers
+        log "Namespace still exists, removing finalizers..."
+        $KUBECTL_CMD patch namespace "$RHACS_OPERATOR_NAMESPACE" -p '{"metadata":{"finalizers":[]}}' --type=merge 2>/dev/null || true
+        sleep 2
+    fi
+    
+    if ! $KUBECTL_CMD get namespace "$RHACS_OPERATOR_NAMESPACE" >/dev/null 2>&1; then
+        log "✓ Namespace deleted"
+    else
+        warning "Namespace may still exist. You may need to manually remove finalizers."
+    fi
 else
     log "Namespace not found"
 fi
