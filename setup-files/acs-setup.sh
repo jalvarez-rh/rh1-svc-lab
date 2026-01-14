@@ -308,8 +308,8 @@ EOF
         
         # Wait for CRD to be available
         log "Waiting for SecuredCluster CRD to be installed..."
-        local wait_count=0
-        local max_wait=120
+        wait_count=0
+        max_wait=120
         while ! $KUBECTL_CMD get crd securedclusters.platform.stackrox.io >/dev/null 2>&1; do
             if [ $wait_count -ge $max_wait ]; then
                 error "Timeout waiting for SecuredCluster CRD to be installed"
