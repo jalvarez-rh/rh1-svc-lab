@@ -45,3 +45,6 @@ package*
 node_modules
 .firebaserc
 .firebase
+
+# RHACS init bundles (contain sensitive TLS certificates)
+setup-files/init-bundles/

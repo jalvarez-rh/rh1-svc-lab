@@ -232,26 +232,34 @@ log "✓ Admin password retrieved from environment"
 
 # Generate init bundle while still on local-cluster
 log "Generating init bundle for cluster: $CLUSTER_NAME (while on local-cluster)..."
+
+# Create init-bundles directory if it doesn't exist
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+INIT_BUNDLES_DIR="${SCRIPT_DIR}/init-bundles"
+mkdir -p "$INIT_BUNDLES_DIR"
+INIT_BUNDLE_FILE="${INIT_BUNDLES_DIR}/${CLUSTER_NAME}-init-bundle.yaml"
+
 INIT_BUNDLE_OUTPUT=$(roxctl -e "$ROX_ENDPOINT_NORMALIZED" \
   central init-bundles generate "$CLUSTER_NAME" \
-  --output-secrets cluster_init_bundle.yaml \
+  --output-secrets "$INIT_BUNDLE_FILE" \
   --password "$ADMIN_PASSWORD" \
   --insecure-skip-tls-verify 2>&1) || INIT_BUNDLE_EXIT_CODE=$?
 
 if echo "$INIT_BUNDLE_OUTPUT" | grep -q "AlreadyExists"; then
     log "Init bundle already exists in RHACS Central, using existing bundle"
     # Try to retrieve existing bundle or create a new one with different name
+    INIT_BUNDLE_FILE="${INIT_BUNDLES_DIR}/${CLUSTER_NAME}-init-bundle-$(date +%s).yaml"
     INIT_BUNDLE_OUTPUT=$(roxctl -e "$ROX_ENDPOINT_NORMALIZED" \
       central init-bundles generate "${CLUSTER_NAME}-$(date +%s)" \
-      --output-secrets cluster_init_bundle.yaml \
+      --output-secrets "$INIT_BUNDLE_FILE" \
       --password "$ADMIN_PASSWORD" \
       --insecure-skip-tls-verify 2>&1) || warning "Failed to generate new init bundle"
 fi
 
-if [ ! -f cluster_init_bundle.yaml ]; then
+if [ ! -f "$INIT_BUNDLE_FILE" ]; then
     error "Failed to generate init bundle. roxctl output: ${INIT_BUNDLE_OUTPUT:0:500}"
 fi
-log "✓ Init bundle generated"
+log "✓ Init bundle generated and saved to: $INIT_BUNDLE_FILE"
 
 # Now switch to aws-us cluster for deployment
 log "Switching to aws-us context for deployment..."
@@ -578,13 +586,66 @@ if ! $KUBECTL_CMD get crd securedclusters.platform.stackrox.io >/dev/null 2>&1; 
 fi
 
 # Apply init bundle secrets to aws-us cluster
-if [ -f cluster_init_bundle.yaml ]; then
-    log "Applying init bundle secrets to aws-us cluster..."
-    $KUBECTL_CMD apply -f cluster_init_bundle.yaml -n "$RHACS_OPERATOR_NAMESPACE" || error "Failed to apply init bundle secrets"
+if [ -f "$INIT_BUNDLE_FILE" ]; then
+    log "Applying init bundle secrets to aws-us cluster from: $INIT_BUNDLE_FILE"
+    if ! $KUBECTL_CMD apply -f "$INIT_BUNDLE_FILE" -n "$RHACS_OPERATOR_NAMESPACE"; then
+        error "Failed to apply init bundle secrets. Check the init bundle file: $INIT_BUNDLE_FILE"
+    fi
     log "✓ Init bundle secrets applied"
-    rm -f cluster_init_bundle.yaml
+    
+    # Verify the secrets were created
+    log "Verifying init bundle secrets were created..."
+    sleep 2
+    REQUIRED_SECRETS=("sensor-tls" "admission-control-tls" "collector-tls")
+    MISSING_SECRETS=()
+    for secret in "${REQUIRED_SECRETS[@]}"; do
+        if ! $KUBECTL_CMD get secret "$secret" -n "$RHACS_OPERATOR_NAMESPACE" >/dev/null 2>&1; then
+            MISSING_SECRETS+=("$secret")
+        fi
+    done
+    
+    if [ ${#MISSING_SECRETS[@]} -gt 0 ]; then
+        warning "Some required secrets are missing: ${MISSING_SECRETS[*]}"
+        warning "This may cause pod initialization failures. Check the init bundle file: $INIT_BUNDLE_FILE"
+    else
+        log "✓ All required secrets verified: ${REQUIRED_SECRETS[*]}"
+    fi
+    
+    log "Init bundle saved at: $INIT_BUNDLE_FILE (kept for reference)"
 else
-    log "Init bundle file not found, skipping (may already be applied)"
+    # Try to find any existing init bundle file for this cluster
+    SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+    INIT_BUNDLES_DIR="${SCRIPT_DIR}/init-bundles"
+    EXISTING_BUNDLE=$(find "$INIT_BUNDLES_DIR" -name "${CLUSTER_NAME}-init-bundle*.yaml" 2>/dev/null | head -1)
+    if [ -n "$EXISTING_BUNDLE" ] && [ -f "$EXISTING_BUNDLE" ]; then
+        log "Found existing init bundle file: $EXISTING_BUNDLE"
+        log "Applying init bundle secrets to aws-us cluster..."
+        if ! $KUBECTL_CMD apply -f "$EXISTING_BUNDLE" -n "$RHACS_OPERATOR_NAMESPACE"; then
+            warning "Failed to apply existing init bundle secrets. You may need to regenerate the init bundle."
+        else
+            log "✓ Init bundle secrets applied from existing file"
+            # Verify the secrets were created
+            log "Verifying init bundle secrets were created..."
+            sleep 2
+            REQUIRED_SECRETS=("sensor-tls" "admission-control-tls" "collector-tls")
+            MISSING_SECRETS=()
+            for secret in "${REQUIRED_SECRETS[@]}"; do
+                if ! $KUBECTL_CMD get secret "$secret" -n "$RHACS_OPERATOR_NAMESPACE" >/dev/null 2>&1; then
+                    MISSING_SECRETS+=("$secret")
+                fi
+            done
+            
+            if [ ${#MISSING_SECRETS[@]} -gt 0 ]; then
+                warning "Some required secrets are missing: ${MISSING_SECRETS[*]}"
+                warning "This may cause pod initialization failures. Regenerate the init bundle if needed."
+            else
+                log "✓ All required secrets verified: ${REQUIRED_SECRETS[*]}"
+            fi
+        fi
+    else
+        warning "Init bundle file not found. If pods are failing, you may need to regenerate the init bundle."
+        warning "Expected location: $INIT_BUNDLE_FILE"
+    fi
 fi
 
 # Create or update SecuredCluster resource in aws-us cluster (optimized for single-node)
