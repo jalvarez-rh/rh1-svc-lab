@@ -308,9 +308,9 @@ fi
 # This prevents the "00000000..." wildcard ID issue that causes sensor panic
 log "Checking for existing init bundle in Central..."
 if [ "$AUTH_METHOD" = "token" ]; then
-    EXISTING_BUNDLES=$(curl -sk -H "$AUTH_HEADER" "${CENTRAL_API_URL}/v1/clusterinit/init-bundles" 2>/dev/null || echo "[]")
+    EXISTING_BUNDLES=$(curl -sk -H "$AUTH_HEADER" "${CENTRAL_API_URL}/v1/cluster-init/init-bundles" 2>/dev/null || echo "[]")
 else
-    EXISTING_BUNDLES=$(curl -sk -u "${ACS_PORTAL_USERNAME}:${ADMIN_PASSWORD}" "${CENTRAL_API_URL}/v1/clusterinit/init-bundles" 2>/dev/null || echo "[]")
+    EXISTING_BUNDLES=$(curl -sk -u "${ACS_PORTAL_USERNAME}:${ADMIN_PASSWORD}" "${CENTRAL_API_URL}/v1/cluster-init/init-bundles" 2>/dev/null || echo "[]")
 fi
 
 # Check if bundle with this name exists
@@ -319,9 +319,9 @@ BUNDLE_ID=$(echo "$EXISTING_BUNDLES" | jq -r ".[] | select(.name == \"${CLUSTER_
 if [ -n "$BUNDLE_ID" ] && [ "$BUNDLE_ID" != "null" ] && [ "$BUNDLE_ID" != "" ]; then
     log "Found existing init bundle '$CLUSTER_NAME' (ID: $BUNDLE_ID) in Central - deleting to prevent wildcard cert issues..."
     if [ "$AUTH_METHOD" = "token" ]; then
-        REVOKE_RESPONSE=$(curl -sk -X DELETE -H "$AUTH_HEADER" "${CENTRAL_API_URL}/v1/clusterinit/init-bundles/${BUNDLE_ID}" 2>&1)
+        REVOKE_RESPONSE=$(curl -sk -X DELETE -H "$AUTH_HEADER" "${CENTRAL_API_URL}/v1/cluster-init/init-bundles/${BUNDLE_ID}" 2>&1)
     else
-        REVOKE_RESPONSE=$(curl -sk -X DELETE -u "${ACS_PORTAL_USERNAME}:${ADMIN_PASSWORD}" "${CENTRAL_API_URL}/v1/clusterinit/init-bundles/${BUNDLE_ID}" 2>&1)
+        REVOKE_RESPONSE=$(curl -sk -X DELETE -u "${ACS_PORTAL_USERNAME}:${ADMIN_PASSWORD}" "${CENTRAL_API_URL}/v1/cluster-init/init-bundles/${BUNDLE_ID}" 2>&1)
     fi
     
     if echo "$REVOKE_RESPONSE" | grep -qE "200|204|deleted|revoked" || [ -z "$REVOKE_RESPONSE" ]; then
@@ -340,35 +340,31 @@ log "Generating fresh init bundle to ensure proper certificate assignment..."
 BUNDLE_NAME="$CLUSTER_NAME"
 
 # Create init bundle metadata
-# Use curl with HTTP status code capture
+# Use the correct API endpoint: /v1/cluster-init/init-bundles (with hyphen)
 log "Creating init bundle via API..."
 log "Central API URL: ${CENTRAL_API_URL}"
+log "Using endpoint: /v1/cluster-init/init-bundles"
 
-# Try different request formats and endpoints
-CREATE_RESPONSE=""
-HTTP_CODE="000"
-CREATE_BODY=""
-
-# First, try the standard endpoint with JSON body
+# Create init bundle using the correct endpoint
 if [ "$AUTH_METHOD" = "token" ]; then
     CREATE_RESPONSE=$(curl -sk -w "\n%{http_code}" -X POST \
         -H "$AUTH_HEADER" \
         -H "Content-Type: application/json" \
         -d "{\"name\": \"${BUNDLE_NAME}\"}" \
-        "${CENTRAL_API_URL}/v1/clusterinit/init-bundles" 2>&1)
+        "${CENTRAL_API_URL}/v1/cluster-init/init-bundles" 2>&1)
 else
     CREATE_RESPONSE=$(curl -sk -w "\n%{http_code}" -X POST \
         -u "${ACS_PORTAL_USERNAME}:${ADMIN_PASSWORD}" \
         -H "Content-Type: application/json" \
         -d "{\"name\": \"${BUNDLE_NAME}\"}" \
-        "${CENTRAL_API_URL}/v1/clusterinit/init-bundles" 2>&1)
+        "${CENTRAL_API_URL}/v1/cluster-init/init-bundles" 2>&1)
 fi
 
 # Extract HTTP status code (last line)
 HTTP_CODE=$(echo "$CREATE_RESPONSE" | tail -1)
 CREATE_BODY=$(echo "$CREATE_RESPONSE" | sed '$d')
 
-log "Initial API call returned HTTP $HTTP_CODE"
+log "API call returned HTTP $HTTP_CODE"
 if [ "$HTTP_CODE" != "200" ] && [ "$HTTP_CODE" != "201" ]; then
     log "Response body: ${CREATE_BODY:0:200}"
 fi
@@ -386,13 +382,13 @@ elif [ "$HTTP_CODE" = "409" ] || echo "$CREATE_BODY" | grep -qi "already exists\
             -H "$AUTH_HEADER" \
             -H "Content-Type: application/json" \
             -d "{\"name\": \"${BUNDLE_NAME}\"}" \
-            "${CENTRAL_API_URL}/v1/clusterinit/init-bundles" 2>&1)
+            "${CENTRAL_API_URL}/v1/cluster-init/init-bundles" 2>&1)
     else
         CREATE_RESPONSE=$(curl -sk -w "\n%{http_code}" -X POST \
             -u "${ACS_PORTAL_USERNAME}:${ADMIN_PASSWORD}" \
             -H "Content-Type: application/json" \
             -d "{\"name\": \"${BUNDLE_NAME}\"}" \
-            "${CENTRAL_API_URL}/v1/clusterinit/init-bundles" 2>&1)
+            "${CENTRAL_API_URL}/v1/cluster-init/init-bundles" 2>&1)
     fi
     HTTP_CODE=$(echo "$CREATE_RESPONSE" | tail -1)
     CREATE_BODY=$(echo "$CREATE_RESPONSE" | sed '$d')
@@ -405,12 +401,11 @@ elif [ "$HTTP_CODE" = "404" ]; then
     log "API endpoint returned 404, trying alternative endpoints..."
     
     # Try /v1/init-bundles (without clusterinit)
+    # Try alternative endpoints if the correct one doesn't work
     ALTERNATIVE_ENDPOINTS=(
-        "/v1/init-bundles"
-        "/api/v1/clusterinit/init-bundles"
-        "/v1/clusterinit/init-bundles/generate"
-        "/api/v1/init-bundles"
-        "/v1/clusterinit/init-bundles/create"
+        "/v1/cluster-init/init-bundles"  # Correct endpoint (with hyphen)
+        "/v1/clusterinit/init-bundles"   # Legacy endpoint (without hyphen)
+        "/api/v1/cluster-init/init-bundles"
     )
     
     # Try different request body formats
@@ -461,6 +456,7 @@ elif [ "$HTTP_CODE" = "404" ]; then
         error "  2. Authentication failure (check credentials)"
         error "  3. API endpoint structure differs in this RHACS version"
         error "Last response (HTTP $HTTP_CODE): ${CREATE_BODY:0:500}"
+        error "Expected endpoint: ${CENTRAL_API_URL}/v1/cluster-init/init-bundles"
         error "Please verify the Central API endpoint and authentication."
     fi
 else
@@ -541,16 +537,9 @@ if [ -z "$NEW_BUNDLE_ID" ] || [ "$NEW_BUNDLE_ID" = "null" ] || [ "$NEW_BUNDLE_ID
         # Try to get bundle ID from the list endpoint if creation didn't return it
         log "Attempting to retrieve bundle ID from bundle list..."
         if [ "$AUTH_METHOD" = "token" ]; then
-            BUNDLE_LIST=$(curl -sk -H "$AUTH_HEADER" "${CENTRAL_API_URL}/v1/clusterinit/init-bundles" 2>/dev/null || echo "[]")
-            # Try alternative list endpoints
-            if [ "$BUNDLE_LIST" = "[]" ] || [ -z "$BUNDLE_LIST" ]; then
-                BUNDLE_LIST=$(curl -sk -H "$AUTH_HEADER" "${CENTRAL_API_URL}/api/v1/clusterinit/init-bundles" 2>/dev/null || echo "[]")
-            fi
+            BUNDLE_LIST=$(curl -sk -H "$AUTH_HEADER" "${CENTRAL_API_URL}/v1/cluster-init/init-bundles" 2>/dev/null || echo "[]")
         else
-            BUNDLE_LIST=$(curl -sk -u "${ACS_PORTAL_USERNAME}:${ADMIN_PASSWORD}" "${CENTRAL_API_URL}/v1/clusterinit/init-bundles" 2>/dev/null || echo "[]")
-            if [ "$BUNDLE_LIST" = "[]" ] || [ -z "$BUNDLE_LIST" ]; then
-                BUNDLE_LIST=$(curl -sk -u "${ACS_PORTAL_USERNAME}:${ADMIN_PASSWORD}" "${CENTRAL_API_URL}/api/v1/clusterinit/init-bundles" 2>/dev/null || echo "[]")
-            fi
+            BUNDLE_LIST=$(curl -sk -u "${ACS_PORTAL_USERNAME}:${ADMIN_PASSWORD}" "${CENTRAL_API_URL}/v1/cluster-init/init-bundles" 2>/dev/null || echo "[]")
         fi
         
         if [ "$BUNDLE_LIST" != "[]" ] && [ -n "$BUNDLE_LIST" ]; then
@@ -577,76 +566,71 @@ fi
 
 log "Init bundle created with ID: $NEW_BUNDLE_ID"
 
-# Fetch the init bundle secrets via API
-# Try multiple endpoint variations to get Kubernetes secrets format
-log "Fetching init bundle secrets from API for bundle ID: $NEW_BUNDLE_ID..."
+# Extract the base64-encoded bundle from the JSON response
+# The API returns kubectlBundle or helmValuesBundle fields that are base64-encoded
+log "Extracting init bundle secrets from API response..."
+
+# The CREATE_BODY contains the JSON response with base64-encoded bundle data
+# Try to extract kubectlBundle first (Kubernetes secrets format), then helmValuesBundle
+KUBECTL_BUNDLE=$(echo "$CREATE_BODY" | jq -r '.kubectlBundle // empty' 2>/dev/null || echo "")
+HELM_BUNDLE=$(echo "$CREATE_BODY" | jq -r '.helmValuesBundle // empty' 2>/dev/null || echo "")
 
 BUNDLE_SECRETS=""
-SECRET_ENDPOINTS=(
-    "/v1/clusterinit/init-bundles/${NEW_BUNDLE_ID}/secrets.yaml"
-    "/api/v1/clusterinit/init-bundles/${NEW_BUNDLE_ID}/secrets.yaml"
-    "/v1/clusterinit/init-bundles/${NEW_BUNDLE_ID}/helm-values.yaml"
-    "/api/v1/clusterinit/init-bundles/${NEW_BUNDLE_ID}/helm-values.yaml"
-    "/v1/clusterinit/init-bundles/${NEW_BUNDLE_ID}"
-    "/api/v1/clusterinit/init-bundles/${NEW_BUNDLE_ID}"
-)
 
-for SECRET_ENDPOINT in "${SECRET_ENDPOINTS[@]}"; do
-    log "  Trying: ${CENTRAL_API_URL}${SECRET_ENDPOINT}"
-    if [ "$AUTH_METHOD" = "token" ]; then
-        TEST_SECRETS=$(curl -sk -H "$AUTH_HEADER" -H "Accept: application/yaml" "${CENTRAL_API_URL}${SECRET_ENDPOINT}" 2>/dev/null || echo "")
+if [ -n "$KUBECTL_BUNDLE" ] && [ "$KUBECTL_BUNDLE" != "null" ] && [ "$KUBECTL_BUNDLE" != "" ]; then
+    log "Found kubectlBundle in response, decoding base64..."
+    # Decode base64 to get the YAML secrets
+    BUNDLE_SECRETS=$(echo "$KUBECTL_BUNDLE" | base64 -d 2>/dev/null || echo "")
+    if [ -n "$BUNDLE_SECRETS" ] && echo "$BUNDLE_SECRETS" | grep -q "kind: Secret"; then
+        log "✓ Successfully decoded kubectlBundle"
     else
-        TEST_SECRETS=$(curl -sk -u "${ACS_PORTAL_USERNAME}:${ADMIN_PASSWORD}" -H "Accept: application/yaml" "${CENTRAL_API_URL}${SECRET_ENDPOINT}" 2>/dev/null || echo "")
+        warning "kubectlBundle decoded but doesn't contain expected Secret resources"
+        BUNDLE_SECRETS=""
     fi
-    
-    # Check if we got valid secret data
-    if [ -n "$TEST_SECRETS" ] && (echo "$TEST_SECRETS" | grep -q "kind: Secret" || echo "$TEST_SECRETS" | grep -q "apiVersion:"); then
-        BUNDLE_SECRETS="$TEST_SECRETS"
-        log "✓ Found secrets at endpoint: ${SECRET_ENDPOINT}"
-        break
-    elif [ -n "$TEST_SECRETS" ] && echo "$TEST_SECRETS" | grep -qE "(sensor-tls|admission-control-tls|collector-tls)"; then
-        # Found helm values or similar format with secret names
-        BUNDLE_SECRETS="$TEST_SECRETS"
-        log "✓ Found bundle data at endpoint: ${SECRET_ENDPOINT}"
-        break
-    fi
-done
+fi
 
-# If we still don't have secrets, try getting the full bundle details and extract secrets
+# If kubectlBundle didn't work, try helmValuesBundle
 if [ -z "$BUNDLE_SECRETS" ] || ! echo "$BUNDLE_SECRETS" | grep -q "kind: Secret"; then
-    log "Secrets not found in standard endpoints, trying bundle details endpoint..."
-    if [ "$AUTH_METHOD" = "token" ]; then
-        BUNDLE_DETAILS=$(curl -sk -H "$AUTH_HEADER" "${CENTRAL_API_URL}/v1/clusterinit/init-bundles/${NEW_BUNDLE_ID}" 2>/dev/null || echo "")
-    else
-        BUNDLE_DETAILS=$(curl -sk -u "${ACS_PORTAL_USERNAME}:${ADMIN_PASSWORD}" "${CENTRAL_API_URL}/v1/clusterinit/init-bundles/${NEW_BUNDLE_ID}" 2>/dev/null || echo "")
+    if [ -n "$HELM_BUNDLE" ] && [ "$HELM_BUNDLE" != "null" ] && [ "$HELM_BUNDLE" != "" ]; then
+        log "Found helmValuesBundle in response, decoding base64..."
+        BUNDLE_SECRETS=$(echo "$HELM_BUNDLE" | base64 -d 2>/dev/null || echo "")
+        if [ -n "$BUNDLE_SECRETS" ]; then
+            log "✓ Successfully decoded helmValuesBundle"
+            # Note: helmValuesBundle might be in Helm values format, not Kubernetes secrets
+            # The operator can handle both formats
+        fi
     fi
-    
-    # Check if bundle details contains secret data or references
-    if [ -n "$BUNDLE_DETAILS" ]; then
-        # Try to extract helmValues or kubernetesSecrets from JSON response
-        HELM_VALS=$(echo "$BUNDLE_DETAILS" | jq -r '.helmValues // .kubernetesSecrets // .secrets // empty' 2>/dev/null || echo "")
-        if [ -n "$HELM_VALS" ] && [ "$HELM_VALS" != "null" ]; then
-            BUNDLE_SECRETS="$HELM_VALS"
-            log "✓ Extracted secrets from bundle details JSON"
+fi
+
+# If still no secrets, try alternative extraction methods
+if [ -z "$BUNDLE_SECRETS" ] || ! echo "$BUNDLE_SECRETS" | grep -q "kind: Secret"; then
+    log "Trying alternative field names in JSON response..."
+    # Try other possible field names
+    ALT_BUNDLE=$(echo "$CREATE_BODY" | jq -r '.bundle // .data.kubectlBundle // .data.helmValuesBundle // .meta.kubectlBundle // empty' 2>/dev/null || echo "")
+    if [ -n "$ALT_BUNDLE" ] && [ "$ALT_BUNDLE" != "null" ] && [ "$ALT_BUNDLE" != "" ]; then
+        # Check if it's base64 encoded or plain text
+        if echo "$ALT_BUNDLE" | grep -qE "^[A-Za-z0-9+/]+=*$" && [ ${#ALT_BUNDLE} -gt 100 ]; then
+            # Looks like base64
+            BUNDLE_SECRETS=$(echo "$ALT_BUNDLE" | base64 -d 2>/dev/null || echo "")
+            log "✓ Decoded bundle from alternative field"
+        else
+            # Might be plain YAML already
+            BUNDLE_SECRETS="$ALT_BUNDLE"
         fi
     fi
 fi
 
 if [ -z "$BUNDLE_SECRETS" ]; then
-    error "Failed to fetch init bundle secrets for bundle ID: $NEW_BUNDLE_ID"
-    error "Tried endpoints:"
-    for ep in "${SECRET_ENDPOINTS[@]}"; do
-        error "  - ${CENTRAL_API_URL}${ep}"
-    done
-    error "Please check:"
-    error "  1. Bundle ID is correct: $NEW_BUNDLE_ID"
-    error "  2. Bundle exists in Central"
-    error "  3. API endpoints match your RHACS version"
+    error "Failed to extract init bundle secrets from API response."
+    error "Response structure:"
+    echo "$CREATE_BODY" | jq '.' 2>/dev/null | head -20 || echo "$CREATE_BODY" | head -20
+    error "Expected fields: kubectlBundle or helmValuesBundle (base64-encoded)"
+    error "Please check the API response format."
 fi
 
 # Save the bundle secrets to file
 echo "$BUNDLE_SECRETS" > "$INIT_BUNDLE_FILE"
-log "✓ Init bundle secrets saved to: $INIT_BUNDLE_FILE"
+log "✓ Init bundle secrets decoded and saved to: $INIT_BUNDLE_FILE"
 
 # Verify the init bundle file contains valid secrets (not wildcard/empty)
 log "Validating init bundle contains valid certificate data..."
