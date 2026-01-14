@@ -306,17 +306,106 @@ spec:
 EOF
         log "✓ Operator subscription created"
         
+        # Check subscription status and InstallPlan
+        log "Checking subscription status..."
+        sleep 5  # Give subscription time to create InstallPlan
+        SUBSCRIPTION_STATUS=$($KUBECTL_CMD get subscription rhacs-operator -n "$RHACS_OPERATOR_NAMESPACE" -o jsonpath='{.status.state}' 2>/dev/null || echo "unknown")
+        INSTALL_PLAN=$($KUBECTL_CMD get subscription rhacs-operator -n "$RHACS_OPERATOR_NAMESPACE" -o jsonpath='{.status.installPlanRef.name}' 2>/dev/null || echo "")
+        log "Subscription state: ${SUBSCRIPTION_STATUS:-unknown}"
+        if [ -n "$INSTALL_PLAN" ] && [ "$INSTALL_PLAN" != "null" ]; then
+            log "InstallPlan: $INSTALL_PLAN"
+            INSTALL_PLAN_PHASE=$($KUBECTL_CMD get installplan "$INSTALL_PLAN" -n "$RHACS_OPERATOR_NAMESPACE" -o jsonpath='{.status.phase}' 2>/dev/null || echo "")
+            if [ -n "$INSTALL_PLAN_PHASE" ]; then
+                log "InstallPlan phase: $INSTALL_PLAN_PHASE"
+            fi
+        else
+            log "Waiting for InstallPlan to be created..."
+        fi
+        
+        # Wait for CSV to be installed first
+        log "Waiting for RHACS operator CSV to be installed..."
+        csv_wait_count=0
+        csv_max_wait=300
+        CSV_NAME=""
+        while [ -z "$CSV_NAME" ] || [ "$CSV_NAME" = "null" ] || [ "$CSV_NAME" = "" ]; do
+            if [ $csv_wait_count -ge $csv_max_wait ]; then
+                warning "Timeout waiting for operator CSV. Checking subscription and InstallPlan status..."
+                $KUBECTL_CMD get subscription rhacs-operator -n "$RHACS_OPERATOR_NAMESPACE" -o yaml 2>/dev/null | grep -A 15 "status:" || true
+                INSTALL_PLAN=$($KUBECTL_CMD get subscription rhacs-operator -n "$RHACS_OPERATOR_NAMESPACE" -o jsonpath='{.status.installPlanRef.name}' 2>/dev/null || echo "")
+                if [ -n "$INSTALL_PLAN" ] && [ "$INSTALL_PLAN" != "null" ]; then
+                    log "Checking InstallPlan $INSTALL_PLAN..."
+                    $KUBECTL_CMD get installplan "$INSTALL_PLAN" -n "$RHACS_OPERATOR_NAMESPACE" -o yaml 2>/dev/null | grep -A 20 "status:" || true
+                fi
+                log "Checking for CSV in stackrox namespace..."
+                $KUBECTL_CMD get csv -n "$RHACS_OPERATOR_NAMESPACE" 2>/dev/null || true
+                log "Checking for CSV in openshift-operators namespace..."
+                $KUBECTL_CMD get csv -n openshift-operators 2>/dev/null | grep rhacs || true
+                error "Operator CSV installation timeout. Please check operator installation manually."
+            fi
+            # Check both stackrox and openshift-operators namespaces for CSV
+            CSV_NAME=$($KUBECTL_CMD get csv -n "$RHACS_OPERATOR_NAMESPACE" -o jsonpath='{.items[?(@.metadata.name=~"rhacs-operator.*")].metadata.name}' 2>/dev/null | head -1 || echo "")
+            if [ -z "$CSV_NAME" ] || [ "$CSV_NAME" = "null" ]; then
+                CSV_NAME=$($KUBECTL_CMD get csv -n openshift-operators -o jsonpath='{.items[?(@.metadata.name=~"rhacs-operator.*")].metadata.name}' 2>/dev/null | head -1 || echo "")
+            fi
+            sleep 2
+            csv_wait_count=$((csv_wait_count + 1))
+            if [ $((csv_wait_count % 20)) -eq 0 ]; then
+                log "  Still waiting for CSV... ($csv_wait_count/${csv_max_wait}s)"
+                # Check InstallPlan status periodically
+                INSTALL_PLAN=$($KUBECTL_CMD get subscription rhacs-operator -n "$RHACS_OPERATOR_NAMESPACE" -o jsonpath='{.status.installPlanRef.name}' 2>/dev/null || echo "")
+                if [ -n "$INSTALL_PLAN" ] && [ "$INSTALL_PLAN" != "null" ]; then
+                    INSTALL_PLAN_PHASE=$($KUBECTL_CMD get installplan "$INSTALL_PLAN" -n "$RHACS_OPERATOR_NAMESPACE" -o jsonpath='{.status.phase}' 2>/dev/null || echo "")
+                    if [ -n "$INSTALL_PLAN_PHASE" ]; then
+                        log "  InstallPlan phase: $INSTALL_PLAN_PHASE"
+                    fi
+                fi
+            fi
+        done
+        log "✓ Operator CSV found: $CSV_NAME"
+        
+        # Determine which namespace the CSV is in
+        CSV_NAMESPACE="$RHACS_OPERATOR_NAMESPACE"
+        if ! $KUBECTL_CMD get csv "$CSV_NAME" -n "$RHACS_OPERATOR_NAMESPACE" >/dev/null 2>&1; then
+            CSV_NAMESPACE="openshift-operators"
+        fi
+        log "CSV is in namespace: $CSV_NAMESPACE"
+        
+        # Wait for CSV to be in Succeeded phase
+        log "Waiting for operator CSV to be ready..."
+        csv_ready_wait_count=0
+        csv_ready_max_wait=300
+        while true; do
+            CSV_PHASE=$($KUBECTL_CMD get csv "$CSV_NAME" -n "$CSV_NAMESPACE" -o jsonpath='{.status.phase}' 2>/dev/null || echo "")
+            if [ "$CSV_PHASE" = "Succeeded" ]; then
+                break
+            fi
+            if [ $csv_ready_wait_count -ge $csv_ready_max_wait ]; then
+                warning "Timeout waiting for CSV to be ready. Current phase: ${CSV_PHASE:-unknown}"
+                $KUBECTL_CMD get csv "$CSV_NAME" -n "$CSV_NAMESPACE" -o yaml 2>/dev/null | grep -A 20 "status:" || true
+                error "Operator CSV not ready. Please check operator installation manually."
+            fi
+            sleep 2
+            csv_ready_wait_count=$((csv_ready_wait_count + 1))
+            if [ $((csv_ready_wait_count % 20)) -eq 0 ]; then
+                log "  Still waiting for CSV to be ready... ($csv_ready_wait_count/${csv_ready_max_wait}s) - Phase: ${CSV_PHASE:-pending}"
+            fi
+        done
+        log "✓ Operator CSV is ready"
+        
         # Wait for CRD to be available
         log "Waiting for SecuredCluster CRD to be installed..."
         wait_count=0
         max_wait=120
         while ! $KUBECTL_CMD get crd securedclusters.platform.stackrox.io >/dev/null 2>&1; do
             if [ $wait_count -ge $max_wait ]; then
-                error "Timeout waiting for SecuredCluster CRD to be installed"
+                warning "Timeout waiting for SecuredCluster CRD to be installed"
+                warning "Checking operator installation status..."
+                $KUBECTL_CMD get csv "$CSV_NAME" -n "$RHACS_OPERATOR_NAMESPACE" -o yaml 2>/dev/null | grep -A 20 "status:" || true
+                error "SecuredCluster CRD installation timeout. Please check operator installation manually."
             fi
             sleep 2
             wait_count=$((wait_count + 1))
-            if [ $((wait_count % 10)) -eq 0 ]; then
+            if [ $((wait_count % 20)) -eq 0 ]; then
                 log "  Still waiting for CRD... ($wait_count/${max_wait}s)"
             fi
         done
