@@ -242,7 +242,7 @@ fi
 ADMIN_PASSWORD="$ACS_PORTAL_PASSWORD"
 log "✓ Admin password retrieved from environment"
 
-# Generate init bundle while still on local-cluster
+# Generate init bundle while still on local-cluster using curl API calls
 log "Generating init bundle for cluster: $CLUSTER_NAME (while on local-cluster)..."
 
 # Create init-bundles directory if it doesn't exist
@@ -251,26 +251,193 @@ INIT_BUNDLES_DIR="${SCRIPT_DIR}/init-bundles"
 mkdir -p "$INIT_BUNDLES_DIR"
 INIT_BUNDLE_FILE="${INIT_BUNDLES_DIR}/${CLUSTER_NAME}-init-bundle.yaml"
 
-INIT_BUNDLE_OUTPUT=$(roxctl -e "$ROX_ENDPOINT_NORMALIZED" \
-  central init-bundles generate "$CLUSTER_NAME" \
-  --output-secrets "$INIT_BUNDLE_FILE" \
-  --password "$ADMIN_PASSWORD" \
-  --insecure-skip-tls-verify 2>&1) || INIT_BUNDLE_EXIT_CODE=$?
-
-if echo "$INIT_BUNDLE_OUTPUT" | grep -q "AlreadyExists"; then
-    log "Init bundle already exists in RHACS Central, using existing bundle"
-    # Try to retrieve existing bundle or create a new one with different name
-    INIT_BUNDLE_FILE="${INIT_BUNDLES_DIR}/${CLUSTER_NAME}-init-bundle-$(date +%s).yaml"
-    INIT_BUNDLE_OUTPUT=$(roxctl -e "$ROX_ENDPOINT_NORMALIZED" \
-      central init-bundles generate "${CLUSTER_NAME}-$(date +%s)" \
-      --output-secrets "$INIT_BUNDLE_FILE" \
-      --password "$ADMIN_PASSWORD" \
-      --insecure-skip-tls-verify 2>&1) || warning "Failed to generate new init bundle"
+# Ensure jq is available for JSON parsing
+if ! command -v jq >/dev/null 2>&1; then
+    warning "jq is required for init bundle generation. Installing jq..."
+    if command -v dnf >/dev/null 2>&1; then
+        sudo dnf install -y jq >/dev/null 2>&1 || error "Failed to install jq using dnf"
+    elif command -v apt-get >/dev/null 2>&1; then
+        sudo apt-get update >/dev/null 2>&1 && sudo apt-get install -y jq >/dev/null 2>&1 || error "Failed to install jq using apt-get"
+    else
+        error "Cannot install jq automatically. Please install jq manually."
+    fi
 fi
 
-if [ ! -f "$INIT_BUNDLE_FILE" ]; then
-    error "Failed to generate init bundle. roxctl output: ${INIT_BUNDLE_OUTPUT:0:500}"
+# Load ROX_API_TOKEN if available, otherwise use admin password
+if [ -z "${ROX_API_TOKEN:-}" ]; then
+    if [ -f ~/.bashrc ]; then
+        set +u
+        source ~/.bashrc
+        set -u
+    fi
 fi
+
+# Construct Central API URL
+CENTRAL_API_URL="https://${ROX_ENDPOINT_NORMALIZED}"
+CENTRAL_API_URL="${CENTRAL_API_URL%/}"
+
+# Determine authentication method
+if [ -n "${ROX_API_TOKEN:-}" ] && [ "${ROX_API_TOKEN}" != "null" ]; then
+    AUTH_HEADER="Authorization: Bearer ${ROX_API_TOKEN}"
+    AUTH_METHOD="token"
+else
+    AUTH_HEADER=""
+    AUTH_METHOD="password"
+fi
+
+# Check if init bundle already exists in Central and delete it to avoid wildcard cert issues
+# This prevents the "00000000..." wildcard ID issue that causes sensor panic
+log "Checking for existing init bundle in Central..."
+if [ "$AUTH_METHOD" = "token" ]; then
+    EXISTING_BUNDLES=$(curl -sk -H "$AUTH_HEADER" "${CENTRAL_API_URL}/v1/clusterinit/init-bundles" 2>/dev/null || echo "[]")
+else
+    EXISTING_BUNDLES=$(curl -sk -u "${ACS_PORTAL_USERNAME}:${ADMIN_PASSWORD}" "${CENTRAL_API_URL}/v1/clusterinit/init-bundles" 2>/dev/null || echo "[]")
+fi
+
+# Check if bundle with this name exists
+BUNDLE_ID=$(echo "$EXISTING_BUNDLES" | jq -r ".[] | select(.name == \"${CLUSTER_NAME}\") | .id" 2>/dev/null | head -1 || echo "")
+
+if [ -n "$BUNDLE_ID" ] && [ "$BUNDLE_ID" != "null" ] && [ "$BUNDLE_ID" != "" ]; then
+    log "Found existing init bundle '$CLUSTER_NAME' (ID: $BUNDLE_ID) in Central - deleting to prevent wildcard cert issues..."
+    if [ "$AUTH_METHOD" = "token" ]; then
+        REVOKE_RESPONSE=$(curl -sk -X DELETE -H "$AUTH_HEADER" "${CENTRAL_API_URL}/v1/clusterinit/init-bundles/${BUNDLE_ID}" 2>&1)
+    else
+        REVOKE_RESPONSE=$(curl -sk -X DELETE -u "${ACS_PORTAL_USERNAME}:${ADMIN_PASSWORD}" "${CENTRAL_API_URL}/v1/clusterinit/init-bundles/${BUNDLE_ID}" 2>&1)
+    fi
+    
+    if echo "$REVOKE_RESPONSE" | grep -qE "200|204|deleted|revoked" || [ -z "$REVOKE_RESPONSE" ]; then
+        log "✓ Existing init bundle revoked/deleted"
+        sleep 2
+    else
+        warning "Failed to revoke existing init bundle: ${REVOKE_RESPONSE:0:200}"
+        warning "Will attempt to generate new one anyway"
+    fi
+else
+    log "No existing init bundle found in Central, proceeding with generation"
+fi
+
+# Always generate a fresh init bundle to avoid wildcard cert issues
+log "Generating fresh init bundle to ensure proper certificate assignment..."
+BUNDLE_NAME="$CLUSTER_NAME"
+
+# Create init bundle metadata
+if [ "$AUTH_METHOD" = "token" ]; then
+    CREATE_RESPONSE=$(curl -sk -X POST \
+        -H "$AUTH_HEADER" \
+        -H "Content-Type: application/json" \
+        -d "{\"name\": \"${BUNDLE_NAME}\"}" \
+        "${CENTRAL_API_URL}/v1/clusterinit/init-bundles" 2>&1)
+else
+    CREATE_RESPONSE=$(curl -sk -X POST \
+        -u "${ACS_PORTAL_USERNAME}:${ADMIN_PASSWORD}" \
+        -H "Content-Type: application/json" \
+        -d "{\"name\": \"${BUNDLE_NAME}\"}" \
+        "${CENTRAL_API_URL}/v1/clusterinit/init-bundles" 2>&1)
+fi
+
+# Check if creation was successful or if bundle already exists
+if echo "$CREATE_RESPONSE" | grep -qi "already exists\|AlreadyExists"; then
+    log "Init bundle still exists after revocation attempt, trying with timestamped name..."
+    BUNDLE_NAME="${CLUSTER_NAME}-$(date +%s)"
+    INIT_BUNDLE_FILE="${INIT_BUNDLES_DIR}/${BUNDLE_NAME}-init-bundle.yaml"
+    
+    if [ "$AUTH_METHOD" = "token" ]; then
+        CREATE_RESPONSE=$(curl -sk -X POST \
+            -H "$AUTH_HEADER" \
+            -H "Content-Type: application/json" \
+            -d "{\"name\": \"${BUNDLE_NAME}\"}" \
+            "${CENTRAL_API_URL}/v1/clusterinit/init-bundles" 2>&1)
+    else
+        CREATE_RESPONSE=$(curl -sk -X POST \
+            -u "${ACS_PORTAL_USERNAME}:${ADMIN_PASSWORD}" \
+            -H "Content-Type: application/json" \
+            -d "{\"name\": \"${BUNDLE_NAME}\"}" \
+            "${CENTRAL_API_URL}/v1/clusterinit/init-bundles" 2>&1)
+    fi
+fi
+
+# Extract bundle ID from response
+NEW_BUNDLE_ID=$(echo "$CREATE_RESPONSE" | jq -r '.id // .meta.id // empty' 2>/dev/null || echo "")
+
+if [ -z "$NEW_BUNDLE_ID" ] || [ "$NEW_BUNDLE_ID" = "null" ] || [ "$NEW_BUNDLE_ID" = "" ]; then
+    # Try to get bundle ID by name if creation response didn't include it
+    if [ "$AUTH_METHOD" = "token" ]; then
+        BUNDLE_LIST=$(curl -sk -H "$AUTH_HEADER" "${CENTRAL_API_URL}/v1/clusterinit/init-bundles" 2>/dev/null || echo "[]")
+    else
+        BUNDLE_LIST=$(curl -sk -u "${ACS_PORTAL_USERNAME}:${ADMIN_PASSWORD}" "${CENTRAL_API_URL}/v1/clusterinit/init-bundles" 2>/dev/null || echo "[]")
+    fi
+    NEW_BUNDLE_ID=$(echo "$BUNDLE_LIST" | jq -r ".[] | select(.name == \"${BUNDLE_NAME}\") | .id" 2>/dev/null | head -1 || echo "")
+fi
+
+if [ -z "$NEW_BUNDLE_ID" ] || [ "$NEW_BUNDLE_ID" = "null" ] || [ "$NEW_BUNDLE_ID" = "" ]; then
+    error "Failed to create or find init bundle. Response: ${CREATE_RESPONSE:0:500}"
+fi
+
+log "Init bundle created with ID: $NEW_BUNDLE_ID"
+
+# Fetch the init bundle secrets
+# Try Kubernetes secrets format first, fallback to helm-values if needed
+log "Fetching init bundle secrets..."
+BUNDLE_SECRETS=""
+
+# Try Kubernetes secrets endpoint first
+if [ "$AUTH_METHOD" = "token" ]; then
+    BUNDLE_SECRETS=$(curl -sk -H "$AUTH_HEADER" "${CENTRAL_API_URL}/v1/clusterinit/init-bundles/${NEW_BUNDLE_ID}/secrets.yaml" 2>/dev/null || echo "")
+else
+    BUNDLE_SECRETS=$(curl -sk -u "${ACS_PORTAL_USERNAME}:${ADMIN_PASSWORD}" "${CENTRAL_API_URL}/v1/clusterinit/init-bundles/${NEW_BUNDLE_ID}/secrets.yaml" 2>/dev/null || echo "")
+fi
+
+# If secrets.yaml doesn't work, try helm-values.yaml and extract secrets
+if [ -z "$BUNDLE_SECRETS" ] || ! echo "$BUNDLE_SECRETS" | grep -q "kind: Secret"; then
+    log "Trying helm-values endpoint..."
+    if [ "$AUTH_METHOD" = "token" ]; then
+        HELM_VALUES=$(curl -sk -H "$AUTH_HEADER" "${CENTRAL_API_URL}/v1/clusterinit/init-bundles/${NEW_BUNDLE_ID}/helm-values.yaml" 2>/dev/null || echo "")
+    else
+        HELM_VALUES=$(curl -sk -u "${ACS_PORTAL_USERNAME}:${ADMIN_PASSWORD}" "${CENTRAL_API_URL}/v1/clusterinit/init-bundles/${NEW_BUNDLE_ID}/helm-values.yaml" 2>/dev/null || echo "")
+    fi
+    
+    if [ -n "$HELM_VALUES" ]; then
+        # Extract secrets from helm values (they're typically base64 encoded in the values)
+        # For now, save helm values and let the operator handle it, or we need to convert
+        # Actually, roxctl converts helm values to secrets - we might need to do the same
+        # But for simplicity, let's try the API endpoint that roxctl uses internally
+        log "Helm values retrieved, attempting to get Kubernetes secrets format..."
+        
+        # Try the internal API endpoint that returns Kubernetes secrets
+        if [ "$AUTH_METHOD" = "token" ]; then
+            BUNDLE_SECRETS=$(curl -sk -H "$AUTH_HEADER" -H "Accept: application/yaml" "${CENTRAL_API_URL}/v1/clusterinit/init-bundles/${NEW_BUNDLE_ID}" 2>/dev/null || echo "")
+        else
+            BUNDLE_SECRETS=$(curl -sk -u "${ACS_PORTAL_USERNAME}:${ADMIN_PASSWORD}" -H "Accept: application/yaml" "${CENTRAL_API_URL}/v1/clusterinit/init-bundles/${NEW_BUNDLE_ID}" 2>/dev/null || echo "")
+        fi
+        
+        # If still no secrets, use helm values (operator can handle helm values too)
+        if [ -z "$BUNDLE_SECRETS" ] || ! echo "$BUNDLE_SECRETS" | grep -q "kind: Secret"; then
+            BUNDLE_SECRETS="$HELM_VALUES"
+        fi
+    fi
+fi
+
+if [ -z "$BUNDLE_SECRETS" ]; then
+    error "Failed to fetch init bundle secrets for bundle ID: $NEW_BUNDLE_ID"
+fi
+
+# Save the bundle secrets to file
+echo "$BUNDLE_SECRETS" > "$INIT_BUNDLE_FILE"
+
+# Verify the init bundle file contains valid secrets (not wildcard/empty)
+log "Validating init bundle contains valid certificate data..."
+if grep -q "kind: Secret" "$INIT_BUNDLE_FILE" && grep -q "data:" "$INIT_BUNDLE_FILE"; then
+    # Check if bundle contains actual certificate data (not just empty/wildcard)
+    if grep -q "00000000-0000-0000-0000-000000000000" "$INIT_BUNDLE_FILE"; then
+        warning "Init bundle may contain wildcard ID - this can cause sensor panic"
+        warning "Consider manually deleting the init bundle in Central and regenerating"
+    else
+        log "✓ Init bundle appears to contain valid certificate data"
+    fi
+else
+    error "Init bundle file does not appear to contain valid Secret resources"
+fi
+
 log "✓ Init bundle generated and saved to: $INIT_BUNDLE_FILE"
 
 # Now switch to aws-us cluster for deployment
@@ -603,15 +770,52 @@ if [ -f "$INIT_BUNDLE_FILE" ]; then
     log "Applying init bundle secrets to aws-us cluster from: $INIT_BUNDLE_FILE"
     log "NOTE: Init bundle must be applied BEFORE SecuredCluster creation to avoid certificate race conditions"
     
-    # Check for existing secrets and delete them if they exist (to avoid stale data from previous installs)
-    log "Checking for existing init bundle secrets from previous installations..."
-    for secret in sensor-tls admission-control-tls collector-tls; do
+    # If SecuredCluster exists, delete it first to force fresh registration with new certs
+    # This prevents the wildcard cert issue where sensor panics before completing registration
+    if $KUBECTL_CMD get securedcluster "$SECURED_CLUSTER_NAME" -n "$RHACS_OPERATOR_NAMESPACE" >/dev/null 2>&1; then
+        log "Deleting existing SecuredCluster to force fresh registration with new init bundle..."
+        log "  (This prevents wildcard cert issues that cause sensor panic - Red Hat Solution 6972449)"
+        $KUBECTL_CMD delete securedcluster "$SECURED_CLUSTER_NAME" -n "$RHACS_OPERATOR_NAMESPACE" --ignore-not-found=true || true
+        sleep 5
+        # Wait for it to be fully deleted
+        DELETE_WAIT=0
+        while $KUBECTL_CMD get securedcluster "$SECURED_CLUSTER_NAME" -n "$RHACS_OPERATOR_NAMESPACE" >/dev/null 2>&1; do
+            if [ $DELETE_WAIT -ge 30 ]; then
+                warning "SecuredCluster still exists, removing finalizers..."
+                $KUBECTL_CMD patch securedcluster "$SECURED_CLUSTER_NAME" -n "$RHACS_OPERATOR_NAMESPACE" -p '{"metadata":{"finalizers":[]}}' --type=merge 2>/dev/null || true
+                break
+            fi
+            sleep 2
+            DELETE_WAIT=$((DELETE_WAIT + 2))
+        done
+        log "✓ SecuredCluster deleted, will be recreated with fresh init bundle"
+    fi
+    
+    # CRITICAL: Fully clean up existing secrets to prevent wildcard cert issues
+    # This addresses Red Hat Solution 6972449 - stale init bundle secrets cause sensor panic
+    log "Cleaning up existing init bundle secrets to prevent wildcard cert issues..."
+    REQUIRED_SECRETS=("sensor-tls" "admission-control-tls" "collector-tls")
+    for secret in "${REQUIRED_SECRETS[@]}"; do
         if $KUBECTL_CMD get secret "$secret" -n "$RHACS_OPERATOR_NAMESPACE" >/dev/null 2>&1; then
-            log "  Found existing secret $secret, deleting to ensure fresh init bundle..."
-            $KUBECTL_CMD delete secret "$secret" -n "$RHACS_OPERATOR_NAMESPACE" --ignore-not-found=true || true
-            sleep 1
+            log "  Deleting existing secret $secret (may contain wildcard cert)..."
+            # Force delete to ensure complete cleanup
+            $KUBECTL_CMD delete secret "$secret" -n "$RHACS_OPERATOR_NAMESPACE" --ignore-not-found=true --grace-period=0 2>/dev/null || true
+            # Wait a moment for deletion to complete
+            sleep 2
+            # Verify deletion
+            if $KUBECTL_CMD get secret "$secret" -n "$RHACS_OPERATOR_NAMESPACE" >/dev/null 2>&1; then
+                warning "Secret $secret still exists after deletion, forcing removal..."
+                $KUBECTL_CMD patch secret "$secret" -n "$RHACS_OPERATOR_NAMESPACE" -p '{"metadata":{"finalizers":[]}}' --type=merge 2>/dev/null || true
+                $KUBECTL_CMD delete secret "$secret" -n "$RHACS_OPERATOR_NAMESPACE" --force --grace-period=0 2>/dev/null || true
+                sleep 1
+            fi
         fi
     done
+    
+    # Also check for any pods using these secrets and wait for them to be cleaned up
+    log "Waiting for pods using old secrets to be cleaned up..."
+    sleep 3
+    log "✓ Old secrets cleaned up, ready for fresh init bundle"
     
     # Apply init bundle
     if ! $KUBECTL_CMD apply -f "$INIT_BUNDLE_FILE" -n "$RHACS_OPERATOR_NAMESPACE"; then
