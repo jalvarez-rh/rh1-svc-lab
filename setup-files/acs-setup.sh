@@ -477,8 +477,55 @@ spec:
     enforcement: Enabled
     bypass: BreakGlassAnnotation
     failurePolicy: Ignore
+    dynamic:
+      disableBypass: false
+    replicas: 1
+    tolerations:
+      - key: node-role.kubernetes.io/master
+        operator: Exists
+        effect: NoSchedule
+      - key: node-role.kubernetes.io/control-plane
+        operator: Exists
+        effect: NoSchedule
+  scanner:
+    scannerComponent: Enabled
+    replicas: 1
+    tolerations:
+      - key: node-role.kubernetes.io/master
+        operator: Exists
+        effect: NoSchedule
+      - key: node-role.kubernetes.io/control-plane
+        operator: Exists
+        effect: NoSchedule
   scannerV4:
-    scannerComponent: Default
+    scannerComponent: Enabled
+    replicas: 1
+    dbReplicas: 1
+    indexerReplicas: 1
+    tolerations:
+      - key: node-role.kubernetes.io/master
+        operator: Exists
+        effect: NoSchedule
+      - key: node-role.kubernetes.io/control-plane
+        operator: Exists
+        effect: NoSchedule
+  collector:
+    collectionMethod: KernelModule
+    tolerations:
+      - key: node-role.kubernetes.io/master
+        operator: Exists
+        effect: NoSchedule
+      - key: node-role.kubernetes.io/control-plane
+        operator: Exists
+        effect: NoSchedule
+  sensor:
+    tolerations:
+      - key: node-role.kubernetes.io/master
+        operator: Exists
+        effect: NoSchedule
+      - key: node-role.kubernetes.io/control-plane
+        operator: Exists
+        effect: NoSchedule
   processBaselines:
     autoLock: Enabled
 EOF
@@ -490,6 +537,80 @@ EOF
 
     log "Secured Cluster Services deployment initiated for aws-us cluster"
     log "The SecuredCluster will connect to Central running on local-cluster"
+fi
+
+# Deploy demo applications to both clusters in parallel
+log "Deploying demo applications to aws-us and local-cluster clusters..."
+DEMO_APPS_REPO="https://github.com/mfosterrox/demo-applications.git"
+DEMO_APPS_DIR="/tmp/demo-applications"
+MANIFESTS_DIR="$DEMO_APPS_DIR/k8s-deployment-manifests"
+
+# Clone or update the repository
+if [ -d "$DEMO_APPS_DIR" ]; then
+    log "Updating existing demo-applications repository..."
+    if ! (cd "$DEMO_APPS_DIR" && git pull >/dev/null 2>&1); then
+        warning "Failed to update repository, continuing with existing files"
+    fi
+else
+    log "Cloning demo-applications repository..."
+    if ! git clone "$DEMO_APPS_REPO" "$DEMO_APPS_DIR" >/dev/null 2>&1; then
+        error "Failed to clone demo-applications repository"
+    fi
+fi
+
+if [ ! -d "$MANIFESTS_DIR" ]; then
+    error "Manifests directory not found: $MANIFESTS_DIR"
+fi
+
+# Function to deploy to a cluster
+deploy_to_cluster() {
+    local cluster=$1
+    local context=$2
+    log "[$cluster] Deploying applications..."
+    
+    if ! $KUBECTL_CMD config use-context "$context" >/dev/null 2>&1; then
+        warning "[$cluster] Failed to switch to $context context, skipping deployment"
+        return 1
+    fi
+    
+    if $KUBECTL_CMD apply -R -f "$MANIFESTS_DIR" >/dev/null 2>&1; then
+        log "[$cluster] ✓ Applications deployed successfully"
+        return 0
+    else
+        warning "[$cluster] Failed to deploy applications"
+        return 1
+    fi
+}
+
+# Deploy to both clusters in parallel
+log "Starting parallel deployments to aws-us and local-cluster..."
+(
+    deploy_to_cluster "aws-us" "aws-us"
+) &
+AWS_US_PID=$!
+
+(
+    deploy_to_cluster "local-cluster" "local-cluster"
+) &
+LOCAL_CLUSTER_PID=$!
+
+# Wait for both deployments to complete
+wait $AWS_US_PID
+AWS_US_RESULT=$?
+
+wait $LOCAL_CLUSTER_PID
+LOCAL_CLUSTER_RESULT=$?
+
+# Report results
+log "Deployment results:"
+if [ $AWS_US_RESULT -eq 0 ] && [ $LOCAL_CLUSTER_RESULT -eq 0 ]; then
+    log "✓ All applications deployed successfully to both clusters"
+elif [ $AWS_US_RESULT -eq 0 ]; then
+    warning "Applications deployed to aws-us but failed on local-cluster"
+elif [ $LOCAL_CLUSTER_RESULT -eq 0 ]; then
+    warning "Applications deployed to local-cluster but failed on aws-us"
+else
+    warning "Failed to deploy applications to both clusters"
 fi
 
 log "ACS setup complete"
