@@ -562,55 +562,27 @@ if [ ! -d "$MANIFESTS_DIR" ]; then
     error "Manifests directory not found: $MANIFESTS_DIR"
 fi
 
-# Function to deploy to a cluster
-deploy_to_cluster() {
-    local cluster=$1
-    local context=$2
-    log "[$cluster] Deploying applications..."
-    
-    if ! $KUBECTL_CMD config use-context "$context" >/dev/null 2>&1; then
-        warning "[$cluster] Failed to switch to $context context, skipping deployment"
-        return 1
-    fi
-    
-    if $KUBECTL_CMD apply -R -f "$MANIFESTS_DIR" >/dev/null 2>&1; then
-        log "[$cluster] ✓ Applications deployed successfully"
-        return 0
-    else
-        warning "[$cluster] Failed to deploy applications"
-        return 1
-    fi
-}
-
-# Deploy to both clusters in parallel
-log "Starting parallel deployments to aws-us and local-cluster..."
-(
-    deploy_to_cluster "aws-us" "aws-us"
-) &
-AWS_US_PID=$!
-
-(
-    deploy_to_cluster "local-cluster" "local-cluster"
-) &
-LOCAL_CLUSTER_PID=$!
-
-# Wait for both deployments to complete
-wait $AWS_US_PID
-AWS_US_RESULT=$?
-
-wait $LOCAL_CLUSTER_PID
-LOCAL_CLUSTER_RESULT=$?
-
-# Report results
-log "Deployment results:"
-if [ $AWS_US_RESULT -eq 0 ] && [ $LOCAL_CLUSTER_RESULT -eq 0 ]; then
-    log "✓ All applications deployed successfully to both clusters"
-elif [ $AWS_US_RESULT -eq 0 ]; then
-    warning "Applications deployed to aws-us but failed on local-cluster"
-elif [ $LOCAL_CLUSTER_RESULT -eq 0 ]; then
-    warning "Applications deployed to local-cluster but failed on aws-us"
+# Deploy to both clusters sequentially
+log "Deploying applications to aws-us cluster..."
+if ! $KUBECTL_CMD config use-context aws-us >/dev/null 2>&1; then
+    warning "Failed to switch to aws-us context, skipping deployment"
 else
-    warning "Failed to deploy applications to both clusters"
+    if $KUBECTL_CMD apply -R -f "$MANIFESTS_DIR"; then
+        log "✓ Applications deployed successfully to aws-us cluster"
+    else
+        warning "Failed to deploy applications to aws-us cluster"
+    fi
+fi
+
+log "Deploying applications to local-cluster..."
+if ! $KUBECTL_CMD config use-context local-cluster >/dev/null 2>&1; then
+    warning "Failed to switch to local-cluster context, skipping deployment"
+else
+    if $KUBECTL_CMD apply -R -f "$MANIFESTS_DIR"; then
+        log "✓ Applications deployed successfully to local-cluster"
+    else
+        warning "Failed to deploy applications to local-cluster"
+    fi
 fi
 
 log "ACS setup complete"
