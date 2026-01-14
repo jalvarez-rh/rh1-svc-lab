@@ -342,6 +342,14 @@ BUNDLE_NAME="$CLUSTER_NAME"
 # Create init bundle metadata
 # Use curl with HTTP status code capture
 log "Creating init bundle via API..."
+log "Central API URL: ${CENTRAL_API_URL}"
+
+# Try different request formats and endpoints
+CREATE_RESPONSE=""
+HTTP_CODE="000"
+CREATE_BODY=""
+
+# First, try the standard endpoint with JSON body
 if [ "$AUTH_METHOD" = "token" ]; then
     CREATE_RESPONSE=$(curl -sk -w "\n%{http_code}" -X POST \
         -H "$AUTH_HEADER" \
@@ -359,6 +367,11 @@ fi
 # Extract HTTP status code (last line)
 HTTP_CODE=$(echo "$CREATE_RESPONSE" | tail -1)
 CREATE_BODY=$(echo "$CREATE_RESPONSE" | sed '$d')
+
+log "Initial API call returned HTTP $HTTP_CODE"
+if [ "$HTTP_CODE" != "200" ] && [ "$HTTP_CODE" != "201" ]; then
+    log "Response body: ${CREATE_BODY:0:200}"
+fi
 
 # Check HTTP status code
 if [ "$HTTP_CODE" = "200" ] || [ "$HTTP_CODE" = "201" ]; then
@@ -396,35 +409,49 @@ elif [ "$HTTP_CODE" = "404" ]; then
         "/v1/init-bundles"
         "/api/v1/clusterinit/init-bundles"
         "/v1/clusterinit/init-bundles/generate"
+        "/api/v1/init-bundles"
+        "/v1/clusterinit/init-bundles/create"
+    )
+    
+    # Try different request body formats
+    REQUEST_BODIES=(
+        "{\"name\": \"${BUNDLE_NAME}\"}"
+        "{\"initBundle\": {\"name\": \"${BUNDLE_NAME}\"}}"
+        "{\"meta\": {\"name\": \"${BUNDLE_NAME}\"}}"
+        "{\"name\": \"${BUNDLE_NAME}\", \"type\": \"kubernetes\"}"
     )
     
     BUNDLE_CREATED=false
     for ALT_ENDPOINT in "${ALTERNATIVE_ENDPOINTS[@]}"; do
-        log "  Trying: ${CENTRAL_API_URL}${ALT_ENDPOINT}"
+        for REQUEST_BODY in "${REQUEST_BODIES[@]}"; do
+            log "  Trying: ${CENTRAL_API_URL}${ALT_ENDPOINT}"
         if [ "$AUTH_METHOD" = "token" ]; then
             TEST_RESPONSE=$(curl -sk -w "\n%{http_code}" -X POST \
                 -H "$AUTH_HEADER" \
                 -H "Content-Type: application/json" \
-                -d "{\"name\": \"${BUNDLE_NAME}\"}" \
+                -d "$REQUEST_BODY" \
                 "${CENTRAL_API_URL}${ALT_ENDPOINT}" 2>&1)
         else
             TEST_RESPONSE=$(curl -sk -w "\n%{http_code}" -X POST \
                 -u "${ACS_PORTAL_USERNAME}:${ADMIN_PASSWORD}" \
                 -H "Content-Type: application/json" \
-                -d "{\"name\": \"${BUNDLE_NAME}\"}" \
+                -d "$REQUEST_BODY" \
                 "${CENTRAL_API_URL}${ALT_ENDPOINT}" 2>&1)
         fi
         TEST_HTTP_CODE=$(echo "$TEST_RESPONSE" | tail -1)
         TEST_BODY=$(echo "$TEST_RESPONSE" | sed '$d')
         
-        if [ "$TEST_HTTP_CODE" = "200" ] || [ "$TEST_HTTP_CODE" = "201" ]; then
-            log "✓ Found working endpoint: ${ALT_ENDPOINT}"
-            CREATE_RESPONSE="$TEST_RESPONSE"
-            HTTP_CODE="$TEST_HTTP_CODE"
-            CREATE_BODY="$TEST_BODY"
-            BUNDLE_CREATED=true
-            break
-        fi
+            if [ "$TEST_HTTP_CODE" = "200" ] || [ "$TEST_HTTP_CODE" = "201" ]; then
+                log "✓ Found working endpoint: ${ALT_ENDPOINT}"
+                CREATE_RESPONSE="$TEST_RESPONSE"
+                HTTP_CODE="$TEST_HTTP_CODE"
+                CREATE_BODY="$TEST_BODY"
+                BUNDLE_CREATED=true
+                break 2
+            elif [ "$TEST_HTTP_CODE" != "404" ]; then
+                log "  Endpoint ${ALT_ENDPOINT} returned HTTP $TEST_HTTP_CODE: ${TEST_BODY:0:100}"
+            fi
+        done
     done
     
     if [ "$BUNDLE_CREATED" = "false" ]; then
@@ -434,14 +461,23 @@ elif [ "$HTTP_CODE" = "404" ]; then
         error "  2. Authentication failure (check credentials)"
         error "  3. API endpoint structure differs in this RHACS version"
         error "Last response (HTTP $HTTP_CODE): ${CREATE_BODY:0:500}"
-        error "Consider using roxctl CLI instead or check Central API documentation."
+        error "Please verify the Central API endpoint and authentication."
     fi
 else
     error "Failed to create init bundle. HTTP $HTTP_CODE. Response: ${CREATE_BODY:0:500}"
 fi
 
-# Extract bundle ID from response body
-NEW_BUNDLE_ID=$(echo "$CREATE_BODY" | jq -r '.id // .meta.id // .data.id // empty' 2>/dev/null || echo "")
+# Extract bundle ID from response body - try multiple possible JSON structures
+NEW_BUNDLE_ID=$(echo "$CREATE_BODY" | jq -r '.id // .meta.id // .data.id // .bundle.id // .initBundle.id // empty' 2>/dev/null || echo "")
+
+# Also check if response is a simple string (some APIs return just the ID)
+if [ -z "$NEW_BUNDLE_ID" ] || [ "$NEW_BUNDLE_ID" = "null" ] || [ "$NEW_BUNDLE_ID" = "" ]; then
+    # Check if response is a plain UUID string
+    if echo "$CREATE_BODY" | grep -qE '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$'; then
+        NEW_BUNDLE_ID=$(echo "$CREATE_BODY" | grep -oE '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$' | head -1)
+        log "Found bundle ID as plain UUID: $NEW_BUNDLE_ID"
+    fi
+fi
 
 if [ -z "$NEW_BUNDLE_ID" ] || [ "$NEW_BUNDLE_ID" = "null" ] || [ "$NEW_BUNDLE_ID" = "" ]; then
     # Try to get bundle ID by name if creation response didn't include it
@@ -458,89 +494,159 @@ if [ -z "$NEW_BUNDLE_ID" ] || [ "$NEW_BUNDLE_ID" = "null" ] || [ "$NEW_BUNDLE_ID
 fi
 
 if [ -z "$NEW_BUNDLE_ID" ] || [ "$NEW_BUNDLE_ID" = "null" ] || [ "$NEW_BUNDLE_ID" = "" ]; then
-    # If curl API fails, fall back to roxctl as backup
-    warning "Failed to create init bundle via API (HTTP $HTTP_CODE)"
-    warning "Response: ${CREATE_BODY:0:300}"
-    warning "Falling back to roxctl CLI method..."
+    # Try to discover the correct API endpoint by testing different variations
+    log "Bundle ID not found in response, attempting to discover correct API endpoint..."
+    log "HTTP Code: $HTTP_CODE, Response: ${CREATE_BODY:0:200}"
     
-    if command -v roxctl >/dev/null 2>&1; then
-        log "Using roxctl to generate init bundle..."
-        INIT_BUNDLE_OUTPUT=$(roxctl -e "$ROX_ENDPOINT_NORMALIZED" \
-          central init-bundles generate "$CLUSTER_NAME" \
-          --output-secrets "$INIT_BUNDLE_FILE" \
-          --password "$ADMIN_PASSWORD" \
-          --insecure-skip-tls-verify 2>&1) || INIT_BUNDLE_EXIT_CODE=$?
-        
-        if [ -f "$INIT_BUNDLE_FILE" ]; then
-            log "✓ Init bundle generated using roxctl fallback"
-            NEW_BUNDLE_ID="roxctl-generated"
+    # Try different API endpoint variations
+    API_ENDPOINTS=(
+        "/v1/clusterinit/init-bundles"
+        "/api/v1/clusterinit/init-bundles"
+        "/v1/init-bundles"
+        "/api/v1/init-bundles"
+    )
+    
+    BUNDLE_CREATED=false
+    for API_ENDPOINT in "${API_ENDPOINTS[@]}"; do
+        log "  Testing endpoint: ${CENTRAL_API_URL}${API_ENDPOINT}"
+        if [ "$AUTH_METHOD" = "token" ]; then
+            TEST_RESPONSE=$(curl -sk -w "\n%{http_code}" -X POST \
+                -H "$AUTH_HEADER" \
+                -H "Content-Type: application/json" \
+                -d "$REQUEST_BODY" \
+                "${CENTRAL_API_URL}${API_ENDPOINT}" 2>&1)
         else
-            error "Both API and roxctl methods failed. roxctl output: ${INIT_BUNDLE_OUTPUT:0:500}"
+            TEST_RESPONSE=$(curl -sk -w "\n%{http_code}" -X POST \
+                -u "${ACS_PORTAL_USERNAME}:${ADMIN_PASSWORD}" \
+                -H "Content-Type: application/json" \
+                -d "$REQUEST_BODY" \
+                "${CENTRAL_API_URL}${API_ENDPOINT}" 2>&1)
         fi
-    else
-        error "Failed to extract bundle ID and roxctl is not available. HTTP Code: $HTTP_CODE. Response: ${CREATE_BODY:0:500}"
-        error "Please install roxctl or check Central API endpoint configuration."
+        TEST_HTTP_CODE=$(echo "$TEST_RESPONSE" | tail -1)
+        TEST_BODY=$(echo "$TEST_RESPONSE" | sed '$d')
+        
+        if [ "$TEST_HTTP_CODE" = "200" ] || [ "$TEST_HTTP_CODE" = "201" ]; then
+            log "✓ Found working endpoint: ${API_ENDPOINT}"
+            CREATE_RESPONSE="$TEST_RESPONSE"
+            HTTP_CODE="$TEST_HTTP_CODE"
+            CREATE_BODY="$TEST_BODY"
+            BUNDLE_CREATED=true
+            break
+        elif [ "$TEST_HTTP_CODE" != "404" ]; then
+            log "  Endpoint ${API_ENDPOINT} returned HTTP $TEST_HTTP_CODE: ${TEST_BODY:0:100}"
+        fi
+    done
+    
+    if [ "$BUNDLE_CREATED" = "false" ]; then
+        # Try to get bundle ID from the list endpoint if creation didn't return it
+        log "Attempting to retrieve bundle ID from bundle list..."
+        if [ "$AUTH_METHOD" = "token" ]; then
+            BUNDLE_LIST=$(curl -sk -H "$AUTH_HEADER" "${CENTRAL_API_URL}/v1/clusterinit/init-bundles" 2>/dev/null || echo "[]")
+            # Try alternative list endpoints
+            if [ "$BUNDLE_LIST" = "[]" ] || [ -z "$BUNDLE_LIST" ]; then
+                BUNDLE_LIST=$(curl -sk -H "$AUTH_HEADER" "${CENTRAL_API_URL}/api/v1/clusterinit/init-bundles" 2>/dev/null || echo "[]")
+            fi
+        else
+            BUNDLE_LIST=$(curl -sk -u "${ACS_PORTAL_USERNAME}:${ADMIN_PASSWORD}" "${CENTRAL_API_URL}/v1/clusterinit/init-bundles" 2>/dev/null || echo "[]")
+            if [ "$BUNDLE_LIST" = "[]" ] || [ -z "$BUNDLE_LIST" ]; then
+                BUNDLE_LIST=$(curl -sk -u "${ACS_PORTAL_USERNAME}:${ADMIN_PASSWORD}" "${CENTRAL_API_URL}/api/v1/clusterinit/init-bundles" 2>/dev/null || echo "[]")
+            fi
+        fi
+        
+        if [ "$BUNDLE_LIST" != "[]" ] && [ -n "$BUNDLE_LIST" ]; then
+            NEW_BUNDLE_ID=$(echo "$BUNDLE_LIST" | jq -r ".[] | select(.name == \"${BUNDLE_NAME}\") | .id" 2>/dev/null | head -1 || echo "")
+            if [ -n "$NEW_BUNDLE_ID" ] && [ "$NEW_BUNDLE_ID" != "null" ] && [ "$NEW_BUNDLE_ID" != "" ]; then
+                log "✓ Found bundle ID from list: $NEW_BUNDLE_ID"
+                BUNDLE_CREATED=true
+            fi
+        fi
+    fi
+    
+    if [ "$BUNDLE_CREATED" = "false" ] && ([ -z "$NEW_BUNDLE_ID" ] || [ "$NEW_BUNDLE_ID" = "null" ] || [ "$NEW_BUNDLE_ID" = "" ]); then
+        error "Failed to create or find init bundle via API."
+        error "HTTP Code: $HTTP_CODE"
+        error "Response: ${CREATE_BODY:0:500}"
+        error "Central API URL: ${CENTRAL_API_URL}"
+        error "Tried endpoints: /v1/clusterinit/init-bundles, /api/v1/clusterinit/init-bundles, /v1/init-bundles, /api/v1/init-bundles"
+        error "Please verify:"
+        error "  1. Central API URL is correct: ${CENTRAL_API_URL}"
+        error "  2. Authentication is working (test with: curl -sk -u user:pass ${CENTRAL_API_URL}/v1/metadata)"
+        error "  3. API endpoint structure matches your RHACS version"
     fi
 fi
 
 log "Init bundle created with ID: $NEW_BUNDLE_ID"
 
-# If roxctl was used, the file is already created, skip API fetching
-if [ "$NEW_BUNDLE_ID" = "roxctl-generated" ]; then
-    log "Init bundle file already created by roxctl, skipping API fetch"
-    if [ ! -f "$INIT_BUNDLE_FILE" ]; then
-        error "roxctl was supposed to create $INIT_BUNDLE_FILE but file not found"
-    fi
-else
-    # Fetch the init bundle secrets via API
-    # Try Kubernetes secrets format first, fallback to helm-values if needed
-    log "Fetching init bundle secrets from API..."
-    BUNDLE_SECRETS=""
-    
-    # Try Kubernetes secrets endpoint first
+# Fetch the init bundle secrets via API
+# Try multiple endpoint variations to get Kubernetes secrets format
+log "Fetching init bundle secrets from API for bundle ID: $NEW_BUNDLE_ID..."
+
+BUNDLE_SECRETS=""
+SECRET_ENDPOINTS=(
+    "/v1/clusterinit/init-bundles/${NEW_BUNDLE_ID}/secrets.yaml"
+    "/api/v1/clusterinit/init-bundles/${NEW_BUNDLE_ID}/secrets.yaml"
+    "/v1/clusterinit/init-bundles/${NEW_BUNDLE_ID}/helm-values.yaml"
+    "/api/v1/clusterinit/init-bundles/${NEW_BUNDLE_ID}/helm-values.yaml"
+    "/v1/clusterinit/init-bundles/${NEW_BUNDLE_ID}"
+    "/api/v1/clusterinit/init-bundles/${NEW_BUNDLE_ID}"
+)
+
+for SECRET_ENDPOINT in "${SECRET_ENDPOINTS[@]}"; do
+    log "  Trying: ${CENTRAL_API_URL}${SECRET_ENDPOINT}"
     if [ "$AUTH_METHOD" = "token" ]; then
-        BUNDLE_SECRETS=$(curl -sk -H "$AUTH_HEADER" "${CENTRAL_API_URL}/v1/clusterinit/init-bundles/${NEW_BUNDLE_ID}/secrets.yaml" 2>/dev/null || echo "")
+        TEST_SECRETS=$(curl -sk -H "$AUTH_HEADER" -H "Accept: application/yaml" "${CENTRAL_API_URL}${SECRET_ENDPOINT}" 2>/dev/null || echo "")
     else
-        BUNDLE_SECRETS=$(curl -sk -u "${ACS_PORTAL_USERNAME}:${ADMIN_PASSWORD}" "${CENTRAL_API_URL}/v1/clusterinit/init-bundles/${NEW_BUNDLE_ID}/secrets.yaml" 2>/dev/null || echo "")
+        TEST_SECRETS=$(curl -sk -u "${ACS_PORTAL_USERNAME}:${ADMIN_PASSWORD}" -H "Accept: application/yaml" "${CENTRAL_API_URL}${SECRET_ENDPOINT}" 2>/dev/null || echo "")
     fi
     
-    # If secrets.yaml doesn't work, try helm-values.yaml and extract secrets
-    if [ -z "$BUNDLE_SECRETS" ] || ! echo "$BUNDLE_SECRETS" | grep -q "kind: Secret"; then
-        log "Trying helm-values endpoint..."
-        if [ "$AUTH_METHOD" = "token" ]; then
-            HELM_VALUES=$(curl -sk -H "$AUTH_HEADER" "${CENTRAL_API_URL}/v1/clusterinit/init-bundles/${NEW_BUNDLE_ID}/helm-values.yaml" 2>/dev/null || echo "")
-        else
-            HELM_VALUES=$(curl -sk -u "${ACS_PORTAL_USERNAME}:${ADMIN_PASSWORD}" "${CENTRAL_API_URL}/v1/clusterinit/init-bundles/${NEW_BUNDLE_ID}/helm-values.yaml" 2>/dev/null || echo "")
+    # Check if we got valid secret data
+    if [ -n "$TEST_SECRETS" ] && (echo "$TEST_SECRETS" | grep -q "kind: Secret" || echo "$TEST_SECRETS" | grep -q "apiVersion:"); then
+        BUNDLE_SECRETS="$TEST_SECRETS"
+        log "✓ Found secrets at endpoint: ${SECRET_ENDPOINT}"
+        break
+    elif [ -n "$TEST_SECRETS" ] && echo "$TEST_SECRETS" | grep -qE "(sensor-tls|admission-control-tls|collector-tls)"; then
+        # Found helm values or similar format with secret names
+        BUNDLE_SECRETS="$TEST_SECRETS"
+        log "✓ Found bundle data at endpoint: ${SECRET_ENDPOINT}"
+        break
+    fi
+done
+
+# If we still don't have secrets, try getting the full bundle details and extract secrets
+if [ -z "$BUNDLE_SECRETS" ] || ! echo "$BUNDLE_SECRETS" | grep -q "kind: Secret"; then
+    log "Secrets not found in standard endpoints, trying bundle details endpoint..."
+    if [ "$AUTH_METHOD" = "token" ]; then
+        BUNDLE_DETAILS=$(curl -sk -H "$AUTH_HEADER" "${CENTRAL_API_URL}/v1/clusterinit/init-bundles/${NEW_BUNDLE_ID}" 2>/dev/null || echo "")
+    else
+        BUNDLE_DETAILS=$(curl -sk -u "${ACS_PORTAL_USERNAME}:${ADMIN_PASSWORD}" "${CENTRAL_API_URL}/v1/clusterinit/init-bundles/${NEW_BUNDLE_ID}" 2>/dev/null || echo "")
+    fi
+    
+    # Check if bundle details contains secret data or references
+    if [ -n "$BUNDLE_DETAILS" ]; then
+        # Try to extract helmValues or kubernetesSecrets from JSON response
+        HELM_VALS=$(echo "$BUNDLE_DETAILS" | jq -r '.helmValues // .kubernetesSecrets // .secrets // empty' 2>/dev/null || echo "")
+        if [ -n "$HELM_VALS" ] && [ "$HELM_VALS" != "null" ]; then
+            BUNDLE_SECRETS="$HELM_VALS"
+            log "✓ Extracted secrets from bundle details JSON"
         fi
-        
-        if [ -n "$HELM_VALUES" ]; then
-            # Extract secrets from helm values (they're typically base64 encoded in the values)
-            # For now, save helm values and let the operator handle it, or we need to convert
-            # Actually, roxctl converts helm values to secrets - we might need to do the same
-            # But for simplicity, let's try the API endpoint that roxctl uses internally
-            log "Helm values retrieved, attempting to get Kubernetes secrets format..."
-            
-            # Try the internal API endpoint that returns Kubernetes secrets
-            if [ "$AUTH_METHOD" = "token" ]; then
-                BUNDLE_SECRETS=$(curl -sk -H "$AUTH_HEADER" -H "Accept: application/yaml" "${CENTRAL_API_URL}/v1/clusterinit/init-bundles/${NEW_BUNDLE_ID}" 2>/dev/null || echo "")
-            else
-                BUNDLE_SECRETS=$(curl -sk -u "${ACS_PORTAL_USERNAME}:${ADMIN_PASSWORD}" -H "Accept: application/yaml" "${CENTRAL_API_URL}/v1/clusterinit/init-bundles/${NEW_BUNDLE_ID}" 2>/dev/null || echo "")
-            fi
-            
-            # If still no secrets, use helm values (operator can handle helm values too)
-            if [ -z "$BUNDLE_SECRETS" ] || ! echo "$BUNDLE_SECRETS" | grep -q "kind: Secret"; then
-                BUNDLE_SECRETS="$HELM_VALUES"
-            fi
-        fi
     fi
-    
-    if [ -z "$BUNDLE_SECRETS" ]; then
-        error "Failed to fetch init bundle secrets for bundle ID: $NEW_BUNDLE_ID"
-    fi
-    
-    # Save the bundle secrets to file
-    echo "$BUNDLE_SECRETS" > "$INIT_BUNDLE_FILE"
 fi
+
+if [ -z "$BUNDLE_SECRETS" ]; then
+    error "Failed to fetch init bundle secrets for bundle ID: $NEW_BUNDLE_ID"
+    error "Tried endpoints:"
+    for ep in "${SECRET_ENDPOINTS[@]}"; do
+        error "  - ${CENTRAL_API_URL}${ep}"
+    done
+    error "Please check:"
+    error "  1. Bundle ID is correct: $NEW_BUNDLE_ID"
+    error "  2. Bundle exists in Central"
+    error "  3. API endpoints match your RHACS version"
+fi
+
+# Save the bundle secrets to file
+echo "$BUNDLE_SECRETS" > "$INIT_BUNDLE_FILE"
+log "✓ Init bundle secrets saved to: $INIT_BUNDLE_FILE"
 
 # Verify the init bundle file contains valid secrets (not wildcard/empty)
 log "Validating init bundle contains valid certificate data..."
