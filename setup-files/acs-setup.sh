@@ -455,21 +455,47 @@ EOF
         # Wait for CSV to be in Succeeded phase
         log "Waiting for operator CSV to be ready..."
         csv_ready_wait_count=0
-        csv_ready_max_wait=300
+        csv_ready_max_wait=600  # Increased to 10 minutes for single-node clusters
         while true; do
             CSV_PHASE=$($KUBECTL_CMD get csv "$CSV_NAME" -n "$CSV_NAMESPACE" -o jsonpath='{.status.phase}' 2>/dev/null || echo "")
             if [ "$CSV_PHASE" = "Succeeded" ]; then
                 break
             fi
+            
+            # Check for stuck installation states
+            CSV_MESSAGE=$($KUBECTL_CMD get csv "$CSV_NAME" -n "$CSV_NAMESPACE" -o jsonpath='{.status.message}' 2>/dev/null || echo "")
+            if [ -n "$CSV_MESSAGE" ] && [[ "$CSV_MESSAGE" == *"not available"* ]] || [[ "$CSV_MESSAGE" == *"minimum availability"* ]]; then
+                if [ $((csv_ready_wait_count % 60)) -eq 0 ]; then
+                    warning "Operator installation appears stuck: $CSV_MESSAGE"
+                    log "Checking operator deployment status..."
+                    $KUBECTL_CMD get deployment rhacs-operator-controller-manager -n "$CSV_NAMESPACE" -o yaml 2>/dev/null | grep -A 10 "status:" || true
+                    log "Checking operator pods..."
+                    $KUBECTL_CMD get pods -n "$CSV_NAMESPACE" | grep rhacs-operator || true
+                fi
+            fi
+            
             if [ $csv_ready_wait_count -ge $csv_ready_max_wait ]; then
                 warning "Timeout waiting for CSV to be ready. Current phase: ${CSV_PHASE:-unknown}"
-                $KUBECTL_CMD get csv "$CSV_NAME" -n "$CSV_NAMESPACE" -o yaml 2>/dev/null | grep -A 20 "status:" || true
-                error "Operator CSV not ready. Please check operator installation manually."
+                if [ -n "$CSV_MESSAGE" ]; then
+                    warning "CSV message: $CSV_MESSAGE"
+                fi
+                log "CSV status details:"
+                $KUBECTL_CMD get csv "$CSV_NAME" -n "$CSV_NAMESPACE" -o yaml 2>/dev/null | grep -A 30 "status:" || true
+                log "Operator deployment status:"
+                $KUBECTL_CMD get deployment rhacs-operator-controller-manager -n "$CSV_NAMESPACE" 2>/dev/null || log "Deployment not found"
+                log "Operator pods:"
+                $KUBECTL_CMD get pods -n "$CSV_NAMESPACE" | grep rhacs-operator || log "No operator pods found"
+                warning "Operator CSV installation timeout. The operator may need manual intervention."
+                warning "You may need to check resource constraints, node availability, or operator subscription issues."
+                error "Please check operator installation manually and retry."
             fi
             sleep 2
             csv_ready_wait_count=$((csv_ready_wait_count + 1))
-            if [ $((csv_ready_wait_count % 20)) -eq 0 ]; then
+            if [ $((csv_ready_wait_count % 30)) -eq 0 ]; then
                 log "  Still waiting for CSV to be ready... ($csv_ready_wait_count/${csv_ready_max_wait}s) - Phase: ${CSV_PHASE:-pending}"
+                if [ -n "$CSV_MESSAGE" ]; then
+                    log "  Status: $CSV_MESSAGE"
+                fi
             fi
         done
         log "✓ Operator CSV is ready"
