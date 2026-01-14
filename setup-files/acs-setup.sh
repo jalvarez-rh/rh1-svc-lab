@@ -152,4 +152,125 @@ else
     fi
 fi
 
+# Deploy Secured Cluster Services to aws-us cluster
+log "Deploying Secured Cluster Services to aws-us cluster..."
+
+# Ensure we're on local-cluster to get Central information
+if ! $KUBECTL_CMD config use-context local-cluster >/dev/null 2>&1; then
+    error "Failed to switch to local-cluster context. Cannot retrieve Central information."
+fi
+
+RHACS_OPERATOR_NAMESPACE="stackrox"
+CLUSTER_NAME="aws-us"
+SECURED_CLUSTER_NAME="aws-us"
+
+# Get Central route from local-cluster
+log "Retrieving Central route from local-cluster..."
+CENTRAL_ROUTE=$($KUBECTL_CMD get route central -n "$RHACS_OPERATOR_NAMESPACE" -o jsonpath='{.spec.host}' 2>/dev/null || echo "")
+if [ -z "$CENTRAL_ROUTE" ]; then
+    error "Central route not found in namespace '$RHACS_OPERATOR_NAMESPACE' on local-cluster. Please ensure RHACS Central is installed."
+fi
+ROX_ENDPOINT="$CENTRAL_ROUTE"
+log "✓ Central endpoint: $ROX_ENDPOINT"
+
+# Normalize endpoint for API calls
+normalize_rox_endpoint() {
+    local input="$1"
+    input="${input#https://}"
+    input="${input#http://}"
+    input="${input%/}"
+    if [[ "$input" != *:* ]]; then
+        input="${input}:443"
+    fi
+    echo "$input"
+}
+
+ROX_ENDPOINT_NORMALIZED="$(normalize_rox_endpoint "$ROX_ENDPOINT")"
+
+# Get admin password from secret
+log "Retrieving admin password from secret..."
+ADMIN_PASSWORD_B64=$($KUBECTL_CMD get secret central-htpasswd -n "$RHACS_OPERATOR_NAMESPACE" -o jsonpath='{.data.password}' 2>/dev/null || echo "")
+if [ -z "$ADMIN_PASSWORD_B64" ]; then
+    error "Admin password secret 'central-htpasswd' not found in namespace '$RHACS_OPERATOR_NAMESPACE'"
+fi
+ADMIN_PASSWORD=$(echo "$ADMIN_PASSWORD_B64" | base64 -d)
+if [ -z "$ADMIN_PASSWORD" ]; then
+    error "Failed to decode admin password from secret"
+fi
+log "✓ Admin password retrieved"
+
+# Check if SecuredCluster already exists in aws-us cluster
+$KUBECTL_CMD config use-context aws-us >/dev/null 2>&1 || error "Failed to switch to aws-us context"
+
+if $KUBECTL_CMD get securedcluster "$SECURED_CLUSTER_NAME" -n "$RHACS_OPERATOR_NAMESPACE" >/dev/null 2>&1; then
+    log "SecuredCluster '$SECURED_CLUSTER_NAME' already exists in aws-us cluster, skipping setup"
+else
+    # Ensure namespace exists in aws-us cluster
+    log "Ensuring namespace '$RHACS_OPERATOR_NAMESPACE' exists in aws-us cluster..."
+    if ! $KUBECTL_CMD get namespace "$RHACS_OPERATOR_NAMESPACE" >/dev/null 2>&1; then
+        $KUBECTL_CMD create namespace "$RHACS_OPERATOR_NAMESPACE" || error "Failed to create namespace"
+        log "✓ Namespace created"
+    else
+        log "✓ Namespace exists"
+    fi
+
+    # Generate init bundle
+    log "Generating init bundle for cluster: $CLUSTER_NAME"
+    INIT_BUNDLE_OUTPUT=$(roxctl -e "$ROX_ENDPOINT_NORMALIZED" \
+      central init-bundles generate "$CLUSTER_NAME" \
+      --output-secrets cluster_init_bundle.yaml \
+      --password "$ADMIN_PASSWORD" \
+      --insecure-skip-tls-verify 2>&1) || INIT_BUNDLE_EXIT_CODE=$?
+    
+    if echo "$INIT_BUNDLE_OUTPUT" | grep -q "AlreadyExists"; then
+        log "Init bundle already exists in RHACS Central, using existing bundle"
+        # Try to retrieve existing bundle or create a new one with different name
+        INIT_BUNDLE_OUTPUT=$(roxctl -e "$ROX_ENDPOINT_NORMALIZED" \
+          central init-bundles generate "${CLUSTER_NAME}-$(date +%s)" \
+          --output-secrets cluster_init_bundle.yaml \
+          --password "$ADMIN_PASSWORD" \
+          --insecure-skip-tls-verify 2>&1) || warning "Failed to generate new init bundle"
+    fi
+
+    if [ ! -f cluster_init_bundle.yaml ]; then
+        error "Failed to generate init bundle. roxctl output: ${INIT_BUNDLE_OUTPUT:0:500}"
+    fi
+    log "✓ Init bundle generated"
+
+    # Apply init bundle secrets to aws-us cluster
+    log "Applying init bundle secrets to aws-us cluster..."
+    $KUBECTL_CMD apply -f cluster_init_bundle.yaml -n "$RHACS_OPERATOR_NAMESPACE" || error "Failed to apply init bundle secrets"
+    log "✓ Init bundle secrets applied"
+
+    # Create SecuredCluster resource in aws-us cluster
+    log "Creating SecuredCluster resource in aws-us cluster..."
+    cat <<EOF | $KUBECTL_CMD apply -f -
+apiVersion: platform.stackrox.io/v1alpha1
+kind: SecuredCluster
+metadata:
+  name: $SECURED_CLUSTER_NAME
+  namespace: $RHACS_OPERATOR_NAMESPACE
+spec:
+  clusterName: "$CLUSTER_NAME"
+  auditLogs:
+    collection: Auto
+  admissionControl:
+    enforcement: Enabled
+    bypass: BreakGlassAnnotation
+    failurePolicy: Ignore
+  scannerV4:
+    scannerComponent: Default
+  processBaselines:
+    autoLock: Enabled
+EOF
+    
+    log "✓ SecuredCluster resource created"
+
+    # Clean up temporary files
+    rm -f cluster_init_bundle.yaml
+
+    log "Secured Cluster Services deployment initiated for aws-us cluster"
+    log "The SecuredCluster will connect to Central running on local-cluster"
+fi
+
 log "ACS setup complete"

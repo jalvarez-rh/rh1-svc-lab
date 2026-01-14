@@ -145,12 +145,15 @@ source ~/.bashrc
 ----
 
 
-. Run the following command to verify roxctl is installed and can connect to RHACS:
+. Clone the repository and run the ACS setup script to install `roxctl` and configure RHACS access:
 
-[source,sh,subs="attributes",role=execute]
+[source,sh,role=execute]
 ----
-roxctl --insecure-skip-tls-verify -e "$ROX_CENTRAL_ADDRESS:443" central whoami
+cd ~ && git clone https://github.com/jalvarez-rh/rh1-svc-lab.git || (cd ~/rh1-svc-lab && git pull origin main)
+cd ~/rh1-svc-lab/setup-files
+./acs-setup.sh
 ----
+
 
 == What's Next?
 
