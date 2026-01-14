@@ -96,13 +96,52 @@ else
 fi
 
 # Delete init bundle secrets
-log "Deleting init bundle secrets..."
-for secret in collector-tls sensor-tls admission-control-tls; do
+log "Deleting all init bundle secrets..."
+# Standard init bundle secrets
+INIT_BUNDLE_SECRETS=("collector-tls" "sensor-tls" "admission-control-tls")
+for secret in "${INIT_BUNDLE_SECRETS[@]}"; do
     if $KUBECTL_CMD get secret "$secret" -n "$RHACS_OPERATOR_NAMESPACE" >/dev/null 2>&1; then
         $KUBECTL_CMD delete secret "$secret" -n "$RHACS_OPERATOR_NAMESPACE" --ignore-not-found=true || warning "Failed to delete secret $secret"
+        log "  Deleted secret: $secret"
     fi
 done
-log "✓ Init bundle secrets deleted"
+
+# Also check for any other TLS secrets that might be from init bundles
+log "Checking for any additional init bundle related secrets..."
+ALL_SECRETS=$($KUBECTL_CMD get secrets -n "$RHACS_OPERATOR_NAMESPACE" -o jsonpath='{.items[*].metadata.name}' 2>/dev/null || echo "")
+if [ -n "$ALL_SECRETS" ]; then
+    for secret in $ALL_SECRETS; do
+        # Check if secret contains TLS data or is related to init bundles
+        if [[ "$secret" == *"tls"* ]] || [[ "$secret" == *"init"* ]] || [[ "$secret" == *"bundle"* ]]; then
+            if ! [[ " ${INIT_BUNDLE_SECRETS[@]} " =~ " ${secret} " ]]; then
+                log "  Found additional init bundle related secret: $secret"
+                $KUBECTL_CMD delete secret "$secret" -n "$RHACS_OPERATOR_NAMESPACE" --ignore-not-found=true || warning "Failed to delete secret $secret"
+            fi
+        fi
+    done
+fi
+log "✓ All init bundle secrets deleted"
+
+# Clean up local init bundle files (optional, set CLEANUP_LOCAL_BUNDLES=true to enable)
+if [ "${CLEANUP_LOCAL_BUNDLES:-false}" = "true" ]; then
+    log "Cleaning up local init bundle files..."
+    SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+    INIT_BUNDLES_DIR="${SCRIPT_DIR}/init-bundles"
+    if [ -d "$INIT_BUNDLES_DIR" ]; then
+        BUNDLE_COUNT=$(find "$INIT_BUNDLES_DIR" -name "*-init-bundle*.yaml" 2>/dev/null | wc -l)
+        if [ "$BUNDLE_COUNT" -gt 0 ]; then
+            log "  Found $BUNDLE_COUNT init bundle file(s) in $INIT_BUNDLES_DIR"
+            rm -f "$INIT_BUNDLES_DIR"/*-init-bundle*.yaml
+            log "✓ Local init bundle files deleted"
+        else
+            log "  No init bundle files found in $INIT_BUNDLES_DIR"
+        fi
+    else
+        log "  Init bundles directory not found: $INIT_BUNDLES_DIR"
+    fi
+else
+    log "Skipping local init bundle file cleanup (set CLEANUP_LOCAL_BUNDLES=true to enable)"
+fi
 
 # Delete all remaining resources (services, configmaps, etc.)
 log "Deleting all remaining resources..."

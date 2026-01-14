@@ -609,6 +609,17 @@ if [ -f "$INIT_BUNDLE_FILE" ]; then
         warning "This may cause pod initialization failures. Check the init bundle file: $INIT_BUNDLE_FILE"
     else
         log "✓ All required secrets verified: ${REQUIRED_SECRETS[*]}"
+        
+        # Verify secrets have data (not empty)
+        log "Verifying init bundle secrets contain data..."
+        for secret in "${REQUIRED_SECRETS[@]}"; do
+            SECRET_DATA=$($KUBECTL_CMD get secret "$secret" -n "$RHACS_OPERATOR_NAMESPACE" -o jsonpath='{.data}' 2>/dev/null || echo "")
+            if [ -z "$SECRET_DATA" ] || [ "$SECRET_DATA" = "{}" ]; then
+                warning "Secret $secret exists but appears to be empty - this may cause pod initialization failures"
+            else
+                log "  ✓ Secret $secret contains data"
+            fi
+        done
     fi
     
     log "Init bundle saved at: $INIT_BUNDLE_FILE (kept for reference)"
@@ -654,7 +665,22 @@ if [ "$SECURED_CLUSTER_EXISTS" = "true" ]; then
 else
     log "Creating SecuredCluster resource in aws-us cluster (optimized for single-node)..."
 fi
-    cat <<EOF | $KUBECTL_CMD apply -f -
+
+# Construct Central endpoint - use the external route since Central is on local-cluster
+# ROX_ENDPOINT was set earlier when we were on local-cluster context
+# Use normalized endpoint which already has port if needed
+if [ -z "${ROX_ENDPOINT_NORMALIZED:-}" ]; then
+    # Fallback: normalize ROX_ENDPOINT if normalized version not available
+    CENTRAL_ENDPOINT="${ROX_ENDPOINT}"
+    if [[ "$CENTRAL_ENDPOINT" != *:* ]]; then
+        CENTRAL_ENDPOINT="${CENTRAL_ENDPOINT}:443"
+    fi
+else
+    CENTRAL_ENDPOINT="${ROX_ENDPOINT_NORMALIZED}"
+fi
+log "Configuring SecuredCluster to connect to Central at: $CENTRAL_ENDPOINT"
+
+cat <<EOF | $KUBECTL_CMD apply -f -
 apiVersion: platform.stackrox.io/v1alpha1
 kind: SecuredCluster
 metadata:
@@ -662,6 +688,7 @@ metadata:
   namespace: $RHACS_OPERATOR_NAMESPACE
 spec:
   clusterName: "$CLUSTER_NAME"
+  centralEndpoint: "$CENTRAL_ENDPOINT"
   auditLogs:
     collection: Auto
   admissionControl:
