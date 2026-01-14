@@ -348,12 +348,21 @@ EOF
             log "Waiting for InstallPlan to be created..."
         fi
         
-        # Wait for CSV to be installed first
-        log "Waiting for RHACS operator CSV to be installed..."
-        csv_wait_count=0
-        csv_max_wait=300
-        CSV_NAME=""
-        while [ -z "$CSV_NAME" ] || [ "$CSV_NAME" = "null" ] || [ "$CSV_NAME" = "" ]; do
+        # Check if CSV already exists before waiting
+        CSV_NAME=$($KUBECTL_CMD get csv -n "$RHACS_OPERATOR_NAMESPACE" 2>/dev/null | grep -v "^NAME" | grep -E "rhacs-operator\." | awk '{print $1}' | head -1 || echo "")
+        if [ -z "$CSV_NAME" ] || [ "$CSV_NAME" = "null" ] || [ "$CSV_NAME" = "" ]; then
+            CSV_NAME=$($KUBECTL_CMD get csv -n openshift-operators 2>/dev/null | grep -v "^NAME" | grep -E "rhacs-operator\." | awk '{print $1}' | head -1 || echo "")
+        fi
+        
+        # Wait for CSV to be installed first (if not already found)
+        if [ -n "$CSV_NAME" ] && [ "$CSV_NAME" != "null" ] && [ "$CSV_NAME" != "" ]; then
+            log "✓ Operator CSV already exists: $CSV_NAME"
+        else
+            log "Waiting for RHACS operator CSV to be installed..."
+            csv_wait_count=0
+            csv_max_wait=300
+            CSV_NAME=""
+            while [ -z "$CSV_NAME" ] || [ "$CSV_NAME" = "null" ] || [ "$CSV_NAME" = "" ]; do
             if [ $csv_wait_count -ge $csv_max_wait ]; then
                 warning "Timeout waiting for operator CSV. Checking subscription and InstallPlan status..."
                 $KUBECTL_CMD get subscription rhacs-operator -n "$RHACS_OPERATOR_NAMESPACE" -o yaml 2>/dev/null | grep -A 15 "status:" || true
@@ -369,14 +378,20 @@ EOF
                 error "Operator CSV installation timeout. Please check operator installation manually."
             fi
             # Check both rhacs-operator and openshift-operators namespaces for CSV
-            CSV_NAME=$($KUBECTL_CMD get csv -n "$RHACS_OPERATOR_NAMESPACE" -o jsonpath='{.items[?(@.metadata.name=~"rhacs-operator.*")].metadata.name}' 2>/dev/null | head -1 || echo "")
-            if [ -z "$CSV_NAME" ] || [ "$CSV_NAME" = "null" ]; then
-                CSV_NAME=$($KUBECTL_CMD get csv -n openshift-operators -o jsonpath='{.items[?(@.metadata.name=~"rhacs-operator.*")].metadata.name}' 2>/dev/null | head -1 || echo "")
+            # Use simpler approach: get all CSVs and filter for rhacs-operator (skip header)
+            CSV_NAME=$($KUBECTL_CMD get csv -n "$RHACS_OPERATOR_NAMESPACE" 2>/dev/null | grep -v "^NAME" | grep -E "rhacs-operator\." | awk '{print $1}' | head -1 || echo "")
+            if [ -z "$CSV_NAME" ] || [ "$CSV_NAME" = "null" ] || [ "$CSV_NAME" = "" ]; then
+                CSV_NAME=$($KUBECTL_CMD get csv -n openshift-operators 2>/dev/null | grep -v "^NAME" | grep -E "rhacs-operator\." | awk '{print $1}' | head -1 || echo "")
             fi
             sleep 2
             csv_wait_count=$((csv_wait_count + 1))
             if [ $((csv_wait_count % 20)) -eq 0 ]; then
                 log "  Still waiting for CSV... ($csv_wait_count/${csv_max_wait}s)"
+                # Debug: show what CSVs we found
+                if [ $csv_wait_count -eq 20 ]; then
+                    log "  Available CSVs in $RHACS_OPERATOR_NAMESPACE:"
+                    $KUBECTL_CMD get csv -n "$RHACS_OPERATOR_NAMESPACE" 2>/dev/null | head -5 || true
+                fi
                 # Check InstallPlan status periodically
                 INSTALL_PLAN=$($KUBECTL_CMD get subscription rhacs-operator -n "$RHACS_OPERATOR_NAMESPACE" -o jsonpath='{.status.installPlanRef.name}' 2>/dev/null || echo "")
                 if [ -n "$INSTALL_PLAN" ] && [ "$INSTALL_PLAN" != "null" ]; then
@@ -386,8 +401,9 @@ EOF
                     fi
                 fi
             fi
-        done
-        log "✓ Operator CSV found: $CSV_NAME"
+            done
+            log "✓ Operator CSV found: $CSV_NAME"
+        fi
         
         # Determine which namespace the CSV is in
         CSV_NAMESPACE="$RHACS_OPERATOR_NAMESPACE"
