@@ -312,10 +312,43 @@ else
         log "✓ Operator namespace exists"
     fi
 
-    # Check if SecuredCluster CRD exists, install operator if needed
+    # Check if SecuredCluster CRD exists and operator is properly installed, install operator if needed
     log "Checking if SecuredCluster CRD is installed..."
-    if ! $KUBECTL_CMD get crd securedclusters.platform.stackrox.io >/dev/null 2>&1; then
-        log "SecuredCluster CRD not found. Installing RHACS operator..."
+    CRD_EXISTS=false
+    if $KUBECTL_CMD get crd securedclusters.platform.stackrox.io >/dev/null 2>&1; then
+        CRD_EXISTS=true
+        log "SecuredCluster CRD found"
+    fi
+    
+    # Check if operator is actually installed (CSV exists and is Succeeded)
+    NEED_OPERATOR_INSTALL=true
+    if [ "$CRD_EXISTS" = "true" ]; then
+        CSV_NAME=$($KUBECTL_CMD get csv -n "$RHACS_OPERATOR_NAMESPACE" 2>/dev/null | grep -v "^NAME" | grep -E "rhacs-operator\." | awk '{print $1}' | head -1 || echo "")
+        if [ -z "$CSV_NAME" ] || [ "$CSV_NAME" = "" ]; then
+            CSV_NAME=$($KUBECTL_CMD get csv -n openshift-operators 2>/dev/null | grep -v "^NAME" | grep -E "rhacs-operator\." | awk '{print $1}' | head -1 || echo "")
+        fi
+        if [ -n "$CSV_NAME" ] && [ "$CSV_NAME" != "" ]; then
+            CSV_PHASE=$($KUBECTL_CMD get csv "$CSV_NAME" -n "$RHACS_OPERATOR_NAMESPACE" -o jsonpath='{.status.phase}' 2>/dev/null || echo "")
+            if [ -z "$CSV_PHASE" ] || [ "$CSV_PHASE" = "" ]; then
+                CSV_PHASE=$($KUBECTL_CMD get csv "$CSV_NAME" -n openshift-operators -o jsonpath='{.status.phase}' 2>/dev/null || echo "")
+            fi
+            if [ "$CSV_PHASE" = "Succeeded" ]; then
+                log "Operator CSV is installed and in Succeeded phase"
+                NEED_OPERATOR_INSTALL=false
+            else
+                log "Operator CSV exists but phase is '${CSV_PHASE:-unknown}', operator may need reinstallation"
+            fi
+        else
+            log "CRD exists but no operator CSV found, operator needs to be installed"
+        fi
+    fi
+    
+    if [ "$NEED_OPERATOR_INSTALL" = "true" ]; then
+        if [ "$CRD_EXISTS" = "false" ]; then
+            log "SecuredCluster CRD not found. Installing RHACS operator..."
+        else
+            log "SecuredCluster CRD exists but operator is not properly installed. Installing RHACS operator..."
+        fi
         
         # Verify namespace exists
         if ! $KUBECTL_CMD get namespace "$RHACS_OPERATOR_NAMESPACE" >/dev/null 2>&1; then
@@ -500,26 +533,34 @@ EOF
         done
         log "✓ Operator CSV is ready"
         
-        # Wait for CRD to be available
-        log "Waiting for SecuredCluster CRD to be installed..."
-        wait_count=0
-        max_wait=120
-        while ! $KUBECTL_CMD get crd securedclusters.platform.stackrox.io >/dev/null 2>&1; do
-            if [ $wait_count -ge $max_wait ]; then
-                warning "Timeout waiting for SecuredCluster CRD to be installed"
-                warning "Checking operator installation status..."
-                $KUBECTL_CMD get csv "$CSV_NAME" -n "$RHACS_OPERATOR_NAMESPACE" -o yaml 2>/dev/null | grep -A 20 "status:" || true
-                error "SecuredCluster CRD installation timeout. Please check operator installation manually."
-            fi
-            sleep 2
-            wait_count=$((wait_count + 1))
-            if [ $((wait_count % 20)) -eq 0 ]; then
-                log "  Still waiting for CRD... ($wait_count/${max_wait}s)"
-            fi
-        done
-        log "✓ SecuredCluster CRD installed"
+        # Wait for CRD to be available (only if it doesn't already exist)
+        if ! $KUBECTL_CMD get crd securedclusters.platform.stackrox.io >/dev/null 2>&1; then
+            log "Waiting for SecuredCluster CRD to be installed..."
+            wait_count=0
+            max_wait=120
+            while ! $KUBECTL_CMD get crd securedclusters.platform.stackrox.io >/dev/null 2>&1; do
+                if [ $wait_count -ge $max_wait ]; then
+                    warning "Timeout waiting for SecuredCluster CRD to be installed"
+                    warning "Checking operator installation status..."
+                    CSV_NAMESPACE="$RHACS_OPERATOR_NAMESPACE"
+                    if ! $KUBECTL_CMD get csv "$CSV_NAME" -n "$RHACS_OPERATOR_NAMESPACE" >/dev/null 2>&1; then
+                        CSV_NAMESPACE="openshift-operators"
+                    fi
+                    $KUBECTL_CMD get csv "$CSV_NAME" -n "$CSV_NAMESPACE" -o yaml 2>/dev/null | grep -A 20 "status:" || true
+                    error "SecuredCluster CRD installation timeout. Please check operator installation manually."
+                fi
+                sleep 2
+                wait_count=$((wait_count + 1))
+                if [ $((wait_count % 20)) -eq 0 ]; then
+                    log "  Still waiting for CRD... ($wait_count/${max_wait}s)"
+                fi
+            done
+            log "✓ SecuredCluster CRD installed"
+        else
+            log "✓ SecuredCluster CRD already exists"
+        fi
     else
-        log "✓ SecuredCluster CRD found"
+        log "✓ Operator is already installed, skipping operator installation"
     fi
 
     # Apply init bundle secrets to aws-us cluster
