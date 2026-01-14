@@ -168,7 +168,6 @@ if ! $KUBECTL_CMD config use-context local-cluster >/dev/null 2>&1; then
 fi
 
 RHACS_OPERATOR_NAMESPACE="rhacs-operator"
-RHACS_NAMESPACE="stackrox"  # Namespace for SecuredCluster resources
 CLUSTER_NAME="aws-us"
 SECURED_CLUSTER_NAME="aws-us"
 
@@ -187,8 +186,12 @@ if [ -n "${ROX_CENTRAL_ADDRESS:-}" ]; then
     ROX_ENDPOINT="${ROX_ENDPOINT#http://}"
     log "✓ Central endpoint from environment: $ROX_ENDPOINT"
 else
-    # Fallback: get from route
-    CENTRAL_ROUTE=$($KUBECTL_CMD get route central -n "$RHACS_NAMESPACE" -o jsonpath='{.spec.host}' 2>/dev/null || echo "")
+    # Fallback: get from route (check both rhacs-operator and common namespaces)
+    CENTRAL_ROUTE=$($KUBECTL_CMD get route central -n "$RHACS_OPERATOR_NAMESPACE" -o jsonpath='{.spec.host}' 2>/dev/null || echo "")
+    if [ -z "$CENTRAL_ROUTE" ]; then
+        # Try openshift-operators as fallback
+        CENTRAL_ROUTE=$($KUBECTL_CMD get route central -n openshift-operators -o jsonpath='{.spec.host}' 2>/dev/null || echo "")
+    fi
     if [ -z "$CENTRAL_ROUTE" ]; then
         error "Central route not found and ROX_CENTRAL_ADDRESS not set. Please ensure RHACS Central is installed or set ROX_CENTRAL_ADDRESS in ~/.bashrc"
     fi
@@ -256,11 +259,11 @@ $KUBECTL_CMD config use-context aws-us >/dev/null 2>&1 || error "Failed to switc
 log "✓ Switched to aws-us context"
 
 # Check if SecuredCluster already exists in aws-us cluster
-if $KUBECTL_CMD get securedcluster "$SECURED_CLUSTER_NAME" -n "$RHACS_NAMESPACE" >/dev/null 2>&1; then
+if $KUBECTL_CMD get securedcluster "$SECURED_CLUSTER_NAME" -n "$RHACS_OPERATOR_NAMESPACE" >/dev/null 2>&1; then
     log "SecuredCluster '$SECURED_CLUSTER_NAME' already exists in aws-us cluster, skipping setup"
     rm -f cluster_init_bundle.yaml
 else
-    # Ensure namespaces exist in aws-us cluster
+    # Ensure namespace exists in aws-us cluster
     log "Ensuring namespace '$RHACS_OPERATOR_NAMESPACE' exists in aws-us cluster..."
     if ! $KUBECTL_CMD get namespace "$RHACS_OPERATOR_NAMESPACE" >/dev/null 2>&1; then
         $KUBECTL_CMD create namespace "$RHACS_OPERATOR_NAMESPACE" || error "Failed to create namespace"
@@ -268,24 +271,21 @@ else
     else
         log "✓ Operator namespace exists"
     fi
-    
-    log "Ensuring namespace '$RHACS_NAMESPACE' exists in aws-us cluster..."
-    if ! $KUBECTL_CMD get namespace "$RHACS_NAMESPACE" >/dev/null 2>&1; then
-        $KUBECTL_CMD create namespace "$RHACS_NAMESPACE" || error "Failed to create namespace"
-        log "✓ RHACS namespace created"
-    else
-        log "✓ RHACS namespace exists"
-    fi
 
     # Check if SecuredCluster CRD exists, install operator if needed
     log "Checking if SecuredCluster CRD is installed..."
     if ! $KUBECTL_CMD get crd securedclusters.platform.stackrox.io >/dev/null 2>&1; then
         log "SecuredCluster CRD not found. Installing RHACS operator..."
         
+        # Verify namespace exists
+        if ! $KUBECTL_CMD get namespace "$RHACS_OPERATOR_NAMESPACE" >/dev/null 2>&1; then
+            error "Namespace '$RHACS_OPERATOR_NAMESPACE' does not exist. Cannot install operator."
+        fi
+        
         # Create OperatorGroup if it doesn't exist
-        if ! $KUBECTL_CMD get operatorgroup -n "$RHACS_OPERATOR_NAMESPACE" >/dev/null 2>&1; then
+        if ! $KUBECTL_CMD get operatorgroup rhacs-operator-group -n "$RHACS_OPERATOR_NAMESPACE" >/dev/null 2>&1; then
             log "Creating OperatorGroup..."
-            cat <<EOF | $KUBECTL_CMD apply -f -
+            if ! cat <<EOF | $KUBECTL_CMD apply -f -
 apiVersion: operators.coreos.com/v1
 kind: OperatorGroup
 metadata:
@@ -293,12 +293,17 @@ metadata:
   namespace: $RHACS_OPERATOR_NAMESPACE
 spec: {}
 EOF
+            then
+                error "Failed to create OperatorGroup"
+            fi
             log "✓ OperatorGroup created (cluster-wide)"
+        else
+            log "✓ OperatorGroup already exists"
         fi
         
         # Create Subscription for RHACS operator
         log "Creating RHACS operator subscription..."
-        cat <<EOF | $KUBECTL_CMD apply -f -
+        SUBSCRIPTION_YAML=$(cat <<EOF
 apiVersion: operators.coreos.com/v1alpha1
 kind: Subscription
 metadata:
@@ -311,7 +316,21 @@ spec:
   sourceNamespace: openshift-marketplace
   installPlanApproval: Automatic
 EOF
-        log "✓ Operator subscription created"
+)
+        if ! echo "$SUBSCRIPTION_YAML" | $KUBECTL_CMD apply -f -; then
+            error "Failed to create RHACS operator subscription"
+        fi
+        
+        # Verify subscription was created with explicit API group
+        log "Verifying subscription was created..."
+        sleep 3
+        if ! $KUBECTL_CMD get subscription.operators.coreos.com rhacs-operator -n "$RHACS_OPERATOR_NAMESPACE" >/dev/null 2>&1; then
+            warning "Subscription not found with explicit API group, checking without..."
+            if ! $KUBECTL_CMD get subscription rhacs-operator -n "$RHACS_OPERATOR_NAMESPACE" >/dev/null 2>&1; then
+                error "Subscription 'rhacs-operator' not found in namespace '$RHACS_OPERATOR_NAMESPACE' after creation. Check operator installation manually."
+            fi
+        fi
+        log "✓ Operator subscription created and verified"
         
         # Check subscription status and InstallPlan
         log "Checking subscription status..."
@@ -319,7 +338,7 @@ EOF
         SUBSCRIPTION_STATUS=$($KUBECTL_CMD get subscription rhacs-operator -n "$RHACS_OPERATOR_NAMESPACE" -o jsonpath='{.status.state}' 2>/dev/null || echo "unknown")
         INSTALL_PLAN=$($KUBECTL_CMD get subscription rhacs-operator -n "$RHACS_OPERATOR_NAMESPACE" -o jsonpath='{.status.installPlanRef.name}' 2>/dev/null || echo "")
         log "Subscription state: ${SUBSCRIPTION_STATUS:-unknown}"
-        if [ -n "$INSTALL_PLAN" ] && [ "$INSTALL_PLAN" != "null" ]; then
+        if [ -n "$INSTALL_PLAN" ] && [ "$INSTALL_PLAN" != "null" ] && [ "$INSTALL_PLAN" != "" ]; then
             log "InstallPlan: $INSTALL_PLAN"
             INSTALL_PLAN_PHASE=$($KUBECTL_CMD get installplan "$INSTALL_PLAN" -n "$RHACS_OPERATOR_NAMESPACE" -o jsonpath='{.status.phase}' 2>/dev/null || echo "")
             if [ -n "$INSTALL_PLAN_PHASE" ]; then
@@ -343,13 +362,13 @@ EOF
                     log "Checking InstallPlan $INSTALL_PLAN..."
                     $KUBECTL_CMD get installplan "$INSTALL_PLAN" -n "$RHACS_OPERATOR_NAMESPACE" -o yaml 2>/dev/null | grep -A 20 "status:" || true
                 fi
-                log "Checking for CSV in stackrox namespace..."
+                log "Checking for CSV in rhacs-operator namespace..."
                 $KUBECTL_CMD get csv -n "$RHACS_OPERATOR_NAMESPACE" 2>/dev/null || true
                 log "Checking for CSV in openshift-operators namespace..."
                 $KUBECTL_CMD get csv -n openshift-operators 2>/dev/null | grep rhacs || true
                 error "Operator CSV installation timeout. Please check operator installation manually."
             fi
-            # Check both stackrox and openshift-operators namespaces for CSV
+            # Check both rhacs-operator and openshift-operators namespaces for CSV
             CSV_NAME=$($KUBECTL_CMD get csv -n "$RHACS_OPERATOR_NAMESPACE" -o jsonpath='{.items[?(@.metadata.name=~"rhacs-operator.*")].metadata.name}' 2>/dev/null | head -1 || echo "")
             if [ -z "$CSV_NAME" ] || [ "$CSV_NAME" = "null" ]; then
                 CSV_NAME=$($KUBECTL_CMD get csv -n openshift-operators -o jsonpath='{.items[?(@.metadata.name=~"rhacs-operator.*")].metadata.name}' 2>/dev/null | head -1 || echo "")
@@ -423,7 +442,7 @@ EOF
 
     # Apply init bundle secrets to aws-us cluster
     log "Applying init bundle secrets to aws-us cluster..."
-    $KUBECTL_CMD apply -f cluster_init_bundle.yaml -n "$RHACS_NAMESPACE" || error "Failed to apply init bundle secrets"
+    $KUBECTL_CMD apply -f cluster_init_bundle.yaml -n "$RHACS_OPERATOR_NAMESPACE" || error "Failed to apply init bundle secrets"
     log "✓ Init bundle secrets applied"
 
     # Create SecuredCluster resource in aws-us cluster
@@ -433,7 +452,7 @@ apiVersion: platform.stackrox.io/v1alpha1
 kind: SecuredCluster
 metadata:
   name: $SECURED_CLUSTER_NAME
-  namespace: $RHACS_NAMESPACE
+  namespace: $RHACS_OPERATOR_NAMESPACE
 spec:
   clusterName: "$CLUSTER_NAME"
   auditLogs:
