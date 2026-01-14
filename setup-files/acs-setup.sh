@@ -258,9 +258,49 @@ log "Switching to aws-us context for deployment..."
 $KUBECTL_CMD config use-context aws-us >/dev/null 2>&1 || error "Failed to switch to aws-us context"
 log "✓ Switched to aws-us context"
 
-# Check if SecuredCluster already exists in aws-us cluster
-if $KUBECTL_CMD get securedcluster "$SECURED_CLUSTER_NAME" -n "$RHACS_OPERATOR_NAMESPACE" >/dev/null 2>&1; then
-    log "SecuredCluster '$SECURED_CLUSTER_NAME' already exists in aws-us cluster, skipping setup"
+# Check if SecuredCluster actually exists and operator is properly installed
+SECURED_CLUSTER_EXISTS=false
+OPERATOR_INSTALLED=false
+
+# Check if SecuredCluster CRD exists (operator must be installed)
+if $KUBECTL_CMD get crd securedclusters.platform.stackrox.io >/dev/null 2>&1; then
+    OPERATOR_INSTALLED=true
+    log "SecuredCluster CRD found, operator appears to be installed"
+    
+    # Check if operator pods are actually running
+    CSV_NAME=$($KUBECTL_CMD get csv -n "$RHACS_OPERATOR_NAMESPACE" 2>/dev/null | grep -v "^NAME" | grep -E "rhacs-operator\." | awk '{print $1}' | head -1 || echo "")
+    if [ -n "$CSV_NAME" ] && [ "$CSV_NAME" != "" ]; then
+        CSV_PHASE=$($KUBECTL_CMD get csv "$CSV_NAME" -n "$RHACS_OPERATOR_NAMESPACE" -o jsonpath='{.status.phase}' 2>/dev/null || echo "")
+        if [ "$CSV_PHASE" = "Succeeded" ]; then
+            log "Operator CSV is in Succeeded phase"
+        else
+            log "Operator CSV phase: ${CSV_PHASE:-unknown}, operator may not be fully installed"
+            OPERATOR_INSTALLED=false
+        fi
+    else
+        log "No operator CSV found, operator is not installed"
+        OPERATOR_INSTALLED=false
+    fi
+    
+    # Only check for SecuredCluster if operator is actually installed
+    if [ "$OPERATOR_INSTALLED" = "true" ]; then
+        if $KUBECTL_CMD get securedcluster "$SECURED_CLUSTER_NAME" -n "$RHACS_OPERATOR_NAMESPACE" >/dev/null 2>&1; then
+            # Check if it's being deleted
+            DELETION_TIMESTAMP=$($KUBECTL_CMD get securedcluster "$SECURED_CLUSTER_NAME" -n "$RHACS_OPERATOR_NAMESPACE" -o jsonpath='{.metadata.deletionTimestamp}' 2>/dev/null || echo "")
+            if [ -n "$DELETION_TIMESTAMP" ] && [ "$DELETION_TIMESTAMP" != "" ]; then
+                log "SecuredCluster exists but is being deleted, will recreate"
+                SECURED_CLUSTER_EXISTS=false
+            else
+                SECURED_CLUSTER_EXISTS=true
+            fi
+        fi
+    fi
+else
+    log "SecuredCluster CRD not found, operator is not installed"
+fi
+
+if [ "$SECURED_CLUSTER_EXISTS" = "true" ] && [ "$OPERATOR_INSTALLED" = "true" ]; then
+    log "SecuredCluster '$SECURED_CLUSTER_NAME' already exists and operator is installed, skipping setup"
     rm -f cluster_init_bundle.yaml
 else
     # Ensure namespace exists in aws-us cluster
