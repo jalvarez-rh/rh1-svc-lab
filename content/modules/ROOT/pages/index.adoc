@@ -134,6 +134,7 @@ cat >> ~/.bashrc << 'EOF'
 export ROX_CENTRAL_ADDRESS="{acs_route}"
 export ACS_PORTAL_USERNAME="{acs_portal_username}"
 export ACS_PORTAL_PASSWORD="{acs_portal_password}"
+export GRPC_ENFORCE_ALPN_ENABLED=false
 EOF
 source ~/.bashrc
 ----

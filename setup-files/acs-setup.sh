@@ -268,6 +268,63 @@ else
         log "✓ Namespace exists"
     fi
 
+    # Check if SecuredCluster CRD exists, install operator if needed
+    log "Checking if SecuredCluster CRD is installed..."
+    if ! $KUBECTL_CMD get crd securedclusters.platform.stackrox.io >/dev/null 2>&1; then
+        log "SecuredCluster CRD not found. Installing RHACS operator..."
+        
+        # Create OperatorGroup if it doesn't exist
+        if ! $KUBECTL_CMD get operatorgroup -n "$RHACS_OPERATOR_NAMESPACE" >/dev/null 2>&1; then
+            log "Creating OperatorGroup..."
+            cat <<EOF | $KUBECTL_CMD apply -f -
+apiVersion: operators.coreos.com/v1
+kind: OperatorGroup
+metadata:
+  name: rhacs-operator-group
+  namespace: $RHACS_OPERATOR_NAMESPACE
+spec:
+  targetNamespaces:
+    - $RHACS_OPERATOR_NAMESPACE
+EOF
+            log "✓ OperatorGroup created"
+        fi
+        
+        # Create Subscription for RHACS operator
+        log "Creating RHACS operator subscription..."
+        cat <<EOF | $KUBECTL_CMD apply -f -
+apiVersion: operators.coreos.com/v1alpha1
+kind: Subscription
+metadata:
+  name: rhacs-operator
+  namespace: $RHACS_OPERATOR_NAMESPACE
+spec:
+  channel: stable
+  name: rhacs-operator
+  source: redhat-operators
+  sourceNamespace: openshift-marketplace
+  installPlanApproval: Automatic
+EOF
+        log "✓ Operator subscription created"
+        
+        # Wait for CRD to be available
+        log "Waiting for SecuredCluster CRD to be installed..."
+        local wait_count=0
+        local max_wait=120
+        while ! $KUBECTL_CMD get crd securedclusters.platform.stackrox.io >/dev/null 2>&1; do
+            if [ $wait_count -ge $max_wait ]; then
+                error "Timeout waiting for SecuredCluster CRD to be installed"
+            fi
+            sleep 2
+            wait_count=$((wait_count + 1))
+            if [ $((wait_count % 10)) -eq 0 ]; then
+                log "  Still waiting for CRD... ($wait_count/${max_wait}s)"
+            fi
+        done
+        log "✓ SecuredCluster CRD installed"
+    else
+        log "✓ SecuredCluster CRD found"
+    fi
+
     # Apply init bundle secrets to aws-us cluster
     log "Applying init bundle secrets to aws-us cluster..."
     $KUBECTL_CMD apply -f cluster_init_bundle.yaml -n "$RHACS_OPERATOR_NAMESPACE" || error "Failed to apply init bundle secrets"
