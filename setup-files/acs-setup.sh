@@ -488,7 +488,7 @@ spec:
         operator: Exists
         effect: NoSchedule
   scanner:
-    scannerComponent: Enabled
+    scannerComponent: AutoSense
     replicas: 1
     tolerations:
       - key: node-role.kubernetes.io/master
@@ -498,7 +498,7 @@ spec:
         operator: Exists
         effect: NoSchedule
   scannerV4:
-    scannerComponent: Enabled
+    scannerComponent: Default
     replicas: 1
     dbReplicas: 1
     indexerReplicas: 1
