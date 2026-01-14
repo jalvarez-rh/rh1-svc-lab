@@ -164,14 +164,29 @@ RHACS_OPERATOR_NAMESPACE="stackrox"
 CLUSTER_NAME="aws-us"
 SECURED_CLUSTER_NAME="aws-us"
 
-# Get Central route from local-cluster
-log "Retrieving Central route from local-cluster..."
-CENTRAL_ROUTE=$($KUBECTL_CMD get route central -n "$RHACS_OPERATOR_NAMESPACE" -o jsonpath='{.spec.host}' 2>/dev/null || echo "")
-if [ -z "$CENTRAL_ROUTE" ]; then
-    error "Central route not found in namespace '$RHACS_OPERATOR_NAMESPACE' on local-cluster. Please ensure RHACS Central is installed."
+# Get Central endpoint from environment or route
+log "Retrieving Central endpoint..."
+if [ -z "${ROX_CENTRAL_ADDRESS:-}" ]; then
+    if [ -f ~/.bashrc ]; then
+        set +u
+        source ~/.bashrc
+        set -u
+    fi
 fi
-ROX_ENDPOINT="$CENTRAL_ROUTE"
-log "✓ Central endpoint: $ROX_ENDPOINT"
+
+if [ -n "${ROX_CENTRAL_ADDRESS:-}" ]; then
+    ROX_ENDPOINT="${ROX_CENTRAL_ADDRESS#https://}"
+    ROX_ENDPOINT="${ROX_ENDPOINT#http://}"
+    log "✓ Central endpoint from environment: $ROX_ENDPOINT"
+else
+    # Fallback: get from route
+    CENTRAL_ROUTE=$($KUBECTL_CMD get route central -n "$RHACS_OPERATOR_NAMESPACE" -o jsonpath='{.spec.host}' 2>/dev/null || echo "")
+    if [ -z "$CENTRAL_ROUTE" ]; then
+        error "Central route not found and ROX_CENTRAL_ADDRESS not set. Please ensure RHACS Central is installed or set ROX_CENTRAL_ADDRESS in ~/.bashrc"
+    fi
+    ROX_ENDPOINT="$CENTRAL_ROUTE"
+    log "✓ Central endpoint from route: $ROX_ENDPOINT"
+fi
 
 # Normalize endpoint for API calls
 normalize_rox_endpoint() {
@@ -187,17 +202,22 @@ normalize_rox_endpoint() {
 
 ROX_ENDPOINT_NORMALIZED="$(normalize_rox_endpoint "$ROX_ENDPOINT")"
 
-# Get admin password from secret
-log "Retrieving admin password from secret..."
-ADMIN_PASSWORD_B64=$($KUBECTL_CMD get secret central-htpasswd -n "$RHACS_OPERATOR_NAMESPACE" -o jsonpath='{.data.password}' 2>/dev/null || echo "")
-if [ -z "$ADMIN_PASSWORD_B64" ]; then
-    error "Admin password secret 'central-htpasswd' not found in namespace '$RHACS_OPERATOR_NAMESPACE'"
+# Get admin password from environment variables
+log "Retrieving admin password from environment..."
+if [ -z "${ACS_PORTAL_PASSWORD:-}" ]; then
+    if [ -f ~/.bashrc ]; then
+        set +u
+        source ~/.bashrc
+        set -u
+    fi
 fi
-ADMIN_PASSWORD=$(echo "$ADMIN_PASSWORD_B64" | base64 -d)
-if [ -z "$ADMIN_PASSWORD" ]; then
-    error "Failed to decode admin password from secret"
+
+if [ -z "${ACS_PORTAL_PASSWORD:-}" ]; then
+    error "ACS_PORTAL_PASSWORD not found. Please set it in ~/.bashrc"
 fi
-log "✓ Admin password retrieved"
+
+ADMIN_PASSWORD="$ACS_PORTAL_PASSWORD"
+log "✓ Admin password retrieved from environment"
 
 # Check if SecuredCluster already exists in aws-us cluster
 $KUBECTL_CMD config use-context aws-us >/dev/null 2>&1 || error "Failed to switch to aws-us context"
