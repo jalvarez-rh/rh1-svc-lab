@@ -167,7 +167,8 @@ if ! $KUBECTL_CMD config use-context local-cluster >/dev/null 2>&1; then
     error "Failed to switch to local-cluster context. Cannot retrieve Central information."
 fi
 
-RHACS_OPERATOR_NAMESPACE="stackrox"
+RHACS_OPERATOR_NAMESPACE="rhacs-operator"
+RHACS_NAMESPACE="stackrox"  # Namespace for SecuredCluster resources
 CLUSTER_NAME="aws-us"
 SECURED_CLUSTER_NAME="aws-us"
 
@@ -187,7 +188,7 @@ if [ -n "${ROX_CENTRAL_ADDRESS:-}" ]; then
     log "✓ Central endpoint from environment: $ROX_ENDPOINT"
 else
     # Fallback: get from route
-    CENTRAL_ROUTE=$($KUBECTL_CMD get route central -n "$RHACS_OPERATOR_NAMESPACE" -o jsonpath='{.spec.host}' 2>/dev/null || echo "")
+    CENTRAL_ROUTE=$($KUBECTL_CMD get route central -n "$RHACS_NAMESPACE" -o jsonpath='{.spec.host}' 2>/dev/null || echo "")
     if [ -z "$CENTRAL_ROUTE" ]; then
         error "Central route not found and ROX_CENTRAL_ADDRESS not set. Please ensure RHACS Central is installed or set ROX_CENTRAL_ADDRESS in ~/.bashrc"
     fi
@@ -255,17 +256,25 @@ $KUBECTL_CMD config use-context aws-us >/dev/null 2>&1 || error "Failed to switc
 log "✓ Switched to aws-us context"
 
 # Check if SecuredCluster already exists in aws-us cluster
-if $KUBECTL_CMD get securedcluster "$SECURED_CLUSTER_NAME" -n "$RHACS_OPERATOR_NAMESPACE" >/dev/null 2>&1; then
+if $KUBECTL_CMD get securedcluster "$SECURED_CLUSTER_NAME" -n "$RHACS_NAMESPACE" >/dev/null 2>&1; then
     log "SecuredCluster '$SECURED_CLUSTER_NAME' already exists in aws-us cluster, skipping setup"
     rm -f cluster_init_bundle.yaml
 else
-    # Ensure namespace exists in aws-us cluster
+    # Ensure namespaces exist in aws-us cluster
     log "Ensuring namespace '$RHACS_OPERATOR_NAMESPACE' exists in aws-us cluster..."
     if ! $KUBECTL_CMD get namespace "$RHACS_OPERATOR_NAMESPACE" >/dev/null 2>&1; then
         $KUBECTL_CMD create namespace "$RHACS_OPERATOR_NAMESPACE" || error "Failed to create namespace"
-        log "✓ Namespace created"
+        log "✓ Operator namespace created"
     else
-        log "✓ Namespace exists"
+        log "✓ Operator namespace exists"
+    fi
+    
+    log "Ensuring namespace '$RHACS_NAMESPACE' exists in aws-us cluster..."
+    if ! $KUBECTL_CMD get namespace "$RHACS_NAMESPACE" >/dev/null 2>&1; then
+        $KUBECTL_CMD create namespace "$RHACS_NAMESPACE" || error "Failed to create namespace"
+        log "✓ RHACS namespace created"
+    else
+        log "✓ RHACS namespace exists"
     fi
 
     # Check if SecuredCluster CRD exists, install operator if needed
@@ -282,11 +291,9 @@ kind: OperatorGroup
 metadata:
   name: rhacs-operator-group
   namespace: $RHACS_OPERATOR_NAMESPACE
-spec:
-  targetNamespaces:
-    - $RHACS_OPERATOR_NAMESPACE
+spec: {}
 EOF
-            log "✓ OperatorGroup created"
+            log "✓ OperatorGroup created (cluster-wide)"
         fi
         
         # Create Subscription for RHACS operator
@@ -416,7 +423,7 @@ EOF
 
     # Apply init bundle secrets to aws-us cluster
     log "Applying init bundle secrets to aws-us cluster..."
-    $KUBECTL_CMD apply -f cluster_init_bundle.yaml -n "$RHACS_OPERATOR_NAMESPACE" || error "Failed to apply init bundle secrets"
+    $KUBECTL_CMD apply -f cluster_init_bundle.yaml -n "$RHACS_NAMESPACE" || error "Failed to apply init bundle secrets"
     log "✓ Init bundle secrets applied"
 
     # Create SecuredCluster resource in aws-us cluster
@@ -426,7 +433,7 @@ apiVersion: platform.stackrox.io/v1alpha1
 kind: SecuredCluster
 metadata:
   name: $SECURED_CLUSTER_NAME
-  namespace: $RHACS_OPERATOR_NAMESPACE
+  namespace: $RHACS_NAMESPACE
 spec:
   clusterName: "$CLUSTER_NAME"
   auditLogs:
