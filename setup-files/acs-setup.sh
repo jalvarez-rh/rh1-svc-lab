@@ -46,11 +46,18 @@ ROXCTL_URL="https://mirror.openshift.com/pub/rhacs/assets/${ROXCTL_VERSION}/bin/
 ROXCTL_TMP="/tmp/roxctl"
 
 if command -v roxctl >/dev/null 2>&1; then
-    INSTALLED_VERSION=$(roxctl version --output json 2>/dev/null | grep -oP '"version":\s*"\K[^"]+' | head -1 || echo "")
+    # Try to get version - handle both plain text and JSON output
+    INSTALLED_VERSION=$(roxctl version 2>/dev/null | grep -oE '[0-9]+\.[0-9]+\.[0-9]+' | head -1 || echo "")
+    
+    # If that didn't work, try JSON format
+    if [ -z "$INSTALLED_VERSION" ]; then
+        INSTALLED_VERSION=$(roxctl version --output json 2>/dev/null | grep -oE '"version":\s*"[^"]+' | grep -oE '[0-9]+\.[0-9]+\.[0-9]+' | head -1 || echo "")
+    fi
+    
     if [ -n "$INSTALLED_VERSION" ] && [[ "$INSTALLED_VERSION" == 4.9.* ]]; then
         log "roxctl version $INSTALLED_VERSION is already installed"
     else
-        log "roxctl exists but is not version 4.9, downloading version $ROXCTL_VERSION..."
+        log "roxctl exists but is not version 4.9 (found: ${INSTALLED_VERSION:-unknown}), downloading version $ROXCTL_VERSION..."
         curl -k -L -o "$ROXCTL_TMP" "$ROXCTL_URL" || error "Failed to download roxctl"
         chmod +x "$ROXCTL_TMP"
         sudo mv "$ROXCTL_TMP" /usr/local/bin/roxctl || error "Failed to move roxctl to /usr/local/bin"
