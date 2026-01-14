@@ -299,10 +299,8 @@ else
     log "SecuredCluster CRD not found, operator is not installed"
 fi
 
-if [ "$SECURED_CLUSTER_EXISTS" = "true" ] && [ "$OPERATOR_INSTALLED" = "true" ]; then
-    log "SecuredCluster '$SECURED_CLUSTER_NAME' already exists and operator is installed, skipping setup"
-    rm -f cluster_init_bundle.yaml
-else
+# Proceed with operator installation if needed
+if [ "$SECURED_CLUSTER_EXISTS" != "true" ] || [ "$OPERATOR_INSTALLED" != "true" ]; then
     # Ensure namespace exists in aws-us cluster
     log "Ensuring namespace '$RHACS_OPERATOR_NAMESPACE' exists in aws-us cluster..."
     if ! $KUBECTL_CMD get namespace "$RHACS_OPERATOR_NAMESPACE" >/dev/null 2>&1; then
@@ -562,14 +560,39 @@ EOF
     else
         log "✓ Operator is already installed, skipping operator installation"
     fi
+fi
 
-    # Apply init bundle secrets to aws-us cluster
+# Always ensure namespace exists and apply SecuredCluster configuration
+# Ensure namespace exists in aws-us cluster
+log "Ensuring namespace '$RHACS_OPERATOR_NAMESPACE' exists in aws-us cluster..."
+if ! $KUBECTL_CMD get namespace "$RHACS_OPERATOR_NAMESPACE" >/dev/null 2>&1; then
+    $KUBECTL_CMD create namespace "$RHACS_OPERATOR_NAMESPACE" || error "Failed to create namespace"
+    log "✓ Operator namespace created"
+else
+    log "✓ Operator namespace exists"
+fi
+
+# Verify operator is installed before proceeding
+if ! $KUBECTL_CMD get crd securedclusters.platform.stackrox.io >/dev/null 2>&1; then
+    error "SecuredCluster CRD not found. Operator must be installed first. Please run the script again to install the operator."
+fi
+
+# Apply init bundle secrets to aws-us cluster
+if [ -f cluster_init_bundle.yaml ]; then
     log "Applying init bundle secrets to aws-us cluster..."
     $KUBECTL_CMD apply -f cluster_init_bundle.yaml -n "$RHACS_OPERATOR_NAMESPACE" || error "Failed to apply init bundle secrets"
     log "✓ Init bundle secrets applied"
+    rm -f cluster_init_bundle.yaml
+else
+    log "Init bundle file not found, skipping (may already be applied)"
+fi
 
-    # Create SecuredCluster resource in aws-us cluster
-    log "Creating SecuredCluster resource in aws-us cluster..."
+# Create or update SecuredCluster resource in aws-us cluster (optimized for single-node)
+if [ "$SECURED_CLUSTER_EXISTS" = "true" ]; then
+    log "Updating existing SecuredCluster resource for single-node optimization..."
+else
+    log "Creating SecuredCluster resource in aws-us cluster (optimized for single-node)..."
+fi
     cat <<EOF | $KUBECTL_CMD apply -f -
 apiVersion: platform.stackrox.io/v1alpha1
 kind: SecuredCluster
@@ -594,16 +617,11 @@ spec:
       - key: node-role.kubernetes.io/control-plane
         operator: Exists
         effect: NoSchedule
+      - key: node-role.kubernetes.io/infra
+        operator: Exists
+        effect: NoSchedule
   scanner:
-    scannerComponent: AutoSense
-    replicas: 1
-    tolerations:
-      - key: node-role.kubernetes.io/master
-        operator: Exists
-        effect: NoSchedule
-      - key: node-role.kubernetes.io/control-plane
-        operator: Exists
-        effect: NoSchedule
+    scannerComponent: Disabled
   scannerV4:
     scannerComponent: Default
     replicas: 1
@@ -616,6 +634,9 @@ spec:
       - key: node-role.kubernetes.io/control-plane
         operator: Exists
         effect: NoSchedule
+      - key: node-role.kubernetes.io/infra
+        operator: Exists
+        effect: NoSchedule
   collector:
     collectionMethod: KernelModule
     tolerations:
@@ -623,6 +644,9 @@ spec:
         operator: Exists
         effect: NoSchedule
       - key: node-role.kubernetes.io/control-plane
+        operator: Exists
+        effect: NoSchedule
+      - key: node-role.kubernetes.io/infra
         operator: Exists
         effect: NoSchedule
   sensor:
@@ -633,17 +657,20 @@ spec:
       - key: node-role.kubernetes.io/control-plane
         operator: Exists
         effect: NoSchedule
+      - key: node-role.kubernetes.io/infra
+        operator: Exists
+        effect: NoSchedule
   processBaselines:
     autoLock: Enabled
 EOF
     
+if [ "$SECURED_CLUSTER_EXISTS" = "true" ]; then
+    log "✓ SecuredCluster resource updated"
+else
     log "✓ SecuredCluster resource created"
-
-    # Clean up temporary files
-    rm -f cluster_init_bundle.yaml
-
-    log "Secured Cluster Services deployment initiated for aws-us cluster"
-    log "The SecuredCluster will connect to Central running on local-cluster"
 fi
+
+log "Secured Cluster Services deployment initiated for aws-us cluster"
+log "The SecuredCluster will connect to Central running on local-cluster"
 
 log "ACS setup complete"
