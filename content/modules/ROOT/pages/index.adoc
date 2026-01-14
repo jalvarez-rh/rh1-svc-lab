@@ -2,7 +2,43 @@
 
 LB6535 - Sovereign Cloud Architecture with OpenShift: Multi-Cluster Data Residency and Compliance Management
 
-== Lab Environment Setup
+== Introduction
+
+Customers today want flexibility. They want to do more, with less, while accelerating AI adoption to stay ahead of the market. Geographic specific compliance standards, petabytes of data in restricted environments, and increasing provider costs are all pushing organizations to reevaluate their technology strategies. Customers are seeking Sovereign Cloud solutions to provide the flexibility necessary to be adaptive in the age of AI and geographic specific requirements.
+
+Red Hat is perfectly positioned to take advantage of these customer needs. With Red Hat's existing hybrid cloud approach, setting up an automated sovereign cloud architecture is simple. Red Hat has the tools to manage data privacy and compliance concerns, bringing simplified management of OpenShift clusters, containers, virtual machines, and AI applications, while providing hardened authorization, authentication, data controls, encryption, vulnerability management, and more.
+
+In this lab, you will progress through a simplified migration process where you, the customer, will bring your workflows and applications to an on premise and cloud environment, bringing your platform, to your data, in a compliant, secure, and repeatable manner.
+
+== What You'll Learn
+
+This lab demonstrates how Red Hat Solutions can empower enterprises to manage their own sovereign cloud architectures enabling application and data mobility and policy enforcement.
+
+Through hands-on activities, you will:
+
+* Configure geographically-distributed OpenShift clusters with automated compliance policies
+* Implement workload placement strategies that enforce data residency requirements
+* Deploy applications with built-in sovereignty enforcement
+* Establish audit trails and compliance reporting for regulatory demonstrations
+* Design disaster recovery scenarios that maintain geographic data constraints
+
+== Prerequisites
+
+Before beginning this lab, you should have:
+
+* Solid OpenShift administration experience
+* Familiarity with multi-cluster concepts
+
+== Lab Modules
+
+This lab is organized into four modules:
+
+* xref:module-01.adoc[Module 1: Operations & Security] - Multi-environment cluster and workload management
+* xref:module-02.adoc[Module 2: Assurance] - Cluster conformance, compliance, and security insights
+* xref:module-03.adoc[Module 3: Technology & Supply Chain] - Secure supply chain and SLSA framework
+* xref:module-04.adoc[Module 4: Data & AI] - Data pipelines and AI compute capabilities
+
+== Getting Started
 
 Before proceeding with the lab modules, you'll need to configure kubectl contexts for the clusters and install the roxctl CLI tool.
 
@@ -90,43 +126,7 @@ cd ~/rh1-svc-lab/setup-files
 ----
 
 
-== Introduction
 
-Customers today want flexibility. They want to do more, with less, while accelerating AI adoption to stay ahead of the market. Geographic specific compliance standards, petabytes of data in restricted environments, and increasing provider costs are all pushing organizations to reevaluate their technology strategies. Customers are seeking Sovereign Cloud solutions to provide the flexibility necessary to be adaptive in the age of AI and geographic specific requirements.
-
-Red Hat is perfectly positioned to take advantage of these customer needs. With Red Hat's existing hybrid cloud approach, setting up an automated sovereign cloud architecture is simple. Red Hat has the tools to manage data privacy and compliance concerns, bringing simplified management of OpenShift clusters, containers, virtual machines, and AI applications, while providing hardened authorization, authentication, data controls, encryption, vulnerability management, and more.
-
-In this lab, you will progress through a simplified migration process where you, the customer, will bring your workflows and applications to an on premise and cloud environment, bringing your platform, to your data, in a compliant, secure, and repeatable manner.
-
-== What You'll Learn
-
-This lab demonstrates how Red Hat Solutions can empower enterprises to manage their own sovereign cloud architectures enabling application and data mobility and policy enforcement.
-
-Through hands-on activities, you will:
-
-* Configure geographically-distributed OpenShift clusters with automated compliance policies
-* Implement workload placement strategies that enforce data residency requirements
-* Deploy applications with built-in sovereignty enforcement
-* Establish audit trails and compliance reporting for regulatory demonstrations
-* Design disaster recovery scenarios that maintain geographic data constraints
-
-== Prerequisites
-
-Before beginning this lab, you should have:
-
-* Solid OpenShift administration experience
-* Familiarity with multi-cluster concepts
-
-== Lab Modules
-
-This lab is organized into four modules:
-
-* xref:module-01.adoc[Module 1: Operations & Security] - Multi-environment cluster and workload management
-* xref:module-02.adoc[Module 2: Assurance] - Cluster conformance, compliance, and security insights
-* xref:module-03.adoc[Module 3: Technology & Supply Chain] - Secure supply chain and SLSA framework
-* xref:module-04.adoc[Module 4: Data & AI] - Data pipelines and AI compute capabilities
-
-== Getting Started
 
 [[openshift-acm]]
 === OpenShift Console Access

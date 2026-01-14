@@ -1,9 +1,38 @@
 #!/bin/bash
 # ACS Setup Script
 # Downloads and sets up roxctl CLI and switches to local-cluster context
+#
+# Usage:
+#   ./acs-setup.sh [--init-bundle FILE] [-i FILE]
+#   
+# Options:
+#   --init-bundle, -i    Path to an existing init-bundle.yaml file containing secrets
+#                        If not provided, the script will generate one automatically
 
 # Exit immediately on error, show exact error message
 set -euo pipefail
+
+# Parse command line arguments
+PROVIDED_INIT_BUNDLE=""
+while [[ $# -gt 0 ]]; do
+    case $1 in
+        --init-bundle|-i)
+            PROVIDED_INIT_BUNDLE="$2"
+            shift 2
+            ;;
+        --help|-h)
+            echo "Usage: $0 [--init-bundle FILE] [-i FILE]"
+            echo ""
+            echo "Options:"
+            echo "  --init-bundle, -i    Path to an existing init-bundle.yaml file containing secrets"
+            echo "                      If not provided, the script will generate one automatically"
+            exit 0
+            ;;
+        *)
+            error "Unknown option: $1. Use --help for usage information."
+            ;;
+    esac
+done
 
 # Colors for logging
 RED='\033[0;31m'
@@ -242,28 +271,70 @@ fi
 ADMIN_PASSWORD="$ACS_PORTAL_PASSWORD"
 log "✓ Admin password retrieved from environment"
 
-# Generate init bundle while still on local-cluster using curl API calls
-log "Generating init bundle for cluster: $CLUSTER_NAME (while on local-cluster)..."
-
-# Create init-bundles directory if it doesn't exist
+# Handle init bundle - either use provided file or generate one
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 INIT_BUNDLES_DIR="${SCRIPT_DIR}/init-bundles"
 mkdir -p "$INIT_BUNDLES_DIR"
 INIT_BUNDLE_FILE="${INIT_BUNDLES_DIR}/${CLUSTER_NAME}-init-bundle.yaml"
 
-# Ensure jq is available for JSON parsing
-if ! command -v jq >/dev/null 2>&1; then
-    warning "jq is required for init bundle generation. Installing jq..."
-    if command -v dnf >/dev/null 2>&1; then
-        sudo dnf install -y jq >/dev/null 2>&1 || error "Failed to install jq using dnf"
-    elif command -v apt-get >/dev/null 2>&1; then
-        sudo apt-get update >/dev/null 2>&1 && sudo apt-get install -y jq >/dev/null 2>&1 || error "Failed to install jq using apt-get"
-    else
-        error "Cannot install jq automatically. Please install jq manually."
+# Check if user provided an init bundle file
+if [ -n "$PROVIDED_INIT_BUNDLE" ]; then
+    log "Using provided init bundle file: $PROVIDED_INIT_BUNDLE"
+    
+    # Validate the provided file exists
+    if [ ! -f "$PROVIDED_INIT_BUNDLE" ]; then
+        error "Init bundle file not found: $PROVIDED_INIT_BUNDLE"
     fi
+    
+    # Validate the file contains valid secrets
+    if ! grep -q "kind: Secret" "$PROVIDED_INIT_BUNDLE" 2>/dev/null; then
+        error "Provided init bundle file does not appear to contain valid Secret resources: $PROVIDED_INIT_BUNDLE"
+    fi
+    
+    # Check for required secrets
+    REQUIRED_SECRETS=("sensor-tls" "admission-control-tls" "collector-tls")
+    MISSING_SECRETS=()
+    for secret in "${REQUIRED_SECRETS[@]}"; do
+        if ! grep -q "name: $secret" "$PROVIDED_INIT_BUNDLE" 2>/dev/null; then
+            MISSING_SECRETS+=("$secret")
+        fi
+    done
+    
+    if [ ${#MISSING_SECRETS[@]} -gt 0 ]; then
+        warning "Init bundle file may be missing some required secrets: ${MISSING_SECRETS[*]}"
+        warning "This may cause deployment issues. Please verify the init bundle is complete."
+    fi
+    
+    # Check if bundle contains wildcard cert (common issue)
+    if grep -q "00000000-0000-0000-0000-000000000000" "$PROVIDED_INIT_BUNDLE" 2>/dev/null; then
+        warning "Init bundle may contain wildcard ID - this can cause sensor panic"
+        warning "Consider regenerating the init bundle in Central"
+    fi
+    
+    # Use the provided file
+    INIT_BUNDLE_FILE="$PROVIDED_INIT_BUNDLE"
+    log "✓ Using provided init bundle file: $INIT_BUNDLE_FILE"
+    SKIP_BUNDLE_GENERATION=true
+else
+    log "No init bundle file provided, will generate one for cluster: $CLUSTER_NAME (while on local-cluster)..."
+    SKIP_BUNDLE_GENERATION=false
 fi
 
-# Load ROX_API_TOKEN if available, otherwise use admin password
+# Generate init bundle if not provided
+if [ "$SKIP_BUNDLE_GENERATION" = "false" ]; then
+    # Ensure jq is available for JSON parsing
+    if ! command -v jq >/dev/null 2>&1; then
+        warning "jq is required for init bundle generation. Installing jq..."
+        if command -v dnf >/dev/null 2>&1; then
+            sudo dnf install -y jq >/dev/null 2>&1 || error "Failed to install jq using dnf"
+        elif command -v apt-get >/dev/null 2>&1; then
+            sudo apt-get update >/dev/null 2>&1 && sudo apt-get install -y jq >/dev/null 2>&1 || error "Failed to install jq using apt-get"
+        else
+            error "Cannot install jq automatically. Please install jq manually."
+        fi
+    fi
+
+    # Load ROX_API_TOKEN if available, otherwise use admin password
 if [ -z "${ROX_API_TOKEN:-}" ]; then
     if [ -f ~/.bashrc ]; then
         set +u
@@ -646,7 +717,10 @@ else
     error "Init bundle file does not appear to contain valid Secret resources"
 fi
 
-log "✓ Init bundle generated and saved to: $INIT_BUNDLE_FILE"
+    log "✓ Init bundle generated and saved to: $INIT_BUNDLE_FILE"
+else
+    log "✓ Using provided init bundle file (skipped generation)"
+fi
 
 # Now switch to aws-us cluster for deployment
 log "Switching to aws-us context for deployment..."
