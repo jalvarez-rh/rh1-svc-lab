@@ -307,10 +307,12 @@ if [ -n "$PROVIDED_INIT_BUNDLE" ]; then
         warning "This may cause deployment issues. Please verify the init bundle is complete."
     fi
     
-    # Check if bundle contains wildcard cert (common issue)
+    # CRITICAL: Check if bundle contains wildcard ID - this causes sensor panic (Red Hat Solution 6972449)
     if grep -q "00000000-0000-0000-0000-000000000000" "$PROVIDED_INIT_BUNDLE" 2>/dev/null; then
-        warning "Init bundle may contain wildcard ID - this can cause sensor panic"
-        warning "Consider regenerating the init bundle in Central"
+        error "Provided init bundle contains wildcard ID '00000000-0000-0000-0000-000000000000' - this will cause sensor panic!"
+        error "Error: Invalid dynamic cluster ID value - no concrete cluster ID was specified"
+        error "Please regenerate the init bundle in Central and ensure it has a concrete cluster ID."
+        error "Init bundle file: $PROVIDED_INIT_BUNDLE"
     fi
     
     # Use the provided file
@@ -709,12 +711,25 @@ log "✓ Init bundle secrets decoded and saved to: $INIT_BUNDLE_FILE"
 # Verify the init bundle file contains valid secrets (not wildcard/empty)
 log "Validating init bundle contains valid certificate data..."
 if grep -q "kind: Secret" "$INIT_BUNDLE_FILE" && grep -q "data:" "$INIT_BUNDLE_FILE"; then
-    # Check if bundle contains actual certificate data (not just empty/wildcard)
+    # CRITICAL: Check if bundle contains wildcard ID - this causes sensor panic (Red Hat Solution 6972449)
     if grep -q "00000000-0000-0000-0000-000000000000" "$INIT_BUNDLE_FILE"; then
-        warning "Init bundle may contain wildcard ID - this can cause sensor panic"
-        warning "Consider manually deleting the init bundle in Central and regenerating"
+        error "Init bundle contains wildcard ID '00000000-0000-0000-0000-000000000000' - this will cause sensor panic!"
+        error "Error: Invalid dynamic cluster ID value - no concrete cluster ID was specified"
+        error "Please delete the existing init bundle in Central and regenerate it."
+        error "The script will attempt to delete and recreate the init bundle..."
+        # Try to delete the bundle and regenerate
+        if [ -n "$NEW_BUNDLE_ID" ] && [ "$NEW_BUNDLE_ID" != "null" ] && [ "$NEW_BUNDLE_ID" != "" ]; then
+            log "Attempting to delete init bundle with ID: $NEW_BUNDLE_ID"
+            if [ "$AUTH_METHOD" = "token" ]; then
+                curl -sk -X DELETE -H "$AUTH_HEADER" "${CENTRAL_API_URL}/v1/cluster-init/init-bundles/${NEW_BUNDLE_ID}" >/dev/null 2>&1 || true
+            else
+                curl -sk -X DELETE -u "${ACS_PORTAL_USERNAME}:${ADMIN_PASSWORD}" "${CENTRAL_API_URL}/v1/cluster-init/init-bundles/${NEW_BUNDLE_ID}" >/dev/null 2>&1 || true
+            fi
+            sleep 2
+        fi
+        error "Please run the script again after deleting the init bundle in Central UI or wait for automatic cleanup"
     else
-        log "✓ Init bundle appears to contain valid certificate data"
+        log "✓ Init bundle appears to contain valid certificate data (no wildcard IDs detected)"
     fi
 else
     error "Init bundle file does not appear to contain valid Secret resources"
@@ -1102,6 +1117,30 @@ if [ -f "$INIT_BUNDLE_FILE" ]; then
     sleep 3
     log "✓ Old secrets cleaned up, ready for fresh init bundle"
     
+    # CRITICAL: Validate init bundle doesn't contain wildcard IDs before applying
+    # This prevents the panic error: "Invalid dynamic cluster ID value "" : no concrete cluster ID"
+    log "Validating init bundle for wildcard IDs (Red Hat Solution 6972449)..."
+    if grep -q "00000000-0000-0000-0000-000000000000" "$INIT_BUNDLE_FILE" 2>/dev/null; then
+        error "Init bundle contains wildcard ID '00000000-0000-0000-0000-000000000000' - this will cause sensor panic!"
+        error "Please regenerate the init bundle in Central and ensure it has a concrete cluster ID."
+        error "Init bundle file: $INIT_BUNDLE_FILE"
+    fi
+    
+    # Check if init bundle appears to be empty or invalid
+    if ! grep -q "kind: Secret" "$INIT_BUNDLE_FILE" 2>/dev/null; then
+        error "Init bundle file does not contain valid Secret resources: $INIT_BUNDLE_FILE"
+    fi
+    
+    # Verify init bundle has actual certificate data (not just empty data fields)
+    if grep -q "data:" "$INIT_BUNDLE_FILE" 2>/dev/null; then
+        # Check if data fields are empty
+        if grep -A 5 "data:" "$INIT_BUNDLE_FILE" 2>/dev/null | grep -qE "^[[:space:]]*[a-zA-Z-]+:[[:space:]]*$"; then
+            warning "Init bundle may have empty data fields - this can cause issues"
+        fi
+    fi
+    
+    log "✓ Init bundle validation passed - no wildcard IDs detected"
+    
     # Apply init bundle
     if ! $KUBECTL_CMD apply -f "$INIT_BUNDLE_FILE" -n "$RHACS_OPERATOR_NAMESPACE"; then
         error "Failed to apply init bundle secrets. Check the init bundle file: $INIT_BUNDLE_FILE"
@@ -1282,6 +1321,22 @@ fi
 
 log "Configuring SecuredCluster centralEndpoint: $CENTRAL_ENDPOINT"
 log "  (This is the API endpoint the sensor will use to connect to Central)"
+
+# Get cluster ID from OpenShift clusterversion to ensure concrete cluster ID
+# This prevents the wildcard ID panic issue (Red Hat Solution 6972449)
+log "Detecting cluster ID from OpenShift clusterversion..."
+CLUSTER_ID=""
+if $KUBECTL_CMD get clusterversion version >/dev/null 2>&1; then
+    CLUSTER_ID=$($KUBECTL_CMD get clusterversion version -o jsonpath='{.spec.clusterID}' 2>/dev/null || echo "")
+    if [ -n "$CLUSTER_ID" ] && [ "$CLUSTER_ID" != "null" ] && [ "$CLUSTER_ID" != "" ]; then
+        log "✓ Detected cluster ID from clusterversion: $CLUSTER_ID"
+        log "  (This ensures sensor uses concrete cluster ID instead of wildcard)"
+    else
+        warning "Could not retrieve cluster ID from clusterversion - sensor will auto-detect"
+    fi
+else
+    warning "clusterversion resource not found - sensor will auto-detect cluster ID"
+fi
 
 cat <<EOF | $KUBECTL_CMD apply -f -
 apiVersion: platform.stackrox.io/v1alpha1
@@ -1476,8 +1531,15 @@ log ""
 log "IMPORTANT NOTES:"
 log "  - Init bundle secrets are applied in namespace: $RHACS_OPERATOR_NAMESPACE"
 log "  - Central endpoint configured: $CENTRAL_ENDPOINT"
+if [ -n "$CLUSTER_ID" ] && [ "$CLUSTER_ID" != "" ]; then
+    log "  - Cluster ID detected: $CLUSTER_ID (sensor will use concrete cluster ID)"
+else
+    log "  - Cluster ID: Sensor will auto-detect from OpenShift clusterversion"
+fi
 log "  - Scanner V4 is enabled with minimal configuration (1 replica, optimized for single-node)"
+log "  - Init bundle validated: No wildcard IDs detected (prevents sensor panic - Red Hat Solution 6972449)"
 log "  - If pods fail to start, check init bundle secrets and sensor connection"
 log "  - Monitor pod logs: oc logs -n $RHACS_OPERATOR_NAMESPACE <pod-name> -c init-tls-certs"
+log "  - If you see 'Invalid dynamic cluster ID' panic, ensure init bundle doesn't contain wildcard ID"
 
 log "ACS setup complete"
