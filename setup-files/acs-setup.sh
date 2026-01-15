@@ -275,7 +275,9 @@ log "✓ Admin password retrieved from environment"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 INIT_BUNDLES_DIR="${SCRIPT_DIR}/init-bundles"
 mkdir -p "$INIT_BUNDLES_DIR"
-INIT_BUNDLE_FILE="${INIT_BUNDLES_DIR}/${CLUSTER_NAME}-init-bundle.yaml"
+# Generate random number to avoid filename conflicts
+RANDOM_SUFFIX=$((RANDOM % 10000))
+INIT_BUNDLE_FILE="${INIT_BUNDLES_DIR}/${CLUSTER_NAME}-init-bundle-${RANDOM_SUFFIX}.yaml"
 
 # Check if user provided an init bundle file
 if [ -n "$PROVIDED_INIT_BUNDLE" ]; then
@@ -446,7 +448,8 @@ if [ "$HTTP_CODE" = "200" ] || [ "$HTTP_CODE" = "201" ]; then
 elif [ "$HTTP_CODE" = "409" ] || echo "$CREATE_BODY" | grep -qi "already exists\|AlreadyExists"; then
     log "Init bundle already exists, trying with timestamped name..."
     BUNDLE_NAME="${CLUSTER_NAME}-$(date +%s)"
-    INIT_BUNDLE_FILE="${INIT_BUNDLES_DIR}/${BUNDLE_NAME}-init-bundle.yaml"
+    RANDOM_SUFFIX=$((RANDOM % 10000))
+    INIT_BUNDLE_FILE="${INIT_BUNDLES_DIR}/${BUNDLE_NAME}-init-bundle-${RANDOM_SUFFIX}.yaml"
     
     if [ "$AUTH_METHOD" = "token" ]; then
         CREATE_RESPONSE=$(curl -sk -w "\n%{http_code}" -X POST \
@@ -1311,7 +1314,7 @@ spec:
   scanner:
     scannerComponent: Disabled
   scannerV4:
-    scannerComponent: Enabled
+    scannerComponent: Default
     replicas: 1
     tolerations:
       - key: node-role.kubernetes.io/master
@@ -1453,14 +1456,14 @@ fi
 log "Verifying Scanner V4 configuration..."
 SCANNER_V4_COMPONENT=$($KUBECTL_CMD get securedcluster "$SECURED_CLUSTER_NAME" -n "$RHACS_OPERATOR_NAMESPACE" -o jsonpath='{.spec.scannerV4.scannerComponent}' 2>/dev/null || echo "")
 SCANNER_V4_REPLICAS=$($KUBECTL_CMD get securedcluster "$SECURED_CLUSTER_NAME" -n "$RHACS_OPERATOR_NAMESPACE" -o jsonpath='{.spec.scannerV4.replicas}' 2>/dev/null || echo "")
-if [ "$SCANNER_V4_COMPONENT" = "Enabled" ]; then
+if [ "$SCANNER_V4_COMPONENT" = "Default" ] || [ "$SCANNER_V4_COMPONENT" = "AutoSense" ]; then
     if [ "$SCANNER_V4_REPLICAS" = "1" ]; then
         log "✓ Scanner V4 is enabled with minimal configuration (1 replica, appropriate for single-node cluster)"
     else
-        log "✓ Scanner V4 is enabled (replicas: ${SCANNER_V4_REPLICAS:-default})"
+        log "✓ Scanner V4 is enabled (component: ${SCANNER_V4_COMPONENT}, replicas: ${SCANNER_V4_REPLICAS:-default})"
     fi
 else
-    warning "Scanner V4 component: ${SCANNER_V4_COMPONENT:-unknown} (expected: Enabled)"
+    warning "Scanner V4 component: ${SCANNER_V4_COMPONENT:-unknown} (expected: Default or AutoSense)"
 fi
 
 log "Secured Cluster Services deployment initiated for aws-us cluster"
