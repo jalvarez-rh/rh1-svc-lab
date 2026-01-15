@@ -116,26 +116,54 @@ log "Certificate will be valid for: ${CERT_DNS_NAMES[*]}"
 CERT_NAME="rhacs-central-tls-cert"
 CERT_SECRET_NAME="rhacs-central-tls-secret"
 
-# Check if certificate already exists
+# Always delete existing certificate and related resources to ensure fresh issuance
+log "Cleaning up any existing certificate resources..."
 if oc get certificate "$CERT_NAME" -n "$RHACS_OPERATOR_NAMESPACE" &>/dev/null; then
-    log "Certificate '$CERT_NAME' already exists, checking status..."
-    CERT_READY=$(oc get certificate "$CERT_NAME" -n "$RHACS_OPERATOR_NAMESPACE" -o jsonpath='{.status.conditions[?(@.type=="Ready")].status}' 2>/dev/null || echo "Unknown")
-    if [ "$CERT_READY" = "True" ]; then
-        log "✓ Certificate is Ready"
-    else
-        log "Certificate exists but not ready (status: $CERT_READY), waiting..."
+    log "  Deleting existing certificate '$CERT_NAME'..."
+    oc delete certificate "$CERT_NAME" -n "$RHACS_OPERATOR_NAMESPACE" --wait=false 2>/dev/null || true
+    
+    # Delete related CertificateRequests
+    CERT_REQ_NAMES=$(oc get certificaterequest -n "$RHACS_OPERATOR_NAMESPACE" -l "cert-manager.io/certificate-name=$CERT_NAME" -o jsonpath='{.items[*].metadata.name}' 2>/dev/null || echo "")
+    if [ -n "$CERT_REQ_NAMES" ]; then
+        for req_name in $CERT_REQ_NAMES; do
+            log "  Deleting CertificateRequest '$req_name'..."
+            oc delete certificaterequest "$req_name" -n "$RHACS_OPERATOR_NAMESPACE" --wait=false 2>/dev/null || true
+        done
     fi
-else
-    log "Creating Certificate resource..."
     
-    # Build DNS names YAML section
-    DNS_NAMES_YAML=""
-    for dns_name in "${CERT_DNS_NAMES[@]}"; do
-        DNS_NAMES_YAML="${DNS_NAMES_YAML}  - ${dns_name}"$'\n'
-    done
+    # Delete related ACME Orders (for Let's Encrypt)
+    ORDER_NAMES=$(oc get order -n "$RHACS_OPERATOR_NAMESPACE" -l "acme.cert-manager.io/certificate-name=$CERT_NAME" -o jsonpath='{.items[*].metadata.name}' 2>/dev/null || echo "")
+    if [ -n "$ORDER_NAMES" ]; then
+        for order_name in $ORDER_NAMES; do
+            log "  Deleting Order '$order_name'..."
+            oc delete order "$order_name" -n "$RHACS_OPERATOR_NAMESPACE" --wait=false 2>/dev/null || true
+        done
+    fi
     
-    # Create Certificate resource
-    cat <<EOF | oc apply -f -
+    # Delete related ACME Challenges
+    CHALLENGE_NAMES=$(oc get challenge -n "$RHACS_OPERATOR_NAMESPACE" -l "acme.cert-manager.io/certificate-name=$CERT_NAME" -o jsonpath='{.items[*].metadata.name}' 2>/dev/null || echo "")
+    if [ -n "$CHALLENGE_NAMES" ]; then
+        for challenge_name in $CHALLENGE_NAMES; do
+            log "  Deleting Challenge '$challenge_name'..."
+            oc delete challenge "$challenge_name" -n "$RHACS_OPERATOR_NAMESPACE" --wait=false 2>/dev/null || true
+        done
+    fi
+    
+    # Wait a moment for resources to be deleted
+    sleep 3
+    log "✓ Cleanup completed"
+fi
+
+log "Creating Certificate resource..."
+
+# Build DNS names YAML section
+DNS_NAMES_YAML=""
+for dns_name in "${CERT_DNS_NAMES[@]}"; do
+    DNS_NAMES_YAML="${DNS_NAMES_YAML}  - ${dns_name}"$'\n'
+done
+
+# Create Certificate resource
+cat <<EOF | oc apply -f -
 apiVersion: cert-manager.io/v1
 kind: Certificate
 metadata:
@@ -148,9 +176,8 @@ ${DNS_NAMES_YAML}  issuerRef:
     name: $CLUSTERISSUER_NAME
     kind: ClusterIssuer
 EOF
-    
-    log "✓ Certificate resource created"
-fi
+
+log "✓ Certificate resource created"
 
 # Wait for certificate to be ready
 log "Waiting for certificate to be ready..."
