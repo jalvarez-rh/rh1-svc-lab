@@ -71,7 +71,25 @@ log "✓ Namespace '$OPERATOR_NAMESPACE' exists"
 log ""
 log "Checking Trusted Artifact Signer operator status"
 
-OPERATOR_PACKAGE="trusted-artifact-signer-operator"
+# Try multiple possible package names
+OPERATOR_PACKAGE=""
+POSSIBLE_PACKAGES=("trusted-artifact-signer-operator" "trusted-artifact-signer" "red-hat-trusted-artifact-signer")
+
+for pkg in "${POSSIBLE_PACKAGES[@]}"; do
+    if oc get packagemanifest "$pkg" -n openshift-marketplace >/dev/null 2>&1; then
+        OPERATOR_PACKAGE="$pkg"
+        log "✓ Found operator package: $OPERATOR_PACKAGE"
+        break
+    fi
+done
+
+# If not found, use default and let subscription creation fail with clear error
+if [ -z "$OPERATOR_PACKAGE" ]; then
+    OPERATOR_PACKAGE="trusted-artifact-signer-operator"
+    warning "Could not find operator package in catalog. Will attempt with: $OPERATOR_PACKAGE"
+    warning "If this fails, check available operators: oc get packagemanifest -n openshift-marketplace | grep -i trusted"
+fi
+
 EXISTING_SUBSCRIPTION=false
 
 if oc get subscription.operators.coreos.com "$OPERATOR_PACKAGE" -n "$OPERATOR_NAMESPACE" >/dev/null 2>&1; then
@@ -101,45 +119,37 @@ else
     log "Trusted Artifact Signer operator not found, proceeding with installation..."
 fi
 
-# Determine preferred channel
+# Determine channel (use stable as specified)
 log ""
 log "Determining available channel for Trusted Artifact Signer operator..."
 
-CHANNEL=""
+CHANNEL="stable"
 if oc get packagemanifest "$OPERATOR_PACKAGE" -n openshift-marketplace >/dev/null 2>&1; then
     AVAILABLE_CHANNELS=$(oc get packagemanifest "$OPERATOR_PACKAGE" -n openshift-marketplace -o jsonpath='{.status.channels[*].name}' 2>/dev/null || echo "")
     
     if [ -n "$AVAILABLE_CHANNELS" ]; then
         log "Available channels: $AVAILABLE_CHANNELS"
         
-        # Prefer stable channel
-        PREFERRED_CHANNELS=("stable" "release-1.0")
-        
-        for pref_channel in "${PREFERRED_CHANNELS[@]}"; do
-            if echo "$AVAILABLE_CHANNELS" | grep -q "\b$pref_channel\b"; then
-                CHANNEL="$pref_channel"
-                log "✓ Selected channel: $CHANNEL"
-                break
-            fi
-        done
-        
-        # If no preferred channel found, use the first available channel
-        if [ -z "$CHANNEL" ]; then
+        # Verify stable channel exists
+        if echo "$AVAILABLE_CHANNELS" | grep -q "\bstable\b"; then
+            CHANNEL="stable"
+            log "✓ Using stable channel (as specified)"
+        else
+            warning "Stable channel not found. Available channels: $AVAILABLE_CHANNELS"
+            # Use first available as fallback
             CHANNEL=$(echo "$AVAILABLE_CHANNELS" | awk '{print $1}')
-            log "✓ Using first available channel: $CHANNEL"
+            log "Using fallback channel: $CHANNEL"
         fi
     else
         warning "Could not determine available channels from packagemanifest"
+        log "Using default channel: stable"
     fi
 else
     warning "Package manifest not found in catalog (may still be syncing)"
+    log "Using default channel: stable"
 fi
 
-# Fallback to default channel if we couldn't determine it
-if [ -z "$CHANNEL" ]; then
-    CHANNEL="stable"
-    log "Using default channel: $CHANNEL"
-fi
+log "Selected channel: $CHANNEL"
 
 # Create or update OperatorGroup
 log ""
@@ -188,6 +198,9 @@ if [ "$EXISTING_SUBSCRIPTION" = true ]; then
     fi
 else
     log "Creating Subscription..."
+    log "  Channel: $CHANNEL"
+    log "  Installation mode: All namespaces"
+    log "  Update approval: Automatic"
     cat <<EOF | oc apply -f -
 apiVersion: operators.coreos.com/v1alpha1
 kind: Subscription
@@ -202,6 +215,24 @@ spec:
   sourceNamespace: openshift-marketplace
 EOF
     log "✓ Subscription created"
+    
+    # Wait a moment for subscription to be processed
+    sleep 3
+    
+    # Check InstallPlan and approve if needed (should be Automatic, but verify)
+    INSTALL_PLAN=$(oc get installplan -n "$OPERATOR_NAMESPACE" -o jsonpath='{.items[*].metadata.name}' 2>/dev/null | tr ' ' '\n' | head -1 || echo "")
+    if [ -n "$INSTALL_PLAN" ]; then
+        IP_APPROVAL=$(oc get installplan "$INSTALL_PLAN" -n "$OPERATOR_NAMESPACE" -o jsonpath='{.spec.approval}' 2>/dev/null || echo "")
+        IP_APPROVED=$(oc get installplan "$INSTALL_PLAN" -n "$OPERATOR_NAMESPACE" -o jsonpath='{.spec.approved}' 2>/dev/null || echo "")
+        
+        if [ "$IP_APPROVAL" = "Manual" ] && [ "$IP_APPROVED" != "true" ]; then
+            log "Approving Manual InstallPlan..."
+            oc patch installplan "$INSTALL_PLAN" -n "$OPERATOR_NAMESPACE" --type merge -p '{"spec":{"approved":true}}' || warning "Failed to approve InstallPlan"
+            log "✓ InstallPlan approved"
+        else
+            log "✓ InstallPlan approval: ${IP_APPROVAL:-Automatic}"
+        fi
+    fi
 fi
 
 # Wait for CSV to be created and ready
