@@ -9,7 +9,7 @@
 #   --init-bundle, -i    Path to an existing init-bundle.yaml file containing secrets
 #                        If not provided, the script will generate one automatically
 
-# Exit immediately on error, show exact error message
+# Exit immediately on error, show error message
 set -euo pipefail
 
 # Parse command line arguments
