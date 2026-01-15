@@ -2,84 +2,29 @@
 
 == Module Goals
 
-The goal of this lab is to learn about the features from the Trusted Software Supply Chain suite of products from Red Hat.
+The goal of this lab is to learn about the features from the Trusted Software Supply Chain suite of products from Red Hat. In sovereign cloud environments, maintaining control over your software supply chain is essential. This module demonstrates how cryptographic signing, verification, and Software Bills of Materials (SBOMs) enable you to maintain sovereignty over your software artifacts and dependencies.
 
 == Trusted Artifact Signer
 
-Red Hat Trusted Artifact Signer (TAS) enhances software supply chain security by simplifying cryptographic signing and verification of software artifacts, such as container images, binaries, and documents.
+In sovereign cloud environments, maintaining verifiable control over software artifacts is critical for ensuring that only approved, audited code runs in your infrastructure. Red Hat Trusted Artifact Signer (TAS) enhances software supply chain security by simplifying cryptographic signing and verification of software artifacts, such as container images, binaries, and documents.
 
-Trusted Artifact Signer provides a production-ready deployment of the https://www.sigstore.dev/[Sigstore project] as a core component of the Red Hat Trusted Software Supply Chain product family.
+Trusted Artifact Signer provides a production-ready deployment of the https://www.sigstore.dev/[Sigstore project] as a core component of the Red Hat Trusted Software Supply Chain product family. This enables organizations to maintain sovereignty over their software supply chain by ensuring all artifacts are cryptographically signed, verifiable, and auditable.
 
-Signing and verification, e.g., using GPG, has been around a long time—why would someone found a new open source project to address signing and verification, you might ask?
+=== Why Trusted Artifact Signer?
 
-=== Why Sigstore / Trusted Artifact Signer?
+In sovereign cloud environments, maintaining control over your software supply chain is essential for regulatory compliance, data protection, and operational independence. Trusted Artifact Signer addresses these requirements through:
 
-. *Supply Chain Security*: Modern software development requires robust mechanisms to secure dependencies and artifacts, which GPG struggles to address effectively.
-. *Usability*: Developers need simpler, more intuitive signing solutions without the burden of manual key management.
-. *Transparency*: A centralized, tamper-evident log system ensures accountability and traceability of signatures, enhancing trust.
-. *Modern Identity Integration*: Sigstore aligns with contemporary authentication mechanisms (e.g., OAuth, OpenID Connect), making it easier to tie signatures to identities.
-. *Automation*: Sigstore fits seamlessly into automated CI/CD workflows, which are critical in modern software development pipelines.
-
-These are bold statements, so let's quickly compare the two to better understand the advantages that Trusted Artifact Signer brings to the table:
-
-==== 1. Key Management
-
-* *GPG*:
-** Users must generate and manage long-term public/private key pairs themselves.
-** Keys are often stored locally, and their security is tied to the user’s system.
-** If a private key is lost or compromised, recovery or revocation can be complex.
-* *Sigstore / Trusted Artifact Signer*:
-** Utilizes short-lived (ephemeral) keys generated on-demand for signing.
-** No need for long-term private key management; keys are automatically discarded after use.
-** Simplifies key management for developers, reducing the risk of key compromise.
-
-==== 2. Trust Model
-
-* *GPG*:
-** Relies on a *Web of Trust* where individuals sign each other’s keys to establish authenticity.
-** Trust depends on manual verification and key-signing parties, which can be cumbersome and error-prone.
-** Requires a high degree of trust in individual users and their ability to manage their keys properly.
-* *Sigstore / Trusted Artifact Signer*:
-** Leverages OpenID Connect (OIDC) for authentication, binding artifacts to an identity (e.g., an SSO system such as Keycloak, a GitHub or GitLab account, email, etc.).
-** Trust is rooted in central transparency logs (e.g., Rekor), ensuring all signatures are centrally (or publicly, if desired) auditable.
-** Encourages a more automated and modern trust model, simplifying verification.
-
-==== 3. Transparency and Verifiability
-
-* *GPG*:
-** Signed artifacts and their signatures must be manually shared and verified.
-** No central or automatic system for transparency or revocation tracking.
-** Difficult to audit or trace all signatures and the associated public keys at scale.
-* *Sigstore / Trusted Artifact Signer*:
-** Every signing action is logged in a central, optionally public, tamper-evident transparency log (Rekor).
-** Anyone can independently verify the signing event and its associated identity.
-** Provides a centralized and automated system for transparency and auditability.
-
-==== 4. Ease of Use
-
-* *GPG*:
-** Comparatively complex for users, requiring manual key generation, management, and sharing.
-** CLI tools have a steep learning curve and are not always user-friendly.
-** Widespread adoption hindered by usability challenges.
-* *Sigstore / Trusted Artifact Signer*:
-** Streamlined experience designed for developers and modern workflows.
-** No need to manually manage keys or trust chains; authentication is identity-based.
-** Easily integrates into CI/CD pipelines and modern development practices.
-
-==== 5. Security
-
-* *GPG*:
-** Vulnerable to long-term key compromise if private keys are not properly secured.
-** Trust in signatures is tightly coupled to key security and revocation is challenging.
-* *Sigstore / Trusted Artifact Signer*:
-** Ephemeral keys reduce the risk of long-term compromise.
-** Transparency logs provide tamper-evident evidence of signing, reducing the risk of undetected forgery.
-** Designed with supply chain security in mind, reducing risks from malicious dependencies or compromised keys.
+. *Supply Chain Security*: Modern software development requires robust mechanisms to secure dependencies and artifacts, which GNU Privacy Guard (GPG) (https://www.gnupg.org/) struggles to address effectively. For sovereign cloud operations, this ensures only approved, verified artifacts enter your infrastructure.
+. *Usability*: Developers need simpler, more intuitive signing solutions without the burden of manual key management. This reduces operational overhead while maintaining strict security controls essential for sovereign environments.
+. *Transparency*: A centralized, tamper-evident log system ensures accountability and traceability of signatures, enhancing trust and providing the auditability required for sovereign cloud compliance.
+. *Modern Identity Integration*: Sigstore aligns with contemporary authentication mechanisms (e.g., OAuth, OpenID Connect), making it easier to tie signatures to identities within your organization's identity management systems—critical for maintaining sovereign control.
+. *Automation*: Sigstore fits seamlessly into automated CI/CD workflows, which are critical in modern software development pipelines. This enables consistent enforcement of signing policies across your sovereign infrastructure without manual intervention.
 
 ==== Advantages of Sigstore / Trusted Artifact Signer over GPG
 
-In summary, Sigstore is designed to address the pain points and limitations of GPG in the context of modern software development, focusing on ease of use, transparency, and security for signing and verifying software artifacts.
+Sigstore is designed to address the pain points and limitations of GPG in the context of modern software development, focusing on ease of use, transparency, and security for signing and verifying software artifacts. For sovereign cloud environments, Trusted Artifact Signer provides the additional benefit of enabling complete operational control over your signing infrastructure.
 
+* Enables sovereign control by allowing organizations to operate signing services within their own infrastructure boundaries.
 * Eliminates manual key management.
 * Provides automated, identity-based signing.
 * Ensures transparency with central (optionally public) logs.
@@ -96,9 +41,7 @@ IMPORTANT: Run the following command to ensure the environment is up to date:
 curl -fsSL https://raw.githubusercontent.com/redhat-tssc-tmm/security-roadshow/main/cosign_gitsign_installer.sh | bash
 ----
 
-For this exercise, we'll be using the container image in Quay that we created during our lab setup (xref:00-acs-setup-install-navigation.adoc#build-a-container-image[Build a container image]).
-
-NOTE: Make sure you still have the variables set. If not, please go through the xref:00-acs-setup-install-navigation.adoc#build-a-container-image[Build a container image] section again to set up your environment and make sure you have pushed the image to Quay.
+== Signing our software
 
 *Procedure*
 
@@ -249,6 +192,8 @@ Root status:
 ----
 
 === Signing and Verifying a Container Image
+
+In sovereign cloud environments, cryptographic signing ensures that only approved, verified container images can be deployed to your infrastructure. This maintains control over your software supply chain and enables compliance with regulatory requirements for software provenance and integrity.
 
 `cosign` will be interacting with the image in our private registry, therefore we need to log in to Quay.
 
@@ -586,6 +531,8 @@ The following checks were performed on each of these signatures:
 ----
 
 === Signing and Verifying Git Commits
+
+Maintaining sovereign control over your codebase requires verifiable proof of authorship and integrity for all code changes. Git commit signing ensures that all code modifications are cryptographically tied to authenticated identities, providing the auditability and traceability essential for sovereign cloud operations.
 
 TIP: Using traditional commit signing and verification methods required management and distribution of private/public key pairs to developers - a task that can become quite cumbersome for a large number of developers in your organization. With *Red Hat Trusted Artifact Signer*, there is no need to issue/distribute/re-issue keys due to lost passwords/maintain a key revocation list etc.
 
@@ -1007,6 +954,8 @@ Validated Certificate claims: true
 
 === Summary
 
+By implementing cryptographic signing and verification for container images and Git commits, you've established foundational controls for maintaining sovereign control over your software supply chain. These capabilities ensure that only approved, verified artifacts enter your infrastructure, providing the auditability and traceability required for regulatory compliance and operational independence in sovereign cloud environments.
+
 With keyless signing and verification, both for container images (or any blob, to be exact) and git commits, we have established artifact and commit integrity, security AND traceability - without the need to create, distribute and manage public/private key pairs.
 
 The artifact is now:
@@ -1019,13 +968,13 @@ The artifact is now:
 
 == Trusted Profile Analyzer
 
-The Trusted Profile Analyzer adds management capabilities for *Software Bills of Materials (SBOMs)* to OpenShift.
+The Trusted Profile Analyzer adds management capabilities for *Software Bills of Materials (SBOMs)* to OpenShift. In sovereign cloud environments, SBOMs are essential for maintaining visibility and control over software dependencies, ensuring compliance with data residency requirements, and enabling organizations to make informed decisions about software components that process sensitive data.
 
 === *What is an SBOM?*
 
 https://www.cisa.gov[CISA.gov] defines an SBOM as "a nested inventory, a list of ingredients that make up software components." https://www.cisa.gov/sbom[¹]
 
-Using SBOMs, you can have a clear vision of everything that goes into your application or what you may have received from vendors, such as Red Hat. This enables platform engineers to more easily enforce operational controls and compliance across hybrid multi-cloud environments.
+Using SBOMs, you can have a clear vision of everything that goes into your application or what you may have received from vendors, such as Red Hat. This enables platform engineers to more easily enforce operational controls and compliance across hybrid multi-cloud environments. For sovereign cloud operations, SBOMs provide the transparency needed to ensure all software components meet regulatory requirements, maintain data sovereignty, and enable organizations to maintain complete control over their software supply chain.
 
 In addition, several regulatory requirements and frameworks either *mandate* or *recommend* the use of *Software Bills of Materials (SBOMs)* to enhance software supply chain transparency and security. Here are some key examples, but the list is continually growing:
 
@@ -1070,9 +1019,9 @@ In addition, several regulatory requirements and frameworks either *mandate* or 
 
 * *Transparency*: Knowing what’s in your software reduces the risk of vulnerabilities.
 * *Risk Management*: SBOMs help identify, track, and remediate issues in the software supply chain.
-* *Compliance*: They demonstrate adherence to evolving cybersecurity and data privacy laws.
+* *Compliance*: They demonstrate adherence to evolving cybersecurity and data privacy laws, including requirements for data residency, operational control, and regulatory reporting that are central to sovereign cloud operations.
 
-*As cybersecurity frameworks continue to evolve, the use of SBOMs is increasingly seen as foundational for compliance and risk mitigation.*
+*As cybersecurity frameworks continue to evolve, the use of SBOMs is increasingly seen as foundational for compliance and risk mitigation. In sovereign cloud environments, SBOMs are essential for maintaining operational independence and ensuring that all software components meet your organization's security and compliance requirements.*
 
 === *Using the Trusted Profile Analyzer UI*
 

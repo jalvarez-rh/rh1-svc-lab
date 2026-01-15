@@ -1,7 +1,5 @@
 = {lab_name}
 
-LB6535 - Sovereign Cloud Architecture with OpenShift: Multi-Cluster Data Residency and Compliance Management
-
 == Introduction
 
 Customers today want flexibility. They want to do more, with less, while accelerating AI adoption to stay ahead of the market. Geographic specific compliance standards, petabytes of data in restricted environments, and increasing provider costs are all pushing organizations to reevaluate their technology strategies. Customers are seeking Sovereign Cloud solutions to provide the flexibility necessary to be adaptive in the age of AI and geographic specific requirements.
