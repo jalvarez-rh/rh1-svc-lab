@@ -162,8 +162,26 @@ WAIT_COUNT=0
 CERT_READY=false
 
 while [ $WAIT_COUNT -lt $MAX_WAIT ]; do
-    CERT_STATUS=$(oc get certificate "$CERT_NAME" -n "$RHACS_OPERATOR_NAMESPACE" -o jsonpath='{.status.conditions[?(@.type=="Ready")].status}' 2>/dev/null || echo "Unknown")
-    CERT_REASON=$(oc get certificate "$CERT_NAME" -n "$RHACS_OPERATOR_NAMESPACE" -o jsonpath='{.status.conditions[?(@.type=="Ready")].reason}' 2>/dev/null || echo "")
+    # Check if certificate resource exists
+    if ! oc get certificate "$CERT_NAME" -n "$RHACS_OPERATOR_NAMESPACE" &>/dev/null; then
+        if [ $((WAIT_COUNT % 30)) -eq 0 ] && [ $WAIT_COUNT -gt 0 ]; then
+            log "  Still waiting... (${WAIT_COUNT}s/${MAX_WAIT}s) - Certificate resource not found yet"
+        fi
+        sleep 5
+        WAIT_COUNT=$((WAIT_COUNT + 5))
+        continue
+    fi
+    
+    # Get certificate status - check if status.conditions exists first
+    CERT_HAS_CONDITIONS=$(oc get certificate "$CERT_NAME" -n "$RHACS_OPERATOR_NAMESPACE" -o jsonpath='{.status.conditions}' 2>/dev/null | wc -c)
+    CERT_STATUS=""
+    CERT_REASON=""
+    
+    if [ "$CERT_HAS_CONDITIONS" -gt 2 ]; then
+        # Status conditions exist, get the Ready condition
+        CERT_STATUS=$(oc get certificate "$CERT_NAME" -n "$RHACS_OPERATOR_NAMESPACE" -o jsonpath='{.status.conditions[?(@.type=="Ready")].status}' 2>/dev/null || echo "")
+        CERT_REASON=$(oc get certificate "$CERT_NAME" -n "$RHACS_OPERATOR_NAMESPACE" -o jsonpath='{.status.conditions[?(@.type=="Ready")].reason}' 2>/dev/null || echo "")
+    fi
     
     if [ "$CERT_STATUS" = "True" ]; then
         CERT_READY=true
@@ -171,13 +189,39 @@ while [ $WAIT_COUNT -lt $MAX_WAIT ]; do
         break
     fi
     
+    # Get additional diagnostic info
+    CERT_REQ_NAME=$(oc get certificaterequest -n "$RHACS_OPERATOR_NAMESPACE" -l "cert-manager.io/certificate-name=$CERT_NAME" -o jsonpath='{.items[0].metadata.name}' 2>/dev/null || echo "")
+    CHALLENGE_STATUS=""
+    if [ -n "$CERT_REQ_NAME" ]; then
+        CHALLENGE_STATUS=$(oc get certificaterequest "$CERT_REQ_NAME" -n "$RHACS_OPERATOR_NAMESPACE" -o jsonpath='{.status.conditions[?(@.type=="Ready")].reason}' 2>/dev/null || echo "")
+    fi
+    
+    # Check for ACME challenges (for Let's Encrypt)
+    ACME_ORDER_NAME=$(oc get order -n "$RHACS_OPERATOR_NAMESPACE" -l "acme.cert-manager.io/certificate-name=$CERT_NAME" -o jsonpath='{.items[0].metadata.name}' 2>/dev/null || echo "")
+    ACME_STATUS=""
+    if [ -n "$ACME_ORDER_NAME" ]; then
+        ACME_STATUS=$(oc get order "$ACME_ORDER_NAME" -n "$RHACS_OPERATOR_NAMESPACE" -o jsonpath='{.status.state}' 2>/dev/null || echo "")
+    fi
+    
     # Show progress every 30 seconds with cleaner status
     if [ $((WAIT_COUNT % 30)) -eq 0 ] && [ $WAIT_COUNT -gt 0 ]; then
-        if [ -n "$CERT_REASON" ] && [ "$CERT_REASON" != "Unknown" ]; then
-            log "  Still waiting... (${WAIT_COUNT}s/${MAX_WAIT}s) - Status: $CERT_REASON"
+        STATUS_MSG=""
+        if [ "$CERT_STATUS" = "True" ]; then
+            STATUS_MSG="Status: Ready"
+        elif [ -n "$CERT_REASON" ] && [ "$CERT_REASON" != "" ] && [ "$CERT_REASON" != "DoesNotExist" ]; then
+            STATUS_MSG="Status: $CERT_REASON"
+        elif [ -n "$ACME_STATUS" ] && [ "$ACME_STATUS" != "" ]; then
+            STATUS_MSG="ACME Order: $ACME_STATUS"
+        elif [ -n "$CHALLENGE_STATUS" ] && [ "$CHALLENGE_STATUS" != "" ]; then
+            STATUS_MSG="CertificateRequest: $CHALLENGE_STATUS"
+        elif [ "$CERT_HAS_CONDITIONS" -le 2 ]; then
+            STATUS_MSG="Status: Processing (cert-manager is working on it)"
+        elif [ -n "$CERT_STATUS" ] && [ "$CERT_STATUS" != "" ]; then
+            STATUS_MSG="Status: $CERT_STATUS"
         else
-            log "  Still waiting... (${WAIT_COUNT}s/${MAX_WAIT}s)"
+            STATUS_MSG="Status: Processing (cert-manager is working on it)"
         fi
+        log "  Still waiting... (${WAIT_COUNT}s/${MAX_WAIT}s) - $STATUS_MSG"
     fi
     
     sleep 5
@@ -186,13 +230,37 @@ done
 
 if [ "$CERT_READY" = false ]; then
     warning "Certificate did not become ready within ${MAX_WAIT} seconds"
+    
+    # Check if certificate resource exists
+    if ! oc get certificate "$CERT_NAME" -n "$RHACS_OPERATOR_NAMESPACE" &>/dev/null; then
+        error "Certificate resource '$CERT_NAME' was not created. Check if cert-manager is running: oc get pods -n cert-manager"
+    fi
+    
+    # Get detailed status
     CERT_REASON=$(oc get certificate "$CERT_NAME" -n "$RHACS_OPERATOR_NAMESPACE" -o jsonpath='{.status.conditions[?(@.type=="Ready")].reason}' 2>/dev/null || echo "Unknown")
     CERT_MESSAGE=$(oc get certificate "$CERT_NAME" -n "$RHACS_OPERATOR_NAMESPACE" -o jsonpath='{.status.conditions[?(@.type=="Ready")].message}' 2>/dev/null || echo "")
-    if [ -n "$CERT_MESSAGE" ]; then
+    
+    # Check CertificateRequest
+    CERT_REQ_NAME=$(oc get certificaterequest -n "$RHACS_OPERATOR_NAMESPACE" -l "cert-manager.io/certificate-name=$CERT_NAME" -o jsonpath='{.items[0].metadata.name}' 2>/dev/null || echo "")
+    if [ -n "$CERT_REQ_NAME" ]; then
+        CERT_REQ_STATUS=$(oc get certificaterequest "$CERT_REQ_NAME" -n "$RHACS_OPERATOR_NAMESPACE" -o jsonpath='{.status.conditions[?(@.type=="Ready")].status}' 2>/dev/null || echo "")
+        CERT_REQ_REASON=$(oc get certificaterequest "$CERT_REQ_NAME" -n "$RHACS_OPERATOR_NAMESPACE" -o jsonpath='{.status.conditions[?(@.type=="Ready")].reason}' 2>/dev/null || echo "")
+        warning "CertificateRequest '$CERT_REQ_NAME' status: $CERT_REQ_STATUS, reason: $CERT_REQ_REASON"
+    fi
+    
+    if [ -n "$CERT_MESSAGE" ] && [ "$CERT_MESSAGE" != "" ]; then
         warning "Certificate status reason: $CERT_REASON"
         warning "Certificate status message: $CERT_MESSAGE"
     fi
-    error "Certificate is not ready. Check cert-manager logs for details: oc logs -n cert-manager -l app=cert-manager"
+    
+    log ""
+    log "To troubleshoot, check:"
+    log "  oc describe certificate $CERT_NAME -n $RHACS_OPERATOR_NAMESPACE"
+    if [ -n "$CERT_REQ_NAME" ]; then
+        log "  oc describe certificaterequest $CERT_REQ_NAME -n $RHACS_OPERATOR_NAMESPACE"
+    fi
+    log "  oc logs -n cert-manager -l app=cert-manager --tail=50"
+    error "Certificate is not ready. See troubleshooting commands above."
 fi
 
 # Verify the cert-manager secret exists
