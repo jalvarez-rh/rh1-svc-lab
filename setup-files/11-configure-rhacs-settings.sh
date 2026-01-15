@@ -1,7 +1,7 @@
 #!/bin/bash
-# Add Layered Product Namespaces Script for RHACS
-# Adds specified namespaces to the Red Hat layered products platform component rule
-# Uses the same approach as 11-configure-rhacs-settings.sh
+# RHACS Configuration Script
+# Makes API calls to RHACS to change configuration details
+# Enables monitoring/metrics and configures policy guidelines
 
 # Exit immediately on error, show exact error message
 set -euo pipefail
@@ -13,41 +13,88 @@ YELLOW='\033[1;33m'
 NC='\033[0m'
 
 log() {
-    echo -e "${GREEN}[LAYERED-PRODUCTS]${NC} $1"
+    echo -e "${GREEN}[RHACS-CONFIG]${NC} $1"
 }
 
 warning() {
-    echo -e "${YELLOW}[LAYERED-PRODUCTS]${NC} $1"
+    echo -e "${YELLOW}[RHACS-CONFIG]${NC} $1"
 }
 
 error() {
-    echo -e "${RED}[LAYERED-PRODUCTS] ERROR:${NC} $1" >&2
-    echo -e "${RED}[LAYERED-PRODUCTS] Script failed at line ${BASH_LINENO[0]}${NC}" >&2
+    echo -e "${RED}[RHACS-CONFIG] ERROR:${NC} $1" >&2
+    echo -e "${RED}[RHACS-CONFIG] Script failed at line ${BASH_LINENO[0]}${NC}" >&2
     exit 1
 }
 
-# Load ROX_API_TOKEN and ROX_CENTRAL_ADDRESS from ~/.bashrc
-if [ -f ~/.bashrc ]; then
-    # Temporarily disable unbound variable check when sourcing bashrc
-    set +u
-    source ~/.bashrc
-    set -u
+# Trap to show error details on exit
+trap 'error "Command failed: $(cat <<< "$BASH_COMMAND")"' ERR
+
+# Set script directory and project root
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+PROJECT_ROOT="$(dirname "$SCRIPT_DIR")"
+
+# RHACS operator namespace
+RHACS_OPERATOR_NAMESPACE="rhacs-operator"
+
+# Generate ROX_ENDPOINT from Central route
+log "Extracting ROX_ENDPOINT from Central route..."
+CENTRAL_ROUTE=$(oc get route central -n "$RHACS_OPERATOR_NAMESPACE" -o jsonpath='{.spec.host}' 2>/dev/null || echo "")
+if [ -z "$CENTRAL_ROUTE" ]; then
+    error "Central route not found in namespace '$RHACS_OPERATOR_NAMESPACE'. Please ensure RHACS Central is installed."
+fi
+ROX_ENDPOINT="$CENTRAL_ROUTE"
+log "✓ Extracted ROX_ENDPOINT: $ROX_ENDPOINT"
+
+# Get ADMIN_PASSWORD from secret (needed for token generation)
+log "Extracting admin password from secret..."
+ADMIN_PASSWORD_B64=$(oc get secret central-htpasswd -n "$RHACS_OPERATOR_NAMESPACE" -o jsonpath='{.data.password}' 2>/dev/null || echo "")
+if [ -z "$ADMIN_PASSWORD_B64" ]; then
+    error "Admin password secret 'central-htpasswd' not found in namespace '$RHACS_OPERATOR_NAMESPACE'"
+fi
+ADMIN_PASSWORD=$(echo "$ADMIN_PASSWORD_B64" | base64 -d)
+if [ -z "$ADMIN_PASSWORD" ]; then
+    error "Failed to decode admin password from secret"
+fi
+log "✓ Admin password extracted"
+
+# Generate ROX_API_TOKEN
+log "Generating API token..."
+ROX_ENDPOINT_FOR_API="${ROX_ENDPOINT#https://}"
+ROX_ENDPOINT_FOR_API="${ROX_ENDPOINT_FOR_API#http://}"
+
+set +e
+TOKEN_RESPONSE=$(curl -k -s --connect-timeout 15 --max-time 60 -X POST \
+    -u "admin:${ADMIN_PASSWORD}" \
+    -H "Content-Type: application/json" \
+    "https://${ROX_ENDPOINT_FOR_API}/v1/apitokens/generate" \
+    -d '{"name":"rhacs-config-script-token","roles":["Admin"]}' 2>&1)
+TOKEN_CURL_EXIT_CODE=$?
+set -e
+
+if [ $TOKEN_CURL_EXIT_CODE -ne 0 ]; then
+    error "Failed to generate API token. curl exit code: $TOKEN_CURL_EXIT_CODE. Response: ${TOKEN_RESPONSE:0:300}"
 fi
 
-# Verify required variables are set
-if [ -z "${ROX_API_TOKEN:-}" ]; then
-    error "ROX_API_TOKEN not found in ~/.bashrc. Please ensure it is exported."
+# Extract token from response
+if echo "$TOKEN_RESPONSE" | jq . >/dev/null 2>&1; then
+    ROX_API_TOKEN=$(echo "$TOKEN_RESPONSE" | jq -r '.token // .data.token // empty' 2>/dev/null || echo "")
 fi
 
-if [ -z "${ROX_CENTRAL_ADDRESS:-}" ]; then
-    error "ROX_CENTRAL_ADDRESS not found in ~/.bashrc. Please ensure it is exported."
+if [ -z "$ROX_API_TOKEN" ] || [ "$ROX_API_TOKEN" = "null" ]; then
+    # Try to extract token from response text
+    ROX_API_TOKEN=$(echo "$TOKEN_RESPONSE" | grep -oE '[a-zA-Z0-9_-]{40,}' | head -1 || echo "")
 fi
 
-# Ensure ROX_CENTRAL_ADDRESS has https:// prefix
-ROX_ENDPOINT="$ROX_CENTRAL_ADDRESS"
-if [[ ! "$ROX_ENDPOINT" =~ ^https?:// ]]; then
-    ROX_ENDPOINT="https://$ROX_ENDPOINT"
+if [ -z "$ROX_API_TOKEN" ]; then
+    error "Failed to extract API token from response. Response: ${TOKEN_RESPONSE:0:500}"
 fi
+
+# Verify token is not empty and has reasonable length
+if [ ${#ROX_API_TOKEN} -lt 20 ]; then
+    error "Generated token appears to be invalid (too short: ${#ROX_API_TOKEN} chars)"
+fi
+
+log "✓ API token generated (length: ${#ROX_API_TOKEN} chars)"
 
 # Ensure jq is installed
 if ! command -v jq >/dev/null 2>&1; then
@@ -64,9 +111,11 @@ if ! command -v jq >/dev/null 2>&1; then
         error "jq is required for this script to work correctly. Please install jq manually."
     fi
     log "✓ jq installed successfully"
+else
+    log "✓ jq is already installed"
 fi
 
-# Prepare API base URL
+# Ensure ROX_ENDPOINT has https:// prefix for API calls
 ROX_ENDPOINT_FOR_API="${ROX_ENDPOINT#https://}"
 ROX_ENDPOINT_FOR_API="${ROX_ENDPOINT_FOR_API#http://}"
 API_BASE="https://${ROX_ENDPOINT_FOR_API}/v1"
@@ -77,6 +126,9 @@ make_api_call() {
     local endpoint=$2
     local data="${3:-}"
     local description="${4:-API call}"
+    
+    # Redirect log to stderr so it's not captured in response
+    log "Making $description: $method $endpoint" >&2
     
     local temp_file=""
     local curl_cmd="curl -k -s -w \"\n%{http_code}\" -X $method"
@@ -118,34 +170,10 @@ make_api_call() {
     echo "$body"
 }
 
-# Namespaces to add to layered products
-NAMESPACES_TO_ADD=(
-    "cert-manager"
-    "open-cluster-management-hub"
-    "open-cluster-management-agent"
-    "open-cluster-management-agent-addon"
-    "openshift-gitops"
-    "quay"
-    "openshift-pipelines"
-    "openshift-operator-controller"
-    "openshift-catalogd"
-    "openshift-frr-k8s"
-    "openshift-cluster-olm-operator"
-)
 
-log "Adding Layered Product Namespaces to RHACS Configuration"
-
-# Get current configuration
-CURRENT_CONFIG=$(make_api_call "GET" "config" "" "Get current configuration")
-
-# Extract current layered products regex
-CURRENT_REGEX=$(echo "$CURRENT_CONFIG" | jq -r '.config.platformComponentConfig.rules[]? | select(.name == "red hat layered products") | .namespaceRule.regex' 2>/dev/null || echo "")
-
-if [ -z "$CURRENT_REGEX" ] || [ "$CURRENT_REGEX" = "null" ]; then
-    log "Initializing configuration with default layered products rule..."
-    
-    # Prepare default configuration payload with layered products rule
-    DEFAULT_CONFIG_PAYLOAD=$(cat <<'EOF'
+# Prepare configuration payload
+log "Preparing configuration payload..."
+CONFIG_PAYLOAD=$(cat <<'EOF'
 {
   "config": {
     "publicConfig": {
@@ -232,98 +260,35 @@ if [ -z "$CURRENT_REGEX" ] || [ "$CURRENT_REGEX" = "null" ]; then
 }
 EOF
 )
-    
-    # Extract the regex from the payload we're about to send
-    DEFAULT_REGEX=$(echo "$DEFAULT_CONFIG_PAYLOAD" | jq -r '.config.platformComponentConfig.rules[]? | select(.name == "red hat layered products") | .namespaceRule.regex' 2>/dev/null || echo "")
-    
-    if [ -z "$DEFAULT_REGEX" ] || [ "$DEFAULT_REGEX" = "null" ]; then
-        error "Failed to extract default regex from configuration payload"
-    fi
-    
-    # Update configuration with default payload
-    CONFIG_RESPONSE=$(make_api_call "PUT" "config" "$DEFAULT_CONFIG_PAYLOAD" "Create initial RHACS configuration")
-    
-    # Use the regex we sent in the payload (we know it's correct)
-    CURRENT_REGEX="$DEFAULT_REGEX"
-    
-    # Get the full configuration back to use for future updates
-    CURRENT_CONFIG=$(make_api_call "GET" "config" "" "Get created configuration")
-    VERIFIED_REGEX=$(echo "$CURRENT_CONFIG" | jq -r '.config.platformComponentConfig.rules[]? | select(.name == "red hat layered products") | .namespaceRule.regex' 2>/dev/null || echo "")
-    
-    if [ -n "$VERIFIED_REGEX" ] && [ "$VERIFIED_REGEX" != "null" ] && [ "$VERIFIED_REGEX" != "" ]; then
-        CURRENT_REGEX="$VERIFIED_REGEX"
-    else
-        # Fallback: use the regex from the payload and the payload as current config
-        CURRENT_REGEX="$DEFAULT_REGEX"
-        CURRENT_CONFIG="$DEFAULT_CONFIG_PAYLOAD"
-    fi
-fi
-
-# Build new regex by appending namespaces that aren't already present
-NEW_REGEX="$CURRENT_REGEX"
-NAMESPACES_ADDED=0
-
-for ns in "${NAMESPACES_TO_ADD[@]}"; do
-    # Escape namespace for regex check
-    ESCAPED_NS=$(echo "$ns" | sed 's/[.*+?^${}()|[]/\\&/g')
-    # Check if namespace is already in regex (format: ^namespace$)
-    if ! echo "$NEW_REGEX" | grep -q "\\^${ESCAPED_NS}\\$"; then
-        # Append to regex with | separator
-        NEW_REGEX="${NEW_REGEX}|^${ns}\$"
-        NAMESPACES_ADDED=$((NAMESPACES_ADDED + 1))
-    fi
-done
-
-if [ $NAMESPACES_ADDED -eq 0 ]; then
-    log "All specified namespaces are already configured. No changes needed."
-    exit 0
-fi
-
-log "Adding $NAMESPACES_ADDED namespace(s) to layered products rule..."
-
-# Validate CURRENT_CONFIG is valid JSON before proceeding
-if ! echo "$CURRENT_CONFIG" | jq . >/dev/null 2>&1; then
-    error "CURRENT_CONFIG is not valid JSON. Cannot proceed with update."
-fi
-
-# Build updated configuration payload using jq to update just the regex
-UPDATED_CONFIG=$(echo "$CURRENT_CONFIG" | jq --arg new_regex "$NEW_REGEX" '
-    .config.platformComponentConfig.rules = (
-        .config.platformComponentConfig.rules | map(
-            if .name == "red hat layered products" then
-                .namespaceRule.regex = $new_regex
-            else
-                .
-            end
-        )
-    )
-')
-
-if [ $? -ne 0 ] || [ -z "$UPDATED_CONFIG" ]; then
-    error "Failed to build updated configuration payload. Check that CURRENT_CONFIG has the correct structure."
-fi
 
 # Update configuration
-CONFIG_RESPONSE=$(make_api_call "PUT" "config" "$UPDATED_CONFIG" "Update RHACS configuration")
-VALIDATED_CONFIG=$(make_api_call "GET" "config" "" "Validate configuration")
+log "Updating RHACS configuration..."
+CONFIG_RESPONSE=$(make_api_call "PUT" "config" "$CONFIG_PAYLOAD" "Update RHACS configuration")
+log "✓ Configuration updated successfully (HTTP 200)"
 
-# Verify VALIDATED_CONFIG is valid JSON
-if ! echo "$VALIDATED_CONFIG" | jq . >/dev/null 2>&1; then
-    warning "Validated config is not valid JSON, using NEW_REGEX as fallback"
-    VERIFIED_REGEX="$NEW_REGEX"
-else
-    # Verify the changes
-    VERIFIED_REGEX=$(echo "$VALIDATED_CONFIG" | jq -r '.config.platformComponentConfig.rules[]? | select(.name == "red hat layered products") | .namespaceRule.regex' 2>/dev/null || echo "")
-    
-    if [ -z "$VERIFIED_REGEX" ] || [ "$VERIFIED_REGEX" = "null" ] || [ "$VERIFIED_REGEX" = "" ]; then
-        # Try alternative query path with more optional operators
-        VERIFIED_REGEX=$(echo "$VALIDATED_CONFIG" | jq -r '.config.platformComponentConfig.rules[]? | select(.name == "red hat layered products")?.namespaceRule?.regex' 2>/dev/null || echo "")
-        
-        if [ -z "$VERIFIED_REGEX" ] || [ "$VERIFIED_REGEX" = "null" ] || [ "$VERIFIED_REGEX" = "" ]; then
-            # Use the regex we just sent as fallback (we know it's correct)
-            VERIFIED_REGEX="$NEW_REGEX"
-        fi
-    fi
+# Validate configuration changes
+log "Validating configuration changes..."
+VALIDATED_CONFIG=$(make_api_call "GET" "config" "" "Validate configuration")
+log "✓ Configuration validated"
+
+# Verify key settings
+log "Verifying telemetry configuration..."
+TELEMETRY_ENABLED=$(echo "$VALIDATED_CONFIG" | jq -r '.config.publicConfig.telemetry.enabled' 2>/dev/null || echo "unknown")
+
+if [ "$TELEMETRY_ENABLED" = "true" ]; then
+    log "✓ Telemetry configuration verified: enabled"
+elif [ "$TELEMETRY_ENABLED" != "unknown" ]; then
+    log "✓ Telemetry configuration: $TELEMETRY_ENABLED"
 fi
 
-log "Configuration updated successfully. Added $NAMESPACES_ADDED namespace(s) to layered products rule."
+log "========================================================="
+log "RHACS Configuration Script Completed Successfully"
+log "========================================================="
+log ""
+log "Summary:"
+log "  - Telemetry/monitoring enabled"
+log "  - Metrics collection configured (image, policy, node vulnerabilities)"
+log "  - Platform component rules updated (Red Hat layered products)"
+log "  - Retention policies configured"
+log "  - Configuration validated"
+
