@@ -8,6 +8,24 @@
 
 Cluster creation and management marks the essential first step in building a truly sovereign cloud environment. By owning the full lifecycle of your clusters—from initial deployment to ongoing operations—your organization maintains direct control over infrastructure, security policies, and data locality. This foundational capability ensures that critical workloads and data remain within your jurisdiction, enabling you to adapt rapidly to regulatory changes, respond to evolving business needs, and operate independently of external providers. Flexible cluster management empowers you to design cloud environments tailored specifically to your sovereignty requirements—ensuring resilience, autonomy, and full compliance from the ground up.
 
+[[hub-cluster-overview]]
+=== RHACM Management Cluster Overview
+
+The hub cluster in Red Hat Advanced Cluster Management (RHACM) serves as the central control plane for managing your entire fleet of OpenShift clusters. It provides a unified interface for cluster lifecycle management, policy enforcement, application deployment, and observability across multiple environments.
+
+[[managed-clusters]]
+=== Managed Clusters Overview
+
+Managed clusters are OpenShift clusters that are registered with and managed by the RHACM hub cluster. These clusters can span multiple cloud providers, on-premises data centers, or edge locations, providing a consistent management experience regardless of where your workloads run.
+
+[[cluster-management]]
+=== Cluster Management Operations
+
+[[cluster-observability]]
+=== Cluster Observability
+
+Cluster observability in RHACM provides comprehensive insights into the health, performance, and status of your managed clusters. This includes metrics, logs, and events aggregated from across your fleet, enabling proactive monitoring and troubleshooting.
+
 === Create and Manage Kubernetes Clusters
 
 Red Hat Advanced Cluster Management for Kubernetes (RHACM) simplifies the deployment and management of additional clusters. While Red Hat OpenShift offers easy deployment methods like IPI and the Assisted Installer, RHACM takes it a step further, allowing you to deploy new clusters with just a few clicks using the cluster creation wizard.
@@ -20,14 +38,14 @@ From the Clusters screen, you can quickly see how simple it is to deploy a new c
 . In the top left of the screen, click the drop down menu and select *Fleet Management*
 . Next, click on the *Create cluster* button in the center of the screen:
 
-image::01-create-cluster.png[link=self, window=blank, width=100%, Create Cluster]
+image::103-create-cluster.png[link=self, window=blank, width=100%, Create Cluster]
 
 NOTE: You’ll notice that the only option already highlighted is Red Hat OpenShift Virtualization, indicating that your credentials are saved. You will use this to deploy the new cluster, but feel free to explore the window to see other available cluster types.
 
 [start=3]
 . Click on the Red Hat OpenShift Virtualization button. You will see one options for the control plane type: *Hosted*
 
-image::02-aws-credentials.png[link=self, window=blank, width=100%, AWS Credentials]
+image::104-aws-credentials.png[link=self, window=blank, width=100%, AWS Credentials]
 
 [start=4]
 . Click on the *hosted* option.
@@ -46,21 +64,21 @@ Single replica means components are not expected to be resilient to problems acr
 . Create a label called *location=emea* - we will use this later on for other exercises.
 . Click on *Next* to continue.
 
-image::03-create-cluster-details.png[link=self, window=blank, width=100%, Create Cluster Details]
+image::105-create-cluster-details.png[link=self, window=blank, width=100%, Create Cluster Details]
 
 On the next screen you can customize the name for the node pools, the amount of pool replicas, cores and memory, enter the name *hcp-emea* for the Node pool name and leave the other details as default.
 
 [start=11]
 . Click on *Next* to proceed.
 
-image::04-create-cluster-nodepools.png[link=self, window=blank, width=100%, Create Cluster NodePools]
+image::106-create-cluster-nodepools.png[link=self, window=blank, width=100%, Create Cluster NodePools]
 
 The next screen allows you to configure storage mappings type to use and it's associated variables, we will leave these as default as these have already been configured on the backend.
 
 [start=12]
 . Click on *Next* to proceed.
 
-image::05-create-cluster-networking.png[link=self, window=blank, width=100%, Create Cluster Networking]
+image::107-create-cluster-networking.png[link=self, window=blank, width=100%, Create Cluster Networking]
 
 [start=13]
 . Click *Next* on each screen to proceed to the final *Review and Create* screen.
@@ -70,15 +88,22 @@ You will see a description of the cluster you are creating.
 [start=14]
 . Click the blue *Create* button to start the deployment process.
 
-image::06-create-cluster-summary-create.png[link=self, window=blank, width=100%, Create Cluster Summary Page]
+image::108-create-cluster-summary-create.png[link=self, window=blank, width=100%, Create Cluster Summary Page]
 
 [start=15]
 . Sit back and watch RHACM do it's thing. You should see the Cluster creation process starting in the UI.
 
-image::07-cluster-creation.png[link=self, window=blank, width=100%, View New Cluster]
+image::03-cluster-creation.png[link=self, window=blank, width=100%, View New Cluster]
 
 NOTE: Deploying this Hosted Control Plane (HCP) cluster will take about 5 to 10 minutes. You’ll continue the lab while waiting for this cluster to provision, we will use it later on.
 
+[[multi-env-workloads]]
+
+== Multi-environment Workload Creation, Management, and Observability
+
+Workload management across multiple environments enables organizations to deploy and manage applications consistently while maintaining sovereignty requirements. This includes support for virtual machines, container workloads, and AI/ML workloads, all managed through a unified interface.
+
+[[vm-workloads]]
 [[create-manage-vms]]
 
 == Create and Manage Virtual Machine
@@ -110,14 +135,14 @@ image::10-template-menu.png[link=self, window=blank, width=100%, Create VM]
 +
 NOTE: Notice all of the avaiable templates to use, Windows VMs are fully supported as well.
 
-. Under Virtual machine name, enter *rhel9-lab-vm* and Leave all the options as Disk size, Disk Source.
+. Under Virtual machine name, enter +rhel9-lab-vm+ and Leave all the options as Disk size, Disk Source.
 +
-image::11-vm-name.png[link=self, window=blank, width=100%, Create VM]
+[NOTE]
+==== 
+Please notice all of the available options to configure the VM with, these will change depending on your operating system
+====
 +
-NOTE: Please notice all of the available options to configure the VM with, these will change depending on your operating system
-
 . Click *Quick create Virtual Machine* and watch for progress, this should take a couple of minutes to complete.
-
 . Once completed you will see the live console as well as stats about your VM.
 
 image::12-vm-finish.png[link=self, window=blank, width=100%, Create VM]
@@ -126,6 +151,7 @@ Feel free to explore the available management screens for VMs, from Metrics to C
 
 NOTE: *UI or GitOps—The Choice is Yours* While this lab focuses on the graphical capabilities of the RHACM console, remember that Virtual Machines in OpenShift are fundamentally Kubernetes objects.You can just as easily define your VMs as code (YAML) and deploy them using Red Hat OpenShift GitOps (ArgoCD). RHACM supports both workflows: use the UI for quick administration and discovery, or use GitOps for a fully declarative, audit-ready production pipeline.
 
+[[container-workloads]]
 === Deploy and Manage Container Workloads via OpenShift GitOps
 
 Red Hat® OpenShift® GitOps, powered by Argo CD and integrated with Red Hat Advanced Cluster Management (RHACM), makes application delivery faster, more secure, and consistent by using Git as the single source of truth to automatically handle declarative deployments and configurations across multiple clusters.
@@ -150,8 +176,17 @@ image::13-argo.png[link=self, window=blank, width=100%, ArgoCD Create]
 * *Namespace:* openshift-gitops
 * *ClusterSet:* managed
 
-image::13-argoconfig.png[link=self, window=blank, width=100%, ArgoCD Config]
+image::03-argoconfig.png[link=self, window=blank, width=100%, ArgoCD Config]
 
+[[ai-workloads]]
+=== AI Workloads
+
+AI and machine learning workloads require specialized compute resources and data locality considerations. RHACM enables you to deploy AI workloads across your cluster fleet while maintaining sovereignty requirements for data and compute resources.
+
+[[workload-observability]]
+=== Workload Observability
+
+Workload observability provides insights into application performance, resource utilization, and health across your multi-cluster environment. This includes metrics, logs, and traces aggregated from applications running in different clusters and environments.
 
 == Deploy Applications Using OpenShift GitOps
 
@@ -166,7 +201,7 @@ In this next step, you'll use Red Hat® OpenShift® GitOps with Argo CD to decla
 * *Argo Server:* openshift-gitops
 . Click *NEXT*
 
-image::14-app-gitops.png[link=self, window=blank, width=100%, App GitOps]
+image::03-app-gitops.png[link=self, window=blank, width=100%, App GitOps]
 
 [start=5]
 . Under repository types, select the GIT repository
@@ -191,12 +226,12 @@ patient-portal
 ----
 . Then click *NEXT TWICE*
 
-image::15-app-gitops-2.png[link=self, window=blank, width=100%, App ACM GitOps]
+image::03-app-gitops-2.png[link=self, window=blank, width=100%, App ACM GitOps]
 
 [start=11]
 . Under *Sync Policy* uncheck *Automaticaly sync when cluster state changes* and check *Replace resources instead of applying changes from the source repository* 
 
-image::16-app-gitops-3.png[link=self, window=blank, width=100%, App ACM GitOps]
+image::03-app-gitops-3.png[link=self, window=blank, width=100%, App ACM GitOps]
 
 NOTE: These changes are only required as you will be modifying the application YAML on RHACM and you don't want it to sync to a Git Repo, you normaly wouldn't uncheck these in a real production enviroment.
 
@@ -208,7 +243,7 @@ NOTE: These changes are only required as you will be modifying the application Y
 * *Operator:* equals any off
 * *Values:* aws-us & local-cluster & hcp-emea
 
-image::17-app-placement.png[link=self, window=blank, width=100%, ACM App Placement]
+image::03-app-placement.png[link=self, window=blank, width=100%, ACM App Placement]
 
 [start=14]
 . Verify all of the information is correct and click *Submit*.
@@ -218,7 +253,7 @@ NOTE: It will take a few minutes to deploy the application
 [start=15]
 . Click on the *Topology Tab* to view and verify that *all of the circles are green*.
 
-image::18-application-topology-git.png[link=self, window=blank, width=100%, Application Topology]
+image::03-application-topology-git.png[link=self, window=blank, width=100%, Application Topology]
 
 [start=16]
 . Under the topology view, Select the *Route* and click on the *Launch Route URL*
@@ -227,13 +262,21 @@ NOTE: This will take you to the Front end for the Patient Portal application, wh
 
 IMPORTANT: If you get a "Application is not available" page change the URL to use http:// and that should fix the issue. 
 
-image::19-application-route-git.png[link=self, window=blank, width=100%, Application Route]
+image::03-application-route-git.png[link=self, window=blank, width=100%, Application Route]
 
-Congratulations! 
+Great work! 
 
 You have successfully deployed an application using RHACM and OpenShift GitOps. This approach utilized a Git repository containing the manifests that defined your application. RHACM took those manifests and used them as deployables, which were then deployed to the target cluster.
 
+[[cross-cloud-networking]]
 
+== Cross-cloud Networking
 
+Cross-cloud networking enables secure connectivity between workloads running in different clusters, cloud providers, or geographic regions. This capability is essential for sovereign cloud environments where data and applications must remain within specific jurisdictions while still enabling collaboration and data sharing across approved boundaries.
 
+[[cross-cloud-migration]]
+
+== Cross-cloud Migration
+
+Cross-cloud migration capabilities allow you to move workloads between clusters and environments while maintaining data sovereignty and compliance requirements. This includes both planned migrations for optimization and emergency migrations for disaster recovery scenarios.
 
