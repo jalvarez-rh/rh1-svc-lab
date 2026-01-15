@@ -1314,8 +1314,9 @@ spec:
   scanner:
     scannerComponent: Disabled
   scannerV4:
-    scannerComponent: Default
-    replicas: 1
+    scannerComponent: AutoSense
+    indexer:
+      replicas: 1
     tolerations:
       - key: node-role.kubernetes.io/master
         operator: Exists
@@ -1455,12 +1456,15 @@ fi
 # Verify Scanner V4 is enabled with minimal configuration
 log "Verifying Scanner V4 configuration..."
 SCANNER_V4_COMPONENT=$($KUBECTL_CMD get securedcluster "$SECURED_CLUSTER_NAME" -n "$RHACS_OPERATOR_NAMESPACE" -o jsonpath='{.spec.scannerV4.scannerComponent}' 2>/dev/null || echo "")
-SCANNER_V4_REPLICAS=$($KUBECTL_CMD get securedcluster "$SECURED_CLUSTER_NAME" -n "$RHACS_OPERATOR_NAMESPACE" -o jsonpath='{.spec.scannerV4.replicas}' 2>/dev/null || echo "")
+SCANNER_V4_INDEXER_REPLICAS=$($KUBECTL_CMD get securedcluster "$SECURED_CLUSTER_NAME" -n "$RHACS_OPERATOR_NAMESPACE" -o jsonpath='{.spec.scannerV4.indexer.replicas}' 2>/dev/null || echo "")
 if [ "$SCANNER_V4_COMPONENT" = "Default" ] || [ "$SCANNER_V4_COMPONENT" = "AutoSense" ]; then
-    if [ "$SCANNER_V4_REPLICAS" = "1" ]; then
-        log "✓ Scanner V4 is enabled with minimal configuration (1 replica, appropriate for single-node cluster)"
+    if [ "$SCANNER_V4_INDEXER_REPLICAS" = "1" ]; then
+        log "✓ Scanner V4 is enabled with minimal configuration (AutoSense mode, indexer: 1 replica, appropriate for single-node cluster)"
     else
-        log "✓ Scanner V4 is enabled (component: ${SCANNER_V4_COMPONENT}, replicas: ${SCANNER_V4_REPLICAS:-default})"
+        log "✓ Scanner V4 is enabled (component: ${SCANNER_V4_COMPONENT}, indexer replicas: ${SCANNER_V4_INDEXER_REPLICAS:-default})"
+        if [ "$SCANNER_V4_INDEXER_REPLICAS" != "1" ] && [ -n "$SCANNER_V4_INDEXER_REPLICAS" ]; then
+            warning "Scanner V4 indexer has ${SCANNER_V4_INDEXER_REPLICAS} replica(s) - consider setting to 1 for single-node clusters"
+        fi
     fi
 else
     warning "Scanner V4 component: ${SCANNER_V4_COMPONENT:-unknown} (expected: Default or AutoSense)"
