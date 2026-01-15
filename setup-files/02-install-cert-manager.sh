@@ -409,11 +409,12 @@ if [ "$ALL_CRDS_AVAILABLE" = false ]; then
     done
 fi
 
-# Verify zerossl-production-ec2 ClusterIssuer is Available
+# Verify zerossl-production-ec2 ClusterIssuer is Available (optional check)
 log ""
-log "Verifying ClusterIssuer 'zerossl-production-ec2' is Available"
+log "Checking for ClusterIssuer 'zerossl-production-ec2' (optional)"
 
 CLUSTERISSUER_NAME="zerossl-production-ec2"
+ISSUER_READY="Not Found"
 
 # Check if zerossl-production-ec2 ClusterIssuer exists
 if oc get clusterissuer "$CLUSTERISSUER_NAME" &>/dev/null; then
@@ -427,7 +428,8 @@ if oc get clusterissuer "$CLUSTERISSUER_NAME" &>/dev/null; then
         warning "ClusterIssuer '$CLUSTERISSUER_NAME' status: $ISSUER_READY (may not be ready)"
     fi
 else
-    error "ClusterIssuer '$CLUSTERISSUER_NAME' not found. Please ensure it exists before running script 08."
+    warning "ClusterIssuer '$CLUSTERISSUER_NAME' not found. It will be required for script 03 (setup-rhacs-route-tls.sh)."
+    warning "You may need to create it manually or it will be created by a later script."
 fi
 
 log ""
@@ -463,7 +465,11 @@ log "  Status: $ISSUER_READY"
 log "========================================================="
 log ""
 log "Cert-manager operator is installed and verified."
-log "ClusterIssuer '$CLUSTERISSUER_NAME' has been verified and is ready."
+if [ "$ISSUER_READY" = "True" ]; then
+    log "ClusterIssuer '$CLUSTERISSUER_NAME' has been verified and is ready."
+else
+    log "ClusterIssuer '$CLUSTERISSUER_NAME' status: $ISSUER_READY (will be checked again in script 03)."
+fi
 log "You can now create Certificate resources to manage TLS certificates."
 log ""
 log "To verify installation:"

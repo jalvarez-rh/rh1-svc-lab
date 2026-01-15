@@ -30,6 +30,15 @@ warning() {
 # Array of scripts to execute in order
 SCRIPTS=(
     "01-rhacs-delete.sh"
+    "02-install-cert-manager.sh"
+    "03-setup-rhacs-route-tls.sh"
+    "04-rhacs-subscription-install.sh"
+    "05-central-install.sh"
+    "06-scs-setup.sh"
+    "07-compliance-operator-install.sh"
+    "08-deploy-applications.sh"
+    "09-setup-co-scan-schedule.sh"
+    "10-trigger-compliance-scan.sh"
 )
 
 log "========================================================="
