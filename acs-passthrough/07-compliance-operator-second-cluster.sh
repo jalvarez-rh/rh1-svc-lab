@@ -1,34 +1,50 @@
 #!/bin/bash
-# Compliance Operator Installation Script for aws-us cluster
-# Installs the Red Hat Compliance Operator to the aws-us cluster
+# Compliance Operator Installation Script for Second Cluster (aws-us)
+# Installs the Red Hat Compliance Operator in the aws-us cluster
+#
+# Usage:
+#   ./14-compliance-operator-second-cluster.sh
 
-# Exit immediately on error, show exact error message
+# Exit immediately on error, show error message
 set -euo pipefail
 
-# Colors for logging
+# Colors
 RED='\033[0;31m'
 GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
 NC='\033[0m'
 
 log() {
-    echo -e "${GREEN}[COMPLIANCE-OP-AWS-US]${NC} $1"
+    echo -e "${GREEN}[COMPLIANCE-OP-2ND]${NC} $1"
 }
 
 warning() {
-    echo -e "${YELLOW}[COMPLIANCE-OP-AWS-US]${NC} $1"
+    echo -e "${YELLOW}[COMPLIANCE-OP-2ND]${NC} $1"
 }
 
 error() {
-    echo -e "${RED}[COMPLIANCE-OP-AWS-US] ERROR:${NC} $1" >&2
-    echo -e "${RED}[COMPLIANCE-OP-AWS-US] Script failed at line ${BASH_LINENO[0]}${NC}" >&2
+    echo -e "${RED}[COMPLIANCE-OP-2ND] ERROR:${NC} $1" >&2
+    echo -e "${RED}[COMPLIANCE-OP-2ND] Script failed at line ${BASH_LINENO[0]}${NC}" >&2
     exit 1
 }
 
-# Check if oc/kubectl is available
-if ! command -v oc >/dev/null 2>&1 && ! command -v kubectl >/dev/null 2>&1; then
-    error "oc or kubectl not found. Cannot proceed."
+# Trap to show error details on exit
+trap 'error "Command failed: $(cat <<< "$BASH_COMMAND")")' ERR
+
+# Prerequisites validation
+log "========================================================="
+log "Compliance Operator Installation for aws-us Cluster"
+log "========================================================="
+log ""
+
+log "Validating prerequisites..."
+
+# Check if oc is available and connected
+log "Checking OpenShift CLI connection..."
+if ! oc whoami; then
+    error "OpenShift CLI not connected. Please login first with: oc login"
 fi
+log "✓ OpenShift CLI connected as: $(oc whoami)"
 
 # Use oc if available, otherwise kubectl
 KUBECTL_CMD="oc"
@@ -38,25 +54,24 @@ fi
 
 # Switch to aws-us cluster context
 log "Switching to aws-us context..."
-if $KUBECTL_CMD config use-context aws-us >/dev/null 2>&1; then
-    log "✓ Switched to aws-us context"
-else
+if ! $KUBECTL_CMD config use-context aws-us >/dev/null 2>&1; then
     error "Failed to switch to aws-us context. Please ensure the context exists."
 fi
+log "✓ Switched to aws-us context"
 
-# Verify connection to cluster
-log "Verifying cluster connection..."
-if ! $KUBECTL_CMD whoami >/dev/null 2>&1; then
-    error "Not connected to cluster. Please login first with: oc login"
-fi
-log "✓ Connected to cluster as: $($KUBECTL_CMD whoami)"
+# Verify we're on the correct cluster
+CURRENT_CONTEXT=$($KUBECTL_CMD config current-context)
+log "Current context: $CURRENT_CONTEXT"
 
 # Check if we have cluster admin privileges
 log "Checking cluster admin privileges..."
-if ! $KUBECTL_CMD auth can-i create subscriptions --all-namespaces >/dev/null 2>&1; then
-    error "Cluster admin privileges required to install operators. Current user: $($KUBECTL_CMD whoami)"
+if ! $KUBECTL_CMD auth can-i create subscriptions --all-namespaces; then
+    error "Cluster admin privileges required to install operators. Current user: $(oc whoami)"
 fi
 log "✓ Cluster admin privileges confirmed"
+
+log "Prerequisites validated successfully"
+log ""
 
 # Check if Compliance Operator is already installed
 log "Checking if Compliance Operator is already installed..."
@@ -67,11 +82,11 @@ if $KUBECTL_CMD get namespace $NAMESPACE >/dev/null 2>&1; then
     
     # Check for existing subscription
     if $KUBECTL_CMD get subscription.operators.coreos.com compliance-operator -n $NAMESPACE >/dev/null 2>&1; then
-        CURRENT_CSV=$($KUBECTL_CMD get subscription.operators.coreos.com compliance-operator -n $NAMESPACE -o jsonpath='{.status.currentCSV}' 2>/dev/null || echo "")
+        CURRENT_CSV=$($KUBECTL_CMD get subscription.operators.coreos.com compliance-operator -n $NAMESPACE -o jsonpath='{.status.currentCSV}')
         if [ -z "$CURRENT_CSV" ]; then
             log "Subscription exists but CSV not yet determined, proceeding with installation..."
         else
-            CSV_PHASE=$($KUBECTL_CMD get csv $CURRENT_CSV -n $NAMESPACE -o jsonpath='{.status.phase}' 2>/dev/null || echo "")
+            CSV_PHASE=$($KUBECTL_CMD get csv $CURRENT_CSV -n $NAMESPACE -o jsonpath='{.status.phase}')
         
             if [ "$CSV_PHASE" = "Succeeded" ]; then
                 log "✓ Compliance Operator is already installed and running"
@@ -94,7 +109,7 @@ fi
 # Install Red Hat Compliance Operator
 log ""
 log "========================================================="
-log "Installing Red Hat Compliance Operator on aws-us cluster"
+log "Installing Red Hat Compliance Operator"
 log "========================================================="
 log ""
 log "Following idempotent installation steps (safe to run multiple times)..."
@@ -102,7 +117,7 @@ log ""
 
 # Step 1: Create the namespace (idempotent)
 log "Step 1: Creating namespace openshift-compliance..."
-if ! $KUBECTL_CMD create ns openshift-compliance --dry-run=client -o yaml 2>/dev/null | $KUBECTL_CMD apply -f -; then
+if ! $KUBECTL_CMD create ns openshift-compliance --dry-run=client -o yaml | $KUBECTL_CMD apply -f -; then
     error "Failed to create openshift-compliance namespace"
 fi
 log "✓ Namespace created successfully"
@@ -254,7 +269,7 @@ if echo "$SUBSCRIPTION_MESSAGE" | grep -qi "constraints not satisfiable\|no oper
     # Check if issue persists
     SUBSCRIPTION_MESSAGE=$($KUBECTL_CMD get subscription compliance-operator -n openshift-compliance -o jsonpath='{.status.conditions[*].message}' 2>/dev/null || echo "")
     if echo "$SUBSCRIPTION_MESSAGE" | grep -qi "constraints not satisfiable\|no operators found in channel"; then
-        error "Subscription failed with channel error. Available channels: ${AVAILABLE_CHANNELS:-unknown}. Please check: $KUBECTL_CMD get packagemanifest compliance-operator -n openshift-marketplace -o yaml"
+        error "Subscription failed with channel error. Available channels: ${AVAILABLE_CHANNELS:-unknown}. Please check: oc get packagemanifest compliance-operator -n openshift-marketplace -o yaml"
     fi
 fi
 
@@ -304,7 +319,7 @@ done
 if [ "$CSV_CREATED" = false ]; then
     warning "CSV not created after ${MAX_WAIT} seconds. Current status:"
     $KUBECTL_CMD get csv,subscription,installplan -n openshift-compliance
-    error "CSV not created. Check subscription status: $KUBECTL_CMD get subscription compliance-operator -n openshift-compliance"
+    error "CSV not created. Check subscription status: oc get subscription compliance-operator -n openshift-compliance"
 fi
 
 # Get the CSV name
@@ -360,7 +375,7 @@ fi
 
 log ""
 log "========================================================="
-log "Compliance Operator installation completed on aws-us!"
+log "Compliance Operator installation completed!"
 log "========================================================="
 log "Cluster: aws-us"
 log "Namespace: openshift-compliance"
@@ -368,36 +383,4 @@ log "Operator: compliance-operator"
 log "CSV: $CSV_NAME"
 log "CSV Phase: $CSV_PHASE"
 log "========================================================="
-
-# Restart RHACS sensor to ensure it picks up Compliance Operator results
-# This is important because RHACS needs to sync compliance results from this cluster
 log ""
-log "Restarting RHACS sensor to sync Compliance Operator results..."
-RHACS_NAMESPACE="rhacs-operator"
-
-if $KUBECTL_CMD whoami >/dev/null 2>&1; then
-    # Check if sensor exists (RHACS should be installed by now)
-    if $KUBECTL_CMD get deployment sensor -n "$RHACS_NAMESPACE" >/dev/null 2>&1; then
-        log "Found RHACS sensor deployment, restarting sensor pods..."
-        if $KUBECTL_CMD delete pods -l app.kubernetes.io/component=sensor -n "$RHACS_NAMESPACE" >/dev/null 2>&1; then
-            log "✓ Sensor pods deleted, waiting for restart..."
-            # Wait for sensor to be ready (with timeout)
-            if $KUBECTL_CMD wait --for=condition=Available deployment/sensor -n "$RHACS_NAMESPACE" --timeout=120s >/dev/null 2>&1; then
-                log "✓ Sensor pods restarted successfully"
-            else
-                warning "Sensor pods restarted but may not be fully ready yet"
-            fi
-        else
-            warning "Could not restart sensor pods (may not exist yet or already restarting)"
-        fi
-    else
-        log "RHACS sensor not found in namespace $RHACS_NAMESPACE, skipping sensor restart"
-        log "Note: Sensor will automatically sync compliance results when it starts"
-    fi
-else
-    log "Not connected to cluster, skipping sensor restart"
-    log "Note: You may need to manually restart the sensor: $KUBECTL_CMD delete pods -l app.kubernetes.io/component=sensor -n $RHACS_NAMESPACE"
-fi
-log ""
-
-log "Compliance Operator deployment complete!"
