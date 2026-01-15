@@ -206,30 +206,99 @@ fi
 
 # Wait for CSV to be created and ready
 log ""
-log "Waiting for operator CSV to be ready..."
+log "Waiting for operator CSV to be created..."
 MAX_WAIT=300
 WAIT_COUNT=0
+CSV_CREATED=false
 CSV_READY=false
 
+# First wait for CSV to be created
 while [ $WAIT_COUNT -lt $MAX_WAIT ]; do
+    # Try multiple ways to find the CSV
     CSV_NAME=$(oc get csv -n "$OPERATOR_NAMESPACE" -o jsonpath='{.items[?(@.spec.displayName=="Trusted Artifact Signer Operator")].metadata.name}' 2>/dev/null || echo "")
     
     if [ -z "$CSV_NAME" ]; then
-        CSV_NAME=$(oc get csv -n "$OPERATOR_NAMESPACE" -o name 2>/dev/null | grep trusted-artifact-signer | head -1 | sed 's|clusterserviceversion.operators.coreos.com/||' || echo "")
+        CSV_NAME=$(oc get csv -n "$OPERATOR_NAMESPACE" -o jsonpath='{.items[?(@.metadata.name=~"trusted-artifact-signer.*")].metadata.name}' 2>/dev/null | head -1 || echo "")
+    fi
+    
+    if [ -z "$CSV_NAME" ]; then
+        CSV_NAME=$(oc get csv -n "$OPERATOR_NAMESPACE" -o name 2>/dev/null | grep -i trusted | head -1 | sed 's|clusterserviceversion.operators.coreos.com/||' || echo "")
+    fi
+    
+    if [ -z "$CSV_NAME" ]; then
+        # Check if any CSV exists at all
+        CSV_COUNT=$(oc get csv -n "$OPERATOR_NAMESPACE" --no-headers 2>/dev/null | wc -l | tr -d '[:space:]' || echo "0")
+        if [ "$CSV_COUNT" -gt 0 ]; then
+            CSV_NAME=$(oc get csv -n "$OPERATOR_NAMESPACE" -o jsonpath='{.items[0].metadata.name}' 2>/dev/null || echo "")
+        fi
     fi
     
     if [ -n "$CSV_NAME" ]; then
-        CSV_PHASE=$(oc get csv "$CSV_NAME" -n "$OPERATOR_NAMESPACE" -o jsonpath='{.status.phase}' 2>/dev/null || echo "")
+        CSV_CREATED=true
+        log "✓ CSV found: $CSV_NAME"
+        break
+    fi
+    
+    # Check subscription status for debugging
+    if [ $((WAIT_COUNT % 30)) -eq 0 ] && [ $WAIT_COUNT -gt 0 ]; then
+        log "  Still waiting for CSV... (${WAIT_COUNT}s/${MAX_WAIT}s)"
         
-        if [ "$CSV_PHASE" = "Succeeded" ]; then
-            CSV_READY=true
-            log "✓ CSV is ready: $CSV_NAME"
-            break
+        # Show subscription status
+        SUB_STATE=$(oc get subscription "$OPERATOR_PACKAGE" -n "$OPERATOR_NAMESPACE" -o jsonpath='{.status.state}' 2>/dev/null || echo "unknown")
+        SUB_CONDITION=$(oc get subscription "$OPERATOR_PACKAGE" -n "$OPERATOR_NAMESPACE" -o jsonpath='{.status.conditions[0].message}' 2>/dev/null || echo "")
+        log "    Subscription state: ${SUB_STATE}"
+        if [ -n "$SUB_CONDITION" ] && [ "$SUB_CONDITION" != "null" ]; then
+            log "    Subscription condition: ${SUB_CONDITION}"
         fi
+        
+        # Check InstallPlan
+        INSTALL_PLAN=$(oc get installplan -n "$OPERATOR_NAMESPACE" -o jsonpath='{.items[*].metadata.name}' 2>/dev/null | tr ' ' '\n' | head -1 || echo "")
+        if [ -n "$INSTALL_PLAN" ]; then
+            IP_PHASE=$(oc get installplan "$INSTALL_PLAN" -n "$OPERATOR_NAMESPACE" -o jsonpath='{.status.phase}' 2>/dev/null || echo "unknown")
+            log "    InstallPlan: $INSTALL_PLAN (phase: $IP_PHASE)"
+        fi
+    fi
+    
+    sleep 5
+    WAIT_COUNT=$((WAIT_COUNT + 5))
+done
+
+if [ "$CSV_CREATED" = false ]; then
+    log ""
+    log "CSV not found. Current status:"
+    oc get subscription "$OPERATOR_PACKAGE" -n "$OPERATOR_NAMESPACE" -o yaml || true
+    oc get installplan -n "$OPERATOR_NAMESPACE" || true
+    oc get csv -n "$OPERATOR_NAMESPACE" || true
+    error "CSV was not created within ${MAX_WAIT} seconds. Check subscription and installplan status above."
+fi
+
+# Now wait for CSV to be in Succeeded phase
+log ""
+log "Waiting for CSV '$CSV_NAME' to reach Succeeded phase..."
+MAX_WAIT=600
+WAIT_COUNT=0
+
+while [ $WAIT_COUNT -lt $MAX_WAIT ]; do
+    CSV_PHASE=$(oc get csv "$CSV_NAME" -n "$OPERATOR_NAMESPACE" -o jsonpath='{.status.phase}' 2>/dev/null || echo "")
+    
+    if [ "$CSV_PHASE" = "Succeeded" ]; then
+        CSV_READY=true
+        log "✓ CSV is ready: $CSV_NAME"
+        break
     fi
     
     if [ $((WAIT_COUNT % 30)) -eq 0 ] && [ $WAIT_COUNT -gt 0 ]; then
         log "  Still waiting... (${WAIT_COUNT}s/${MAX_WAIT}s)"
+        log "  CSV phase: ${CSV_PHASE:-Unknown}"
+        
+        # Show CSV conditions for debugging
+        CSV_CONDITIONS=$(oc get csv "$CSV_NAME" -n "$OPERATOR_NAMESPACE" -o jsonpath='{range .status.conditions[*]}{.type}: {.status} - {.message}{"\n"}{end}' 2>/dev/null || echo "")
+        if [ -n "$CSV_CONDITIONS" ]; then
+            log "  CSV conditions:"
+            echo "$CSV_CONDITIONS" | while read -r line; do
+                log "    $line"
+            done
+        fi
     fi
     
     sleep 5
@@ -237,7 +306,10 @@ while [ $WAIT_COUNT -lt $MAX_WAIT ]; do
 done
 
 if [ "$CSV_READY" = false ]; then
-    error "CSV did not become ready within ${MAX_WAIT} seconds. Check operator status: oc get csv -n $OPERATOR_NAMESPACE"
+    log ""
+    log "CSV did not reach Succeeded phase. Current status:"
+    oc get csv "$CSV_NAME" -n "$OPERATOR_NAMESPACE" -o yaml || true
+    error "CSV did not become ready within ${MAX_WAIT} seconds. Check CSV status above."
 fi
 
 # Check if TrustedArtifactSigner CR already exists
