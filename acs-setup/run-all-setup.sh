@@ -42,6 +42,7 @@ SCRIPTS=(
     "11-configure-rhacs-settings.sh"
     "12-setup-perses-monitoring.sh"
     "13-scs-second-cluster.sh"
+    "14-compliance-operator-second-cluster.sh"
 )
 
 log "========================================================="
