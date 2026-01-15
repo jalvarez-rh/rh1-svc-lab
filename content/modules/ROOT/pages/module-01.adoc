@@ -13,19 +13,6 @@ Cluster creation and management marks the essential first step in building a tru
 
 The hub cluster in Red Hat Advanced Cluster Management (RHACM) serves as the central control plane for managing your entire fleet of OpenShift clusters. It provides a unified interface for cluster lifecycle management, policy enforcement, application deployment, and observability across multiple environments.
 
-[[managed-clusters]]
-=== Managed Clusters Overview
-
-Managed clusters are OpenShift clusters that are registered with and managed by the RHACM hub cluster. These clusters can span multiple cloud providers, on-premises data centers, or edge locations, providing a consistent management experience regardless of where your workloads run.
-
-[[cluster-management]]
-=== Cluster Management Operations
-
-[[cluster-observability]]
-=== Cluster Observability
-
-Cluster observability in RHACM provides comprehensive insights into the health, performance, and status of your managed clusters. This includes metrics, logs, and events aggregated from across your fleet, enabling proactive monitoring and troubleshooting.
-
 === Create and Manage Kubernetes Clusters
 
 Red Hat Advanced Cluster Management for Kubernetes (RHACM) simplifies the deployment and management of additional clusters. While Red Hat OpenShift offers easy deployment methods like IPI and the Assisted Installer, RHACM takes it a step further, allowing you to deploy new clusters with just a few clicks using the cluster creation wizard.
@@ -143,6 +130,7 @@ Please notice all of the available options to configure the VM with, these will 
 ====
 +
 . Click *Quick create Virtual Machine* and watch for progress, this should take a couple of minutes to complete.
+
 . Once completed you will see the live console as well as stats about your VM.
 
 image::12-vm-finish.png[link=self, window=blank, width=100%, Create VM]
@@ -264,7 +252,7 @@ IMPORTANT: If you get a "Application is not available" page change the URL to us
 
 image::03-application-route-git.png[link=self, window=blank, width=100%, Application Route]
 
-Great work! 
+Congratulations! 
 
 You have successfully deployed an application using RHACM and OpenShift GitOps. This approach utilized a Git repository containing the manifests that defined your application. RHACM took those manifests and used them as deployables, which were then deployed to the target cluster.
 
