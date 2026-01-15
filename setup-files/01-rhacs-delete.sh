@@ -48,6 +48,67 @@ if ! oc whoami &>/dev/null; then
 fi
 log "✓ OpenShift CLI connected as: $(oc whoami)"
 
+# Check if RHACS is already correctly installed - if so, skip to compliance step
+log ""
+log "Checking if RHACS is already correctly installed..."
+RHACS_OPERATOR_NAMESPACE="rhacs-operator"
+RHACS_INSTALLED=false
+
+# Check if namespace exists
+if oc get namespace "$RHACS_OPERATOR_NAMESPACE" &>/dev/null; then
+    # Check if SecuredCluster CRD exists
+    if oc get crd securedclusters.platform.stackrox.io &>/dev/null; then
+        # Check if Central CRD exists
+        if oc get crd centrals.platform.stackrox.io &>/dev/null; then
+            # Check if SecuredCluster resource exists and is ready
+            SECURED_CLUSTER_NAME=$(oc get securedcluster -n "$RHACS_OPERATOR_NAMESPACE" -o jsonpath='{.items[0].metadata.name}' 2>/dev/null || echo "")
+            if [ -n "$SECURED_CLUSTER_NAME" ]; then
+                # Check if SecuredCluster is not being deleted
+                SC_DELETION_TIMESTAMP=$(oc get securedcluster "$SECURED_CLUSTER_NAME" -n "$RHACS_OPERATOR_NAMESPACE" -o jsonpath='{.metadata.deletionTimestamp}' 2>/dev/null || echo "")
+                if [ -z "$SC_DELETION_TIMESTAMP" ]; then
+                    # Check if SecuredCluster status indicates it's ready
+                    SC_STATUS=$(oc get securedcluster "$SECURED_CLUSTER_NAME" -n "$RHACS_OPERATOR_NAMESPACE" -o jsonpath='{.status.conditions[?(@.type=="Ready")].status}' 2>/dev/null || echo "")
+                    if [ "$SC_STATUS" = "True" ] || [ -n "$SC_STATUS" ]; then
+                        # Check if Central resource exists
+                        CENTRAL_NAME="rhacs-central-services"
+                        if oc get central "$CENTRAL_NAME" -n "$RHACS_OPERATOR_NAMESPACE" &>/dev/null; then
+                            # Check if Central is not being deleted
+                            CENTRAL_DELETION_TIMESTAMP=$(oc get central "$CENTRAL_NAME" -n "$RHACS_OPERATOR_NAMESPACE" -o jsonpath='{.metadata.deletionTimestamp}' 2>/dev/null || echo "")
+                            if [ -z "$CENTRAL_DELETION_TIMESTAMP" ]; then
+                                # Check if Central status indicates it's ready
+                                CENTRAL_STATUS=$(oc get central "$CENTRAL_NAME" -n "$RHACS_OPERATOR_NAMESPACE" -o jsonpath='{.status.conditions[?(@.type=="Available")].status}' 2>/dev/null || echo "")
+                                if [ "$CENTRAL_STATUS" = "True" ] || [ -n "$CENTRAL_STATUS" ]; then
+                                    # Check if Central pods are running
+                                    CENTRAL_PODS=$(oc get pods -n "$RHACS_OPERATOR_NAMESPACE" -l app=central -o jsonpath='{.items[*].status.phase}' 2>/dev/null || echo "")
+                                    if echo "$CENTRAL_PODS" | grep -q "Running"; then
+                                        RHACS_INSTALLED=true
+                                        log "✓ RHACS is correctly installed and ready:"
+                                        log "  - Namespace '$RHACS_OPERATOR_NAMESPACE' exists"
+                                        log "  - SecuredCluster CRD exists"
+                                        log "  - SecuredCluster '$SECURED_CLUSTER_NAME' exists and is ready"
+                                        log "  - Central CRD exists"
+                                        log "  - Central '$CENTRAL_NAME' exists and is available"
+                                        log "  - Central pods are running"
+                                        log ""
+                                        log "Skipping RHACS installation steps (01-06) and proceeding to compliance operator installation (step 07)"
+                                        log "Exit code 10 indicates RHACS is already installed - master script will skip to step 07"
+                                        exit 10
+                                    fi
+                                fi
+                            fi
+                        fi
+                    fi
+                fi
+            fi
+        fi
+    fi
+fi
+
+if [ "$RHACS_INSTALLED" = false ]; then
+    log "RHACS is not installed or not ready - proceeding with cleanup/installation"
+    log ""
+fi
+
 # Check if we have cluster admin privileges
 log "Checking cluster admin privileges..."
 if ! oc auth can-i delete subscriptions --all-namespaces &>/dev/null; then

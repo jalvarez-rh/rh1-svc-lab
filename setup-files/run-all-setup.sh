@@ -67,8 +67,18 @@ TOTAL=${#SCRIPTS[@]}
 CURRENT=0
 FAILED_SCRIPTS=()
 
-for script in "${SCRIPTS[@]}"; do
-    CURRENT=$((CURRENT + 1))
+SKIP_TO_COMPLIANCE=false
+
+for idx in "${!SCRIPTS[@]}"; do
+    script="${SCRIPTS[$idx]}"
+    CURRENT=$((idx + 1))
+    
+    # Skip scripts 02-06 if RHACS is already installed
+    if [ "$SKIP_TO_COMPLIANCE" = true ] && [ $idx -ge 1 ] && [ $idx -le 5 ]; then
+        log "Skipping script $CURRENT/$TOTAL: $script (RHACS already installed)"
+        continue
+    fi
+    
     log "========================================================="
     log "Executing script $CURRENT/$TOTAL: $script"
     log "========================================================="
@@ -81,8 +91,16 @@ for script in "${SCRIPTS[@]}"; do
         log "✓ Successfully completed: $script"
     else
         EXIT_CODE=$?
-        error "✗ Script failed: $script (exit code: $EXIT_CODE)"
-        FAILED_SCRIPTS+=("$script")
+        
+        # Check if script 01 exited with code 10 (RHACS already installed)
+        if [ "$script" = "01-rhacs-delete.sh" ] && [ "$EXIT_CODE" -eq 10 ]; then
+            log "RHACS is already installed - skipping steps 02-06 and proceeding to compliance operator (step 07)"
+            SKIP_TO_COMPLIANCE=true
+            continue
+        else
+            error "✗ Script failed: $script (exit code: $EXIT_CODE)"
+            FAILED_SCRIPTS+=("$script")
+        fi
     fi
     
     log ""
