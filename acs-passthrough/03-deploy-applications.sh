@@ -67,30 +67,74 @@ echo "export TUTORIAL_HOME=\"$TUTORIAL_HOME\"" >> ~/.bashrc
 export TUTORIAL_HOME="$TUTORIAL_HOME"
 log "✓ TUTORIAL_HOME set to: $TUTORIAL_HOME"
 
+# Function to deploy applications to a cluster
+deploy_to_cluster() {
+    local CLUSTER_NAME="$1"
+    local CLUSTER_CONTEXT="$2"
+    
+    log ""
+    log "========================================================="
+    log "Deploying applications to $CLUSTER_NAME cluster"
+    log "========================================================="
+    
+    # Switch to cluster context
+    log "Switching to $CLUSTER_NAME context..."
+    if ! oc config use-context "$CLUSTER_CONTEXT" >/dev/null 2>&1; then
+        warning "Failed to switch to $CLUSTER_NAME context. Skipping deployment to this cluster."
+        return 1
+    fi
+    log "✓ Switched to $CLUSTER_NAME context"
+    
+    # Verify connection
+    if ! oc whoami >/dev/null 2>&1; then
+        warning "Not connected to $CLUSTER_NAME cluster. Skipping deployment."
+        return 1
+    fi
+    log "✓ Connected to $CLUSTER_NAME cluster as: $(oc whoami)"
+    
+    # Deploy kubernetes-manifests
+    if [ -d "$TUTORIAL_HOME/kubernetes-manifests" ]; then
+        log "Deploying kubernetes-manifests to $CLUSTER_NAME..."
+        oc apply -f "$TUTORIAL_HOME/kubernetes-manifests/" --recursive || warning "Some resources in kubernetes-manifests may have failed to apply to $CLUSTER_NAME"
+        log "✓ kubernetes-manifests deployment attempted on $CLUSTER_NAME"
+    else
+        warning "kubernetes-manifests directory not found at: $TUTORIAL_HOME/kubernetes-manifests"
+    fi
+    
+    log "✓ Deployment to $CLUSTER_NAME completed"
+}
+
 # Deploy applications
 log "Deploying applications from $TUTORIAL_HOME..."
 
-# Deploy kubernetes-manifests
-if [ -d "$TUTORIAL_HOME/kubernetes-manifests" ]; then
-    log "Deploying kubernetes-manifests..."
-    oc apply -f "$TUTORIAL_HOME/kubernetes-manifests/" --recursive || warning "Some resources in kubernetes-manifests may have failed to apply"
-    log "✓ kubernetes-manifests deployment attempted"
-else
-    warning "kubernetes-manifests directory not found at: $TUTORIAL_HOME/kubernetes-manifests"
-fi
+# Store current context
+CURRENT_CONTEXT=$(oc config current-context 2>/dev/null || echo "")
 
-# Deploy skupper-demo
-if [ -d "$TUTORIAL_HOME/skupper-demo" ]; then
-    log "Deploying skupper-demo..."
-    oc apply -f "$TUTORIAL_HOME/skupper-demo/" --recursive || warning "Some resources in skupper-demo may have failed to apply"
-    log "✓ skupper-demo deployment attempted"
-else
-    warning "skupper-demo directory not found at: $TUTORIAL_HOME/skupper-demo"
+# Deploy to local-cluster first
+deploy_to_cluster "local-cluster" "local-cluster"
+
+# Deploy to aws-us cluster
+deploy_to_cluster "aws-us" "aws-us"
+
+# Restore original context if it was set
+if [ -n "$CURRENT_CONTEXT" ]; then
+    log ""
+    log "Restoring original context: $CURRENT_CONTEXT"
+    oc config use-context "$CURRENT_CONTEXT" >/dev/null 2>&1 || true
 fi
 
 # Deployment complete - applications will start in the background
 log ""
+log "========================================================="
 log "Application deployment completed!"
-log "Applications have been deployed and will start in the background."
-log "You can check their status with: oc get pods -A"
+log "========================================================="
+log "Applications have been deployed to both clusters:"
+log "  - local-cluster"
+log "  - aws-us"
+log ""
+log "Applications will start in the background."
+log "You can check their status with:"
+log "  oc get pods -A (on current cluster)"
+log "  oc config use-context local-cluster && oc get pods -A (for local-cluster)"
+log "  oc config use-context aws-us && oc get pods -A (for aws-us)"
 log ""
