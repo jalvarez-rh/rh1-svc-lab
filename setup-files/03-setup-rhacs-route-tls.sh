@@ -50,7 +50,7 @@ fi
 log "✓ cert-manager CRDs available"
 
 # Check if ClusterIssuer exists
-CLUSTERISSUER_NAME="zerossl-production-ec2"
+CLUSTERISSUER_NAME="letsencrypt-production-aws"
 if ! oc get clusterissuer "$CLUSTERISSUER_NAME" &>/dev/null; then
     error "ClusterIssuer '$CLUSTERISSUER_NAME' not found. Please ensure it exists."
 fi

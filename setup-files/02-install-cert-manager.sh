@@ -409,14 +409,14 @@ if [ "$ALL_CRDS_AVAILABLE" = false ]; then
     done
 fi
 
-# Verify zerossl-production-ec2 ClusterIssuer is Available (optional check)
+# Verify letsencrypt-production-aws ClusterIssuer is Available (optional check)
 log ""
-log "Checking for ClusterIssuer 'zerossl-production-ec2' (optional)"
+log "Checking for ClusterIssuer 'letsencrypt-production-aws' (optional)"
 
-CLUSTERISSUER_NAME="zerossl-production-ec2"
+CLUSTERISSUER_NAME="letsencrypt-production-aws"
 ISSUER_READY="Not Found"
 
-# Check if zerossl-production-ec2 ClusterIssuer exists
+# Check if letsencrypt-production-aws ClusterIssuer exists
 if oc get clusterissuer "$CLUSTERISSUER_NAME" &>/dev/null; then
     log "✓ ClusterIssuer '$CLUSTERISSUER_NAME' found"
     
