@@ -39,6 +39,8 @@ SCRIPTS=(
     "08-deploy-applications.sh"
     "09-setup-co-scan-schedule.sh"
     "10-trigger-compliance-scan.sh"
+    "11-configure-rhacs-settings.sh"
+    "12-setup-perses-monitoring.sh"
 )
 
 log "========================================================="
