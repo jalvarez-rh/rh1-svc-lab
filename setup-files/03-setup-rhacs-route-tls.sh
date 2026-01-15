@@ -189,11 +189,20 @@ while [ $WAIT_COUNT -lt $MAX_WAIT ]; do
         break
     fi
     
-    # Get additional diagnostic info
+    # Get additional diagnostic info - CertificateRequests are namespaced, search in the certificate's namespace
     CERT_REQ_NAME=$(oc get certificaterequest -n "$RHACS_OPERATOR_NAMESPACE" -l "cert-manager.io/certificate-name=$CERT_NAME" -o jsonpath='{.items[0].metadata.name}' 2>/dev/null || echo "")
+    CERT_REQ_NAMESPACE=""
     CHALLENGE_STATUS=""
     if [ -n "$CERT_REQ_NAME" ]; then
+        CERT_REQ_NAMESPACE="$RHACS_OPERATOR_NAMESPACE"
         CHALLENGE_STATUS=$(oc get certificaterequest "$CERT_REQ_NAME" -n "$RHACS_OPERATOR_NAMESPACE" -o jsonpath='{.status.conditions[?(@.type=="Ready")].reason}' 2>/dev/null || echo "")
+    else
+        # Try searching in all namespaces as fallback
+        CERT_REQ_NAME=$(oc get certificaterequest --all-namespaces -l "cert-manager.io/certificate-name=$CERT_NAME" -o jsonpath='{.items[0].metadata.name}' 2>/dev/null || echo "")
+        if [ -n "$CERT_REQ_NAME" ]; then
+            CERT_REQ_NAMESPACE=$(oc get certificaterequest --all-namespaces -l "cert-manager.io/certificate-name=$CERT_NAME" -o jsonpath='{.items[0].metadata.namespace}' 2>/dev/null || echo "")
+            CHALLENGE_STATUS=$(oc get certificaterequest "$CERT_REQ_NAME" -n "$CERT_REQ_NAMESPACE" -o jsonpath='{.status.conditions[?(@.type=="Ready")].reason}' 2>/dev/null || echo "")
+        fi
     fi
     
     # Check for ACME challenges (for Let's Encrypt)
@@ -240,12 +249,28 @@ if [ "$CERT_READY" = false ]; then
     CERT_REASON=$(oc get certificate "$CERT_NAME" -n "$RHACS_OPERATOR_NAMESPACE" -o jsonpath='{.status.conditions[?(@.type=="Ready")].reason}' 2>/dev/null || echo "Unknown")
     CERT_MESSAGE=$(oc get certificate "$CERT_NAME" -n "$RHACS_OPERATOR_NAMESPACE" -o jsonpath='{.status.conditions[?(@.type=="Ready")].message}' 2>/dev/null || echo "")
     
-    # Check CertificateRequest
+    # Show certificate status summary
+    log ""
+    log "Certificate Status Summary:"
+    oc get certificate "$CERT_NAME" -n "$RHACS_OPERATOR_NAMESPACE" -o jsonpath='{range .status.conditions[*]}{.type}: {.status} ({.reason}) - {.message}{"\n"}{end}' 2>/dev/null || log "  No status conditions found"
+    
+    # Check CertificateRequest - search in certificate namespace first, then all namespaces
     CERT_REQ_NAME=$(oc get certificaterequest -n "$RHACS_OPERATOR_NAMESPACE" -l "cert-manager.io/certificate-name=$CERT_NAME" -o jsonpath='{.items[0].metadata.name}' 2>/dev/null || echo "")
+    CERT_REQ_NAMESPACE="$RHACS_OPERATOR_NAMESPACE"
+    if [ -z "$CERT_REQ_NAME" ]; then
+        # Try searching in all namespaces as fallback
+        CERT_REQ_NAME=$(oc get certificaterequest --all-namespaces -l "cert-manager.io/certificate-name=$CERT_NAME" -o jsonpath='{.items[0].metadata.name}' 2>/dev/null || echo "")
+        if [ -n "$CERT_REQ_NAME" ]; then
+            CERT_REQ_NAMESPACE=$(oc get certificaterequest --all-namespaces -l "cert-manager.io/certificate-name=$CERT_NAME" -o jsonpath='{.items[0].metadata.namespace}' 2>/dev/null || echo "$RHACS_OPERATOR_NAMESPACE")
+        fi
+    fi
+    
     if [ -n "$CERT_REQ_NAME" ]; then
-        CERT_REQ_STATUS=$(oc get certificaterequest "$CERT_REQ_NAME" -n "$RHACS_OPERATOR_NAMESPACE" -o jsonpath='{.status.conditions[?(@.type=="Ready")].status}' 2>/dev/null || echo "")
-        CERT_REQ_REASON=$(oc get certificaterequest "$CERT_REQ_NAME" -n "$RHACS_OPERATOR_NAMESPACE" -o jsonpath='{.status.conditions[?(@.type=="Ready")].reason}' 2>/dev/null || echo "")
-        warning "CertificateRequest '$CERT_REQ_NAME' status: $CERT_REQ_STATUS, reason: $CERT_REQ_REASON"
+        CERT_REQ_STATUS=$(oc get certificaterequest "$CERT_REQ_NAME" -n "$CERT_REQ_NAMESPACE" -o jsonpath='{.status.conditions[?(@.type=="Ready")].status}' 2>/dev/null || echo "")
+        CERT_REQ_REASON=$(oc get certificaterequest "$CERT_REQ_NAME" -n "$CERT_REQ_NAMESPACE" -o jsonpath='{.status.conditions[?(@.type=="Ready")].reason}' 2>/dev/null || echo "")
+        warning "CertificateRequest '$CERT_REQ_NAME' (namespace: $CERT_REQ_NAMESPACE) status: $CERT_REQ_STATUS, reason: $CERT_REQ_REASON"
+    else
+        warning "No CertificateRequest found for certificate '$CERT_NAME'. This may indicate cert-manager hasn't processed the certificate yet."
     fi
     
     if [ -n "$CERT_MESSAGE" ] && [ "$CERT_MESSAGE" != "" ]; then
@@ -254,10 +279,14 @@ if [ "$CERT_READY" = false ]; then
     fi
     
     log ""
+    log ""
     log "To troubleshoot, check:"
     log "  oc describe certificate $CERT_NAME -n $RHACS_OPERATOR_NAMESPACE"
+    log "  oc get certificaterequest --all-namespaces -l cert-manager.io/certificate-name=$CERT_NAME"
+    log "  oc get order --all-namespaces -l acme.cert-manager.io/certificate-name=$CERT_NAME"
+    log "  oc get challenge --all-namespaces -l acme.cert-manager.io/certificate-name=$CERT_NAME"
     if [ -n "$CERT_REQ_NAME" ]; then
-        log "  oc describe certificaterequest $CERT_REQ_NAME -n $RHACS_OPERATOR_NAMESPACE"
+        log "  oc describe certificaterequest $CERT_REQ_NAME -n $CERT_REQ_NAMESPACE"
     fi
     log "  oc logs -n cert-manager -l app=cert-manager --tail=50"
     error "Certificate is not ready. See troubleshooting commands above."
