@@ -1311,7 +1311,18 @@ spec:
   scanner:
     scannerComponent: Disabled
   scannerV4:
-    scannerComponent: Disabled
+    scannerComponent: Enabled
+    replicas: 1
+    tolerations:
+      - key: node-role.kubernetes.io/master
+        operator: Exists
+        effect: NoSchedule
+      - key: node-role.kubernetes.io/control-plane
+        operator: Exists
+        effect: NoSchedule
+      - key: node-role.kubernetes.io/infra
+        operator: Exists
+        effect: NoSchedule
   collector:
     collectionMethod: KernelModule
     tolerations:
@@ -1438,13 +1449,18 @@ else
     warning "Monitor sensor pod logs if connection issues persist: oc logs -n $RHACS_OPERATOR_NAMESPACE -l app=sensor"
 fi
 
-# Verify Scanner V4 is disabled (as configured for SNO)
+# Verify Scanner V4 is enabled with minimal configuration
 log "Verifying Scanner V4 configuration..."
 SCANNER_V4_COMPONENT=$($KUBECTL_CMD get securedcluster "$SECURED_CLUSTER_NAME" -n "$RHACS_OPERATOR_NAMESPACE" -o jsonpath='{.spec.scannerV4.scannerComponent}' 2>/dev/null || echo "")
-if [ "$SCANNER_V4_COMPONENT" = "Disabled" ]; then
-    log "✓ Scanner V4 is disabled (appropriate for single-node cluster)"
+SCANNER_V4_REPLICAS=$($KUBECTL_CMD get securedcluster "$SECURED_CLUSTER_NAME" -n "$RHACS_OPERATOR_NAMESPACE" -o jsonpath='{.spec.scannerV4.replicas}' 2>/dev/null || echo "")
+if [ "$SCANNER_V4_COMPONENT" = "Enabled" ]; then
+    if [ "$SCANNER_V4_REPLICAS" = "1" ]; then
+        log "✓ Scanner V4 is enabled with minimal configuration (1 replica, appropriate for single-node cluster)"
+    else
+        log "✓ Scanner V4 is enabled (replicas: ${SCANNER_V4_REPLICAS:-default})"
+    fi
 else
-    warning "Scanner V4 component: ${SCANNER_V4_COMPONENT:-unknown} (expected: Disabled)"
+    warning "Scanner V4 component: ${SCANNER_V4_COMPONENT:-unknown} (expected: Enabled)"
 fi
 
 log "Secured Cluster Services deployment initiated for aws-us cluster"
@@ -1453,7 +1469,7 @@ log ""
 log "IMPORTANT NOTES:"
 log "  - Init bundle secrets are applied in namespace: $RHACS_OPERATOR_NAMESPACE"
 log "  - Central endpoint configured: $CENTRAL_ENDPOINT"
-log "  - Scanner V4 is disabled (to reduce resource usage on single-node)"
+log "  - Scanner V4 is enabled with minimal configuration (1 replica, optimized for single-node)"
 log "  - If pods fail to start, check init bundle secrets and sensor connection"
 log "  - Monitor pod logs: oc logs -n $RHACS_OPERATOR_NAMESPACE <pod-name> -c init-tls-certs"
 
