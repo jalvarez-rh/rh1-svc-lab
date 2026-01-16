@@ -1,6 +1,6 @@
 #!/bin/bash
-# Red Hat SSO (Keycloak) Installation Script
-# Installs Red Hat SSO Operator and creates Keycloak instance
+# Keycloak Installation Script
+# Installs Keycloak Operator (Community) and creates Keycloak instance
 # Assumes oc is installed and user is logged in as cluster-admin
 # Usage: ./07-install-keycloak.sh
 
@@ -34,7 +34,7 @@ trap 'error "Command failed: $(cat <<< "$BASH_COMMAND")"' ERR
 
 # Prerequisites validation
 log "========================================================="
-log "Red Hat SSO (Keycloak) Installation"
+log "Keycloak Installation (Community Operator)"
 log "========================================================="
 log ""
 
@@ -60,10 +60,11 @@ log ""
 # Configuration
 NAMESPACE="keycloak-operator"
 KEYCLOAK_CR_NAME="keycloak"
-OPERATOR_PACKAGE="rhbk-operator"
-OPERATOR_GROUP_NAME="rhbk-operator-group"
-SUBSCRIPTION_NAME="rhbk-operator"
-CHANNEL="stable-v26"
+OPERATOR_PACKAGE="keycloak-operator"
+OPERATOR_GROUP_NAME="keycloak-operator-group"
+SUBSCRIPTION_NAME="keycloak-operator"
+CHANNEL="fast"
+OPERATOR_SOURCE="community-operators"
 
 # Ensure namespace exists
 log "Ensuring namespace '$NAMESPACE' exists..."
@@ -73,9 +74,9 @@ if ! oc get namespace "$NAMESPACE" &>/dev/null; then
 fi
 log "✓ Namespace '$NAMESPACE' exists"
 
-# Check if Red Hat SSO operator is already installed
+# Check if Keycloak operator is already installed
 log ""
-log "Checking Red Hat SSO operator status..."
+log "Checking Keycloak operator status..."
 
 EXISTING_SUBSCRIPTION=false
 
@@ -89,21 +90,21 @@ if oc get subscription.operators.coreos.com "$SUBSCRIPTION_NAME" -n "$NAMESPACE"
             CSV_PHASE=$(oc get csv "$CURRENT_CSV" -n "$NAMESPACE" -o jsonpath='{.status.phase}' 2>/dev/null || echo "")
             
             if [ "$CSV_PHASE" = "Succeeded" ]; then
-                log "✓ Red Hat SSO operator is already installed and running"
+                log "✓ Keycloak operator is already installed and running"
                 log "  Installed CSV: $CURRENT_CSV"
                 log "  Current channel: ${EXISTING_CHANNEL:-unknown}"
                 log "  Status: $CSV_PHASE"
             else
-                log "Red Hat SSO operator subscription exists but CSV is in phase: $CSV_PHASE"
+                log "Keycloak operator subscription exists but CSV is in phase: $CSV_PHASE"
             fi
         else
-            log "Red Hat SSO operator subscription exists but CSV not found"
+            log "Keycloak operator subscription exists but CSV not found"
         fi
     else
-        log "Red Hat SSO operator subscription exists but CSV not yet determined"
+        log "Keycloak operator subscription exists but CSV not yet determined"
     fi
 else
-    log "Red Hat SSO operator not found, proceeding with installation..."
+    log "Keycloak operator not found, proceeding with installation..."
 fi
 
 # Create or update OperatorGroup
@@ -133,7 +134,7 @@ fi
 log ""
 log "Creating/updating Subscription..."
 log "  Channel: $CHANNEL"
-log "  Source: redhat-operators"
+log "  Source: $OPERATOR_SOURCE"
 log "  SourceNamespace: openshift-marketplace"
 
 if [ "$EXISTING_SUBSCRIPTION" = true ]; then
@@ -155,7 +156,7 @@ metadata:
 spec:
   channel: $CHANNEL
   name: $OPERATOR_PACKAGE
-  source: redhat-operators
+  source: $OPERATOR_SOURCE
   sourceNamespace: openshift-marketplace
   installPlanApproval: Automatic
 EOF
@@ -170,10 +171,10 @@ WAIT_COUNT=0
 CSV_READY=false
 
 while [ $WAIT_COUNT -lt $MAX_WAIT ]; do
-    CSV_NAME=$(oc get csv -n "$NAMESPACE" -o jsonpath='{.items[?(@.spec.displayName=="Red Hat build of Keycloak Operator")].metadata.name}' 2>/dev/null || echo "")
+    CSV_NAME=$(oc get csv -n "$NAMESPACE" -o jsonpath='{.items[?(@.spec.displayName=="Keycloak Operator")].metadata.name}' 2>/dev/null || echo "")
     
     if [ -z "$CSV_NAME" ]; then
-        CSV_NAME=$(oc get csv -n "$NAMESPACE" -o name 2>/dev/null | grep -i "rhbk-operator\|keycloak" | head -1 | sed 's|clusterserviceversion.operators.coreos.com/||' || echo "")
+        CSV_NAME=$(oc get csv -n "$NAMESPACE" -o name 2>/dev/null | grep -i "keycloak-operator" | head -1 | sed 's|clusterserviceversion.operators.coreos.com/||' || echo "")
     fi
     
     if [ -n "$CSV_NAME" ]; then
