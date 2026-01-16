@@ -1,451 +1,198 @@
 #!/bin/bash
-# Trusted Artifact Signer Installation Script
-# Installs Trusted Artifact Signer operator and creates TrustedArtifactSigner CR in tssc namespace
 
-# Exit immediately on error, show error message
-set -euo pipefail
+# Script to install Red Hat Trusted Artifact Signer (RHTAS) with Red Hat SSO as OIDC provider on OpenShift
+# Assumes oc is installed and user is logged in as cluster-admin
+# Usage: ./install_rhtas.sh <image_to_sign> (e.g., ttl.sh/rhtas/test-image:1h)
+# Note: The signing step will require browser interaction for OIDC authentication
 
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-PROJECT_ROOT="$(dirname "$SCRIPT_DIR")"
-
-# Colors
-RED='\033[0;31m'
-GREEN='\033[0;32m'
-YELLOW='\033[1;33m'
-NC='\033[0m'
-
-log() {
-    echo -e "${GREEN}[TAS-INSTALL]${NC} $1"
-}
-
-warning() {
-    echo -e "${YELLOW}[TAS-INSTALL]${NC} $1"
-}
-
-error() {
-    echo -e "${RED}[TAS-INSTALL] ERROR:${NC} $1" >&2
-    echo -e "${RED}[TAS-INSTALL] Script failed at line ${BASH_LINENO[0]}${NC}" >&2
-    exit 1
-}
-
-# Trap to show error details on exit
-trap 'error "Command failed: $(cat <<< "$BASH_COMMAND")"' ERR
-
-# Prerequisites validation
-log "========================================================="
-log "Trusted Artifact Signer Installation"
-log "========================================================="
-log ""
-
-log "Validating prerequisites..."
-
-# Check if oc is available and connected
-log "Checking OpenShift CLI connection..."
-if ! oc whoami &>/dev/null; then
-    error "OpenShift CLI not connected. Please login first with: oc login"
-fi
-log "✓ OpenShift CLI connected as: $(oc whoami)"
-
-# Check if we have cluster admin privileges
-log "Checking cluster admin privileges..."
-if ! oc auth can-i create subscriptions --all-namespaces &>/dev/null; then
-    error "Cluster admin privileges required to install operators. Current user: $(oc whoami)"
-fi
-log "✓ Cluster admin privileges confirmed"
-
-log "Prerequisites validated successfully"
-log ""
-
-# Trusted Artifact Signer operator namespace
-OPERATOR_NAMESPACE="tssc"
-
-# Ensure namespace exists
-log "Ensuring namespace '$OPERATOR_NAMESPACE' exists..."
-if ! oc get namespace "$OPERATOR_NAMESPACE" &>/dev/null; then
-    log "Creating namespace '$OPERATOR_NAMESPACE'..."
-    oc create namespace "$OPERATOR_NAMESPACE" || error "Failed to create namespace"
-fi
-log "✓ Namespace '$OPERATOR_NAMESPACE' exists"
-
-# Check if Trusted Artifact Signer operator is already installed
-log ""
-log "Checking Trusted Artifact Signer operator status"
-
-# Try multiple possible package names
-OPERATOR_PACKAGE=""
-POSSIBLE_PACKAGES=("trusted-artifact-signer-operator" "trusted-artifact-signer" "red-hat-trusted-artifact-signer")
-
-for pkg in "${POSSIBLE_PACKAGES[@]}"; do
-    if oc get packagemanifest "$pkg" -n openshift-marketplace >/dev/null 2>&1; then
-        OPERATOR_PACKAGE="$pkg"
-        log "✓ Found operator package: $OPERATOR_PACKAGE"
-        break
-    fi
-done
-
-# If not found, use default and let subscription creation fail with clear error
-if [ -z "$OPERATOR_PACKAGE" ]; then
-    OPERATOR_PACKAGE="trusted-artifact-signer-operator"
-    warning "Could not find operator package in catalog. Will attempt with: $OPERATOR_PACKAGE"
-    warning "If this fails, check available operators: oc get packagemanifest -n openshift-marketplace | grep -i trusted"
+IMAGE_TO_SIGN="$1"
+if [ -z "$IMAGE_TO_SIGN" ]; then
+  echo "Usage: $0 <image_to_sign>"
+  exit 1
 fi
 
-EXISTING_SUBSCRIPTION=false
+# Step 1: Install Red Hat Single Sign-On (RH SSO) Operator
+echo "Installing RH SSO Operator..."
+oc create namespace keycloak-system || true
 
-if oc get subscription.operators.coreos.com "$OPERATOR_PACKAGE" -n "$OPERATOR_NAMESPACE" >/dev/null 2>&1; then
-    EXISTING_SUBSCRIPTION=true
-    CURRENT_CSV=$(oc get subscription.operators.coreos.com "$OPERATOR_PACKAGE" -n "$OPERATOR_NAMESPACE" -o jsonpath='{.status.currentCSV}' 2>/dev/null || echo "")
-    EXISTING_CHANNEL=$(oc get subscription.operators.coreos.com "$OPERATOR_PACKAGE" -n "$OPERATOR_NAMESPACE" -o jsonpath='{.spec.channel}' 2>/dev/null || echo "")
-    
-    if [ -n "$CURRENT_CSV" ] && [ "$CURRENT_CSV" != "null" ]; then
-        if oc get csv "$CURRENT_CSV" -n "$OPERATOR_NAMESPACE" >/dev/null 2>&1; then
-            CSV_PHASE=$(oc get csv "$CURRENT_CSV" -n "$OPERATOR_NAMESPACE" -o jsonpath='{.status.phase}' 2>/dev/null || echo "")
-            
-            if [ "$CSV_PHASE" = "Succeeded" ]; then
-                log "✓ Trusted Artifact Signer operator is already installed and running"
-                log "  Installed CSV: $CURRENT_CSV"
-                log "  Current channel: ${EXISTING_CHANNEL:-unknown}"
-                log "  Status: $CSV_PHASE"
-            else
-                log "Trusted Artifact Signer operator subscription exists but CSV is in phase: $CSV_PHASE"
-            fi
-        else
-            log "Trusted Artifact Signer operator subscription exists but CSV not found"
-        fi
-    else
-        log "Trusted Artifact Signer operator subscription exists but CSV not yet determined"
-    fi
-else
-    log "Trusted Artifact Signer operator not found, proceeding with installation..."
-fi
-
-# Determine channel (use stable as specified)
-log ""
-log "Determining available channel for Trusted Artifact Signer operator..."
-
-CHANNEL="stable"
-if oc get packagemanifest "$OPERATOR_PACKAGE" -n openshift-marketplace >/dev/null 2>&1; then
-    AVAILABLE_CHANNELS=$(oc get packagemanifest "$OPERATOR_PACKAGE" -n openshift-marketplace -o jsonpath='{.status.channels[*].name}' 2>/dev/null || echo "")
-    
-    if [ -n "$AVAILABLE_CHANNELS" ]; then
-        log "Available channels: $AVAILABLE_CHANNELS"
-        
-        # Verify stable channel exists
-        if echo "$AVAILABLE_CHANNELS" | grep -q "\bstable\b"; then
-            CHANNEL="stable"
-            log "✓ Using stable channel (as specified)"
-        else
-            warning "Stable channel not found. Available channels: $AVAILABLE_CHANNELS"
-            # Use first available as fallback
-            CHANNEL=$(echo "$AVAILABLE_CHANNELS" | awk '{print $1}')
-            log "Using fallback channel: $CHANNEL"
-        fi
-    else
-        warning "Could not determine available channels from packagemanifest"
-        log "Using default channel: stable"
-    fi
-else
-    warning "Package manifest not found in catalog (may still be syncing)"
-    log "Using default channel: stable"
-fi
-
-log "Selected channel: $CHANNEL"
-
-# Create or update OperatorGroup
-log ""
-log "Ensuring OperatorGroup exists with AllNamespaces mode..."
-
-EXISTING_OG=$(oc get operatorgroup -n "$OPERATOR_NAMESPACE" -o jsonpath='{.items[0].metadata.name}' 2>/dev/null || echo "")
-
-if [ -n "$EXISTING_OG" ]; then
-    # Check if existing OperatorGroup uses AllNamespaces mode
-    TARGET_NAMESPACES=$(oc get operatorgroup "$EXISTING_OG" -n "$OPERATOR_NAMESPACE" -o jsonpath='{.spec.targetNamespaces[*]}' 2>/dev/null || echo "")
-    
-    if [ -n "$TARGET_NAMESPACES" ]; then
-        log "Updating OperatorGroup to use AllNamespaces mode..."
-        oc patch operatorgroup "$EXISTING_OG" -n "$OPERATOR_NAMESPACE" --type merge -p '{"spec":{"targetNamespaces":[]}}' || warning "Failed to update OperatorGroup"
-    else
-        log "✓ OperatorGroup already uses AllNamespaces mode"
-    fi
-else
-    log "Creating OperatorGroup with AllNamespaces mode..."
-    cat <<EOF | oc apply -f -
+cat <<EOF | oc apply -f -
 apiVersion: operators.coreos.com/v1
 kind: OperatorGroup
 metadata:
-  name: tssc-operatorgroup
-  namespace: $OPERATOR_NAMESPACE
+  name: keycloak-operator-group
+  namespace: keycloak-system
 spec:
-  targetNamespaces: []
+  targetNamespaces:
+  - keycloak-system
 EOF
-    log "✓ OperatorGroup created"
-fi
 
-# Create or update Subscription
-log ""
-log "Creating/updating Subscription..."
-log "  Channel: $CHANNEL"
-log "  Source: redhat-operators"
-log "  SourceNamespace: openshift-marketplace"
-
-if [ "$EXISTING_SUBSCRIPTION" = true ]; then
-    # Update existing subscription if channel changed
-    if [ -n "$EXISTING_CHANNEL" ] && [ "$EXISTING_CHANNEL" != "$CHANNEL" ]; then
-        log "Updating subscription channel from '$EXISTING_CHANNEL' to '$CHANNEL'..."
-        oc patch subscription "$OPERATOR_PACKAGE" -n "$OPERATOR_NAMESPACE" --type merge -p "{\"spec\":{\"channel\":\"$CHANNEL\"}}" || error "Failed to update subscription channel"
-    else
-        log "✓ Subscription already exists with channel: $CHANNEL"
-    fi
-else
-    log "Creating Subscription..."
-    log "  Channel: $CHANNEL"
-    log "  Installation mode: All namespaces"
-    log "  Update approval: Automatic"
-    cat <<EOF | oc apply -f -
+cat <<EOF | oc apply -f -
 apiVersion: operators.coreos.com/v1alpha1
 kind: Subscription
 metadata:
-  name: $OPERATOR_PACKAGE
-  namespace: $OPERATOR_NAMESPACE
+  name: rhsso-operator
+  namespace: keycloak-system
 spec:
-  channel: $CHANNEL
+  channel: stable
   installPlanApproval: Automatic
-  name: $OPERATOR_PACKAGE
+  name: rhsso-operator
   source: redhat-operators
   sourceNamespace: openshift-marketplace
 EOF
-    log "✓ Subscription created"
-    
-    # Wait a moment for subscription to be processed
-    sleep 3
-    
-    # Check InstallPlan and approve if needed (should be Automatic, but verify)
-    INSTALL_PLAN=$(oc get installplan -n "$OPERATOR_NAMESPACE" -o jsonpath='{.items[*].metadata.name}' 2>/dev/null | tr ' ' '\n' | head -1 || echo "")
-    if [ -n "$INSTALL_PLAN" ]; then
-        IP_APPROVAL=$(oc get installplan "$INSTALL_PLAN" -n "$OPERATOR_NAMESPACE" -o jsonpath='{.spec.approval}' 2>/dev/null || echo "")
-        IP_APPROVED=$(oc get installplan "$INSTALL_PLAN" -n "$OPERATOR_NAMESPACE" -o jsonpath='{.spec.approved}' 2>/dev/null || echo "")
-        
-        if [ "$IP_APPROVAL" = "Manual" ] && [ "$IP_APPROVED" != "true" ]; then
-            log "Approving Manual InstallPlan..."
-            oc patch installplan "$INSTALL_PLAN" -n "$OPERATOR_NAMESPACE" --type merge -p '{"spec":{"approved":true}}' || warning "Failed to approve InstallPlan"
-            log "✓ InstallPlan approved"
-        else
-            log "✓ InstallPlan approval: ${IP_APPROVAL:-Automatic}"
-        fi
-    fi
-fi
 
-# Wait for CSV to be created and ready
-log ""
-log "Waiting for operator CSV to be created..."
-MAX_WAIT=300
-WAIT_COUNT=0
-CSV_CREATED=false
-CSV_READY=false
+# Wait for RH SSO Operator to be ready
+echo "Waiting for RH SSO Operator to be ready..."
+oc wait --for=condition=Available deployment/rhsso-operator -n keycloak-system --timeout=300s
 
-# First wait for CSV to be created
-while [ $WAIT_COUNT -lt $MAX_WAIT ]; do
-    # Try multiple ways to find the CSV
-    CSV_NAME=$(oc get csv -n "$OPERATOR_NAMESPACE" -o jsonpath='{.items[?(@.spec.displayName=="Trusted Artifact Signer Operator")].metadata.name}' 2>/dev/null || echo "")
-    
-    if [ -z "$CSV_NAME" ]; then
-        CSV_NAME=$(oc get csv -n "$OPERATOR_NAMESPACE" -o jsonpath='{.items[?(@.metadata.name=~"trusted-artifact-signer.*")].metadata.name}' 2>/dev/null | head -1 || echo "")
-    fi
-    
-    if [ -z "$CSV_NAME" ]; then
-        CSV_NAME=$(oc get csv -n "$OPERATOR_NAMESPACE" -o name 2>/dev/null | grep -i trusted | head -1 | sed 's|clusterserviceversion.operators.coreos.com/||' || echo "")
-    fi
-    
-    if [ -z "$CSV_NAME" ]; then
-        # Check if any CSV exists at all
-        CSV_COUNT=$(oc get csv -n "$OPERATOR_NAMESPACE" --no-headers 2>/dev/null | wc -l | tr -d '[:space:]' || echo "0")
-        if [ "$CSV_COUNT" -gt 0 ]; then
-            CSV_NAME=$(oc get csv -n "$OPERATOR_NAMESPACE" -o jsonpath='{.items[0].metadata.name}' 2>/dev/null || echo "")
-        fi
-    fi
-    
-    if [ -n "$CSV_NAME" ]; then
-        CSV_CREATED=true
-        log "✓ CSV found: $CSV_NAME"
-        break
-    fi
-    
-    # Check subscription status for debugging
-    if [ $((WAIT_COUNT % 30)) -eq 0 ] && [ $WAIT_COUNT -gt 0 ]; then
-        log "  Still waiting for CSV... (${WAIT_COUNT}s/${MAX_WAIT}s)"
-        
-        # Show subscription status
-        SUB_STATE=$(oc get subscription "$OPERATOR_PACKAGE" -n "$OPERATOR_NAMESPACE" -o jsonpath='{.status.state}' 2>/dev/null || echo "unknown")
-        SUB_CONDITION=$(oc get subscription "$OPERATOR_PACKAGE" -n "$OPERATOR_NAMESPACE" -o jsonpath='{.status.conditions[0].message}' 2>/dev/null || echo "")
-        log "    Subscription state: ${SUB_STATE}"
-        if [ -n "$SUB_CONDITION" ] && [ "$SUB_CONDITION" != "null" ]; then
-            log "    Subscription condition: ${SUB_CONDITION}"
-        fi
-        
-        # Check InstallPlan
-        INSTALL_PLAN=$(oc get installplan -n "$OPERATOR_NAMESPACE" -o jsonpath='{.items[*].metadata.name}' 2>/dev/null | tr ' ' '\n' | head -1 || echo "")
-        if [ -n "$INSTALL_PLAN" ]; then
-            IP_PHASE=$(oc get installplan "$INSTALL_PLAN" -n "$OPERATOR_NAMESPACE" -o jsonpath='{.status.phase}' 2>/dev/null || echo "unknown")
-            log "    InstallPlan: $INSTALL_PLAN (phase: $IP_PHASE)"
-        fi
-    fi
-    
-    sleep 5
-    WAIT_COUNT=$((WAIT_COUNT + 5))
-done
-
-if [ "$CSV_CREATED" = false ]; then
-    log ""
-    log "CSV not found. Current status:"
-    oc get subscription "$OPERATOR_PACKAGE" -n "$OPERATOR_NAMESPACE" -o yaml || true
-    oc get installplan -n "$OPERATOR_NAMESPACE" || true
-    oc get csv -n "$OPERATOR_NAMESPACE" || true
-    error "CSV was not created within ${MAX_WAIT} seconds. Check subscription and installplan status above."
-fi
-
-# Now wait for CSV to be in Succeeded phase
-log ""
-log "Waiting for CSV '$CSV_NAME' to reach Succeeded phase..."
-MAX_WAIT=600
-WAIT_COUNT=0
-
-while [ $WAIT_COUNT -lt $MAX_WAIT ]; do
-    CSV_PHASE=$(oc get csv "$CSV_NAME" -n "$OPERATOR_NAMESPACE" -o jsonpath='{.status.phase}' 2>/dev/null || echo "")
-    
-    if [ "$CSV_PHASE" = "Succeeded" ]; then
-        CSV_READY=true
-        log "✓ CSV is ready: $CSV_NAME"
-        break
-    fi
-    
-    if [ $((WAIT_COUNT % 30)) -eq 0 ] && [ $WAIT_COUNT -gt 0 ]; then
-        log "  Still waiting... (${WAIT_COUNT}s/${MAX_WAIT}s)"
-        log "  CSV phase: ${CSV_PHASE:-Unknown}"
-        
-        # Show CSV conditions for debugging
-        CSV_CONDITIONS=$(oc get csv "$CSV_NAME" -n "$OPERATOR_NAMESPACE" -o jsonpath='{range .status.conditions[*]}{.type}: {.status} - {.message}{"\n"}{end}' 2>/dev/null || echo "")
-        if [ -n "$CSV_CONDITIONS" ]; then
-            log "  CSV conditions:"
-            echo "$CSV_CONDITIONS" | while read -r line; do
-                log "    $line"
-            done
-        fi
-    fi
-    
-    sleep 5
-    WAIT_COUNT=$((WAIT_COUNT + 5))
-done
-
-if [ "$CSV_READY" = false ]; then
-    log ""
-    log "CSV did not reach Succeeded phase. Current status:"
-    oc get csv "$CSV_NAME" -n "$OPERATOR_NAMESPACE" -o yaml || true
-    error "CSV did not become ready within ${MAX_WAIT} seconds. Check CSV status above."
-fi
-
-# Check if TrustedArtifactSigner CR already exists
-log ""
-log "Checking for existing TrustedArtifactSigner CR..."
-
-TAS_CR_NAME="trusted-artifact-signer"
-if oc get trustedartifactsigner "$TAS_CR_NAME" -n "$OPERATOR_NAMESPACE" >/dev/null 2>&1; then
-    log "✓ TrustedArtifactSigner CR '$TAS_CR_NAME' already exists"
-    
-    # Check status
-    TAS_STATUS=$(oc get trustedartifactsigner "$TAS_CR_NAME" -n "$OPERATOR_NAMESPACE" -o jsonpath='{.status.conditions[?(@.type=="Ready")].status}' 2>/dev/null || echo "")
-    if [ "$TAS_STATUS" = "True" ]; then
-        log "✓ TrustedArtifactSigner is Ready"
-        log ""
-        log "========================================================="
-        log "Trusted Artifact Signer Installation Completed!"
-        log "========================================================="
-        log "Namespace: $OPERATOR_NAMESPACE"
-        log "TrustedArtifactSigner CR: $TAS_CR_NAME"
-        log "Status: Ready"
-        log "========================================================="
-        exit 0
-    else
-        log "TrustedArtifactSigner exists but status is: ${TAS_STATUS:-Unknown}"
-        log "Waiting for it to become ready..."
-    fi
-else
-    log "Creating TrustedArtifactSigner CR..."
-    
-    # Create TrustedArtifactSigner CR
-    cat <<EOF | oc apply -f -
-apiVersion: tssc.redhat.com/v1alpha1
-kind: TrustedArtifactSigner
+# Step 2: Deploy Keycloak instance with internal DB (H2 for simplicity)
+echo "Deploying Keycloak instance..."
+cat <<EOF | oc apply -f -
+apiVersion: keycloak.org/v1alpha1
+kind: Keycloak
 metadata:
-  name: $TAS_CR_NAME
-  namespace: $OPERATOR_NAMESPACE
-spec: {}
+  name: keycloak
+  namespace: keycloak-system
+spec:
+  instances: 1
+  db:
+    vendor: h2
+  http:
+    httpEnabled: true  # For simplicity; use TLS in production
 EOF
-    log "✓ TrustedArtifactSigner CR created"
-fi
 
-# Wait for TrustedArtifactSigner to be ready
-log ""
-log "Waiting for TrustedArtifactSigner to become ready..."
-MAX_WAIT=600
-WAIT_COUNT=0
-TAS_READY=false
+# Wait for Keycloak to be ready
+echo "Waiting for Keycloak to be ready..."
+oc wait --for=condition=Ready pod -l app=keycloak -n keycloak-system --timeout=600s
 
-while [ $WAIT_COUNT -lt $MAX_WAIT ]; do
-    TAS_STATUS=$(oc get trustedartifactsigner "$TAS_CR_NAME" -n "$OPERATOR_NAMESPACE" -o jsonpath='{.status.conditions[?(@.type=="Ready")].status}' 2>/dev/null || echo "")
-    
-    if [ "$TAS_STATUS" = "True" ]; then
-        TAS_READY=true
-        log "✓ TrustedArtifactSigner is Ready"
-        break
-    fi
-    
-    if [ $((WAIT_COUNT % 30)) -eq 0 ] && [ $WAIT_COUNT -gt 0 ]; then
-        log "  Still waiting... (${WAIT_COUNT}s/${MAX_WAIT}s)"
-        log "  Current status: ${TAS_STATUS:-Unknown}"
-        
-        # Show component status
-        log "  Component status:"
-        oc get trustedartifactsigner "$TAS_CR_NAME" -n "$OPERATOR_NAMESPACE" -o jsonpath='{range .status.conditions[*]}{.type}: {.status}{"\n"}{end}' 2>/dev/null || true
-    fi
-    
-    sleep 5
-    WAIT_COUNT=$((WAIT_COUNT + 5))
-done
+# Step 3: Create Realm for RHTAS
+echo "Creating Keycloak Realm..."
+cat <<EOF | oc apply -f -
+apiVersion: keycloak.org/v1alpha1
+kind: KeycloakRealm
+metadata:
+  name: trusted-artifact-signer
+  namespace: keycloak-system
+spec:
+  realm:
+    realm: trusted-artifact-signer
+    enabled: true
+    displayName: Trusted Artifact Signer Realm
+EOF
 
-if [ "$TAS_READY" = false ]; then
-    warning "TrustedArtifactSigner did not become ready within ${MAX_WAIT} seconds"
-    log "Current status:"
-    oc get trustedartifactsigner "$TAS_CR_NAME" -n "$OPERATOR_NAMESPACE" -o yaml
-    error "TrustedArtifactSigner is not ready. Check operator logs for details."
-fi
+# Step 4: Create Client for RHTAS (public client for OIDC)
+echo "Creating Keycloak Client..."
+cat <<EOF | oc apply -f -
+apiVersion: keycloak.org/v1alpha1
+kind: KeycloakClient
+metadata:
+  name: trusted-artifact-signer
+  namespace: keycloak-system
+spec:
+  realmSelector:
+    matchLabels:
+      realm: trusted-artifact-signer
+  client:
+    clientId: trusted-artifact-signer
+    clientAuthenticatorType: none  # Public client
+    standardFlowEnabled: true
+    validRedirectUris:
+    - "*"
+    webOrigins:
+    - "+"
+EOF
 
-# Get component URLs
-log ""
-log "Retrieving Trusted Artifact Signer component URLs..."
+# Step 5: Get OIDC Issuer URL
+echo "Retrieving OIDC Issuer URL..."
+KEYCLOAK_HOST=$(oc get route keycloak -n keycloak-system -o jsonpath='{.spec.host}')
+OIDC_ISSUER_URL="http://${KEYCLOAK_HOST}/auth/realms/trusted-artifact-signer"  # Use https in production
 
-FULCIO_URL=$(oc get fulcio -n "$OPERATOR_NAMESPACE" -o jsonpath='{.items[0].status.url}' 2>/dev/null || echo "")
-REKOR_URL=$(oc get rekor -n "$OPERATOR_NAMESPACE" -o jsonpath='{.items[0].status.url}' 2>/dev/null || echo "")
-TUF_URL=$(oc get tuf -n "$OPERATOR_NAMESPACE" -o jsonpath='{.items[0].status.url}' 2>/dev/null || echo "")
-CLIENT_SERVER_ROUTE=$(oc get route -l app.kubernetes.io/component=client-server -n "$OPERATOR_NAMESPACE" -o jsonpath='{.items[0].spec.host}' 2>/dev/null || echo "")
+# Step 6: Install RHTAS Operator
+echo "Installing RHTAS Operator..."
+cat <<EOF | oc apply -f -
+apiVersion: operators.coreos.com/v1alpha1
+kind: Subscription
+metadata:
+  name: trusted-artifact-signer
+  namespace: openshift-operators
+spec:
+  channel: stable
+  installPlanApproval: Automatic
+  name: trusted-artifact-signer
+  source: redhat-operators
+  sourceNamespace: openshift-marketplace
+EOF
 
-log ""
-log "========================================================="
-log "Trusted Artifact Signer Installation Completed!"
-log "========================================================="
-log "Namespace: $OPERATOR_NAMESPACE"
-log "TrustedArtifactSigner CR: $TAS_CR_NAME"
-log "Status: Ready"
-if [ -n "$FULCIO_URL" ]; then
-    log "Fulcio URL: $FULCIO_URL"
-fi
-if [ -n "$REKOR_URL" ]; then
-    log "Rekor URL: $REKOR_URL"
-fi
-if [ -n "$TUF_URL" ]; then
-    log "TUF URL: $TUF_URL"
-fi
-if [ -n "$CLIENT_SERVER_ROUTE" ]; then
-    log "Client Server Route: https://$CLIENT_SERVER_ROUTE"
-fi
-log "========================================================="
-log ""
+# Wait for RHTAS Operator to be ready
+echo "Waiting for RHTAS Operator to be ready..."
+oc wait --for=condition=Available deployment -l operators.coreos.com/trusted-artifact-signer.openshift-operators -n openshift-operators --timeout=300s
+
+# Step 7: Create namespace for RHTAS components
+oc create namespace trusted-artifact-signer || true
+
+# Step 8: Deploy Securesign CR with OIDC configuration
+echo "Deploying Securesign CR..."
+cat <<EOF | oc apply -f -
+apiVersion: rhtas.redhat.com/v1alpha1
+kind: Securesign
+metadata:
+  name: securesign-sample
+  namespace: trusted-artifact-signer
+spec:
+  fulcio:
+    config:
+      OIDCIssuers:
+      - issuer: ${OIDC_ISSUER_URL}
+        clientID: trusted-artifact-signer
+        issuerURL: ${OIDC_ISSUER_URL}
+        type: email
+EOF
+
+# Wait for RHTAS components to be ready
+echo "Waiting for RHTAS components to be ready..."
+oc wait --for=condition=Ready ctlog/securesign-sample-ctlog -n trusted-artifact-signer --timeout=600s
+oc wait --for=condition=Ready fulcio/securesign-sample-fulcio -n trusted-artifact-signer --timeout=600s
+oc wait --for=condition=Ready rekor/securesign-sample-rekor -n trusted-artifact-signer --timeout=600s
+oc wait --for=condition=Ready trillian/securesign-sample-trillian -n trusted-artifact-signer --timeout=600s
+oc wait --for=condition=Ready tuf/securesign-sample-tuf -n trusted-artifact-signer --timeout=600s
+
+# Step 9: Set up environment for signing
+echo "Setting up environment variables for signing..."
+export FULCIO_URL=$(oc get fulcio -o jsonpath='{.items[0].status.url}' -n trusted-artifact-signer)
+export REKOR_URL=$(oc get rekor -o jsonpath='{.items[0].status.url}' -n trusted-artifact-signer)
+export TUF_URL=$(oc get tuf -o jsonpath='{.items[0].status.url}' -n trusted-artifact-signer)
+export COSIGN_FULCIO_URL=$FULCIO_URL
+export COSIGN_REKOR_URL=$REKOR_URL
+export COSIGN_MIRROR=$TUF_URL
+export COSIGN_ROOT=$TUF_URL/root.json
+export COSIGN_OIDC_ISSUER=$OIDC_ISSUER_URL
+export COSIGN_OIDC_CLIENT_ID=trusted-artifact-signer
+export COSIGN_YES=true
+
+# Initialize Cosign with TUF
+cosign initialize
+
+# Step 10: Sign the image
+echo "Signing the image: $IMAGE_TO_SIGN"
+cosign sign -y $IMAGE_TO_SIGN
+
+# Step 11: Attest the image (example with SLSA predicate)
+echo "Creating predicate.json for attestation..."
+cat <<EOF > predicate.json
+{
+  "builder": {"id": "https://localhost/dummy-id"},
+  "buildType": "https://example.com/tekton-pipeline",
+  "invocation": {},
+  "buildConfig": {},
+  "metadata": {"completeness": {"parameters": false, "environment": false, "materials": false}, "reproducible": false},
+  "materials": []
+}
+EOF
+
+echo "Attesting the image: $IMAGE_TO_SIGN"
+cosign attest -y --predicate ./predicate.json --type slsaprovenance $IMAGE_TO_SIGN
+
+# Cleanup temporary file
+rm predicate.json
+
+echo "Installation and signing/attestation complete!"
+echo "To verify: cosign verify --certificate-identity-regexp '<your-email>' --certificate-oidc-issuer-regexp '${OIDC_ISSUER_URL}' $IMAGE_TO_SIGN"
