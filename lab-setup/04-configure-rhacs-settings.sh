@@ -57,13 +57,55 @@ log "✓ Extracted ROX_ENDPOINT: $ROX_ENDPOINT"
 
 # Get ADMIN_PASSWORD from secret (needed for token generation)
 log "Extracting admin password from secret..."
-ADMIN_PASSWORD_B64=$(oc get secret central-htpasswd -n "$RHACS_NAMESPACE" -o jsonpath='{.data.password}' 2>/dev/null || echo "")
-if [ -z "$ADMIN_PASSWORD_B64" ]; then
-    error "Admin password secret 'central-htpasswd' not found in namespace '$RHACS_NAMESPACE'"
+
+# First check if secret exists
+if ! oc get secret central-htpasswd -n "$RHACS_NAMESPACE" >/dev/null 2>&1; then
+    log "Secret 'central-htpasswd' not found in namespace '$RHACS_NAMESPACE', checking environment variable..."
+    if [ -n "$ACS_PORTAL_PASSWORD" ]; then
+        ADMIN_PASSWORD_B64="$ACS_PORTAL_PASSWORD"
+        log "✓ Using password from ACS_PORTAL_PASSWORD environment variable"
+    else
+        error "Admin password secret 'central-htpasswd' not found in namespace '$RHACS_NAMESPACE' and ACS_PORTAL_PASSWORD environment variable not set"
+    fi
+else
+    # Secret exists, try to extract password
+    ADMIN_PASSWORD_B64=$(oc get secret central-htpasswd -n "$RHACS_NAMESPACE" -o jsonpath='{.data.password}' 2>/dev/null || echo "")
+    
+    # If password key not found, try alternative key names
+    if [ -z "$ADMIN_PASSWORD_B64" ]; then
+        ADMIN_PASSWORD_B64=$(oc get secret central-htpasswd -n "$RHACS_NAMESPACE" -o jsonpath='{.data.adminPassword}' 2>/dev/null || echo "")
+    fi
+    
+    # If still not found, try to get all keys and use the first one
+    if [ -z "$ADMIN_PASSWORD_B64" ]; then
+        log "Checking available keys in secret..."
+        SECRET_DATA=$(oc get secret central-htpasswd -n "$RHACS_NAMESPACE" -o json 2>/dev/null || echo "")
+        if [ -n "$SECRET_DATA" ]; then
+            # Try to extract first key from data section
+            FIRST_KEY=$(echo "$SECRET_DATA" | jq -r '.data | keys[0]' 2>/dev/null || echo "")
+            if [ -n "$FIRST_KEY" ] && [ "$FIRST_KEY" != "null" ]; then
+                log "Found key '$FIRST_KEY' in secret, using it..."
+                ADMIN_PASSWORD_B64=$(echo "$SECRET_DATA" | jq -r ".data.$FIRST_KEY" 2>/dev/null || echo "")
+            fi
+        fi
+    fi
+    
+    # If still not found, fall back to environment variable
+    if [ -z "$ADMIN_PASSWORD_B64" ]; then
+        log "Could not extract password from secret, checking environment variable ACS_PORTAL_PASSWORD..."
+        if [ -n "$ACS_PORTAL_PASSWORD" ]; then
+            ADMIN_PASSWORD_B64="$ACS_PORTAL_PASSWORD"
+            log "✓ Using password from ACS_PORTAL_PASSWORD environment variable"
+        else
+            error "Could not extract password from secret 'central-htpasswd' in namespace '$RHACS_NAMESPACE' and ACS_PORTAL_PASSWORD environment variable not set"
+        fi
+    fi
 fi
-ADMIN_PASSWORD=$(echo "$ADMIN_PASSWORD_B64" | base64 -d)
+
+# Decode password (ACS_PORTAL_PASSWORD is already base64 encoded)
+ADMIN_PASSWORD=$(echo "$ADMIN_PASSWORD_B64" | base64 -d 2>/dev/null || echo "")
 if [ -z "$ADMIN_PASSWORD" ]; then
-    error "Failed to decode admin password from secret"
+    error "Failed to decode admin password. The password might not be base64 encoded."
 fi
 log "✓ Admin password extracted"
 
