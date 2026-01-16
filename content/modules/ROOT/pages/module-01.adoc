@@ -293,4 +293,7 @@ image::03-application-route-git.png[link=self, window=blank, width=100%, Applica
 
 Congratulations! 
 
+image::https://media.giphy.com/media/v1.Y2lkPTc5MGI3NjExdjl5YTd4M2o1MWZ4ZjBmMjM3cmJyMHYzZTFsbHB4ZDg0MXN1dzJvcCZlcD12MV9naWZzX3NlYXJjaCZjdD1n/ely3apij36BJhoZ234/giphy.gif[Celebration, width=400, align="center"]
+
+
 You have successfully deployed an application using RHACM and OpenShift GitOps. This approach utilized a Git repository containing the manifests that defined your application. RHACM took those manifests and used them as deployables, which were then deployed to the target cluster.

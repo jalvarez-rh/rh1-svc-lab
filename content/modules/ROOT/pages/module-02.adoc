@@ -86,7 +86,7 @@ Daily compliance scan for all profiles covering CIS, E8, Moderate, NERC-CIP, PCI
 * Time: 00:00 UTC
 
 . Click Next
-. Select the two clusters: *aws-us* and *production* (The production cluster is the local-cluster in the lab)
+. Select the clusters: *production*
 . Click Next
 . Add the following profiles (in order):
     * ocp4-cis (99 rules, Platform, Version 1.5.0)
@@ -242,13 +242,11 @@ status:
 Changes to Image configuration may take a few minutes to propagate in OpenShift. If the compliance check still fails after rescanning, wait a few minutes and run the scan again.
 ====
 
-Well done! Updating allowed image registries is a great example of a quick compliance improvement you can implement in OpenShift. Other common hardening steps include enabling audit log forwarding or host node auditing with Linux auditd. These types of changes can be managed cluster-wide using the MachineConfig Operator, or automated at deployment time so new clusters are compliant out of the box—options include leveraging Ansible, ACM, or similar automation tools.
+Here are the key points simplified into 5 sentences:
 
-Great job updating your allowed image registries! This is one of the fastest ways to improve security and compliance in OpenShift.
+Updating your allowed image registries is one of the fastest and most effective ways to improve security and compliance in OpenShift. Other quick hardening steps include enabling audit log forwarding and activating host node auditing with Linux auditd. These security configurations can be applied consistently across the entire cluster using the MachineConfig Operator. 
 
-Other quick hardening steps include enabling audit log forwarding and activating host node auditing with Linux auditd. These settings can be applied cluster-wide using the MachineConfig Operator. Even better, you can bake them into new clusters automatically from the start using tools like Ansible, Advanced Cluster Management (ACM), or GitOps workflows.
-
-When Security and Operations teams work closely together, you can provision clusters with strong baseline controls right from day one and keep them consistently secure across the environment.
+For even better results, you can automate these settings so new clusters are secure and compliant from the moment they are created. Tools like Ansible, Advanced Cluster Management (RHACM), or GitOps workflows make this automation straightforward and reliable.
 
 == Maintaining Control in Sovereign & Multi-Region Environments
 
@@ -258,15 +256,11 @@ Red Hat Advanced Cluster Security (RHACS) includes built-in policies that detect
 
 == Next Step: Block Package Managers at Runtime
 
-Package managers such as apt, apk, yum, and dnf are useful on virtual machines, but they have no place in production containers.
-
-Allowing them enables uncontrolled software installation, dramatically increases the attack surface, and breaks auditability and immutability — all of which are core requirements for sovereign cloud environments.
-
-We will create a simple RHACS runtime policy that monitors running processes using Linux kernel instrumentation, detects attempts to execute package managers, and automatically terminates violating pods by leveraging OpenShift enforcement.
-
-This single policy delivers powerful outcomes. It prevents sneaky software installs, enforces immutability, reduces overall risk, and maintains strong sovereign control over what executes in your clusters.
+Package managers such as apt, apk, yum, and dnf are useful on virtual machines, but they have no place in production containers. Allowing them enables uncontrolled software installation, dramatically increases the attack surface, and breaks auditability and immutability — all of which are core requirements for sovereign cloud environments.
 
 Bottom line: No package manager execution means no unauthorized changes — resulting in more secure, more auditable, and more compliant containers.
+
+Now, our security and operations teams want simplifed workflows and flexibility in where to deploy their applications. Policy-as-Code is a great way to achieve this.
 
 *Procedure*
 
