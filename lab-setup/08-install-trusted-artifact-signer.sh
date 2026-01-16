@@ -68,31 +68,66 @@ fi
 
 # Wait for RHTAS Operator to be ready
 echo "Waiting for RHTAS Operator to be ready..."
-MAX_WAIT=300
-WAIT_COUNT=0
-RHTAS_OPERATOR_READY=false
 
-while [ $WAIT_COUNT -lt $MAX_WAIT ]; do
+# First, wait for CSV to appear
+echo "Waiting for CSV to be created..."
+CSV_NAME=""
+MAX_WAIT_CSV=120
+WAIT_COUNT=0
+
+while [ $WAIT_COUNT -lt $MAX_WAIT_CSV ]; do
+    # Try multiple methods to find the CSV
     CSV_NAME=$(oc get csv -n openshift-operators -o jsonpath='{.items[?(@.spec.displayName=="Trusted Artifact Signer Operator")].metadata.name}' 2>/dev/null || echo "")
     if [ -z "$CSV_NAME" ]; then
-        CSV_NAME=$(oc get csv -n openshift-operators -o name 2>/dev/null | grep trusted-artifact-signer | head -1 | sed 's|clusterserviceversion.operators.coreos.com/||' || echo "")
+        CSV_NAME=$(oc get csv -n openshift-operators -o name 2>/dev/null | grep -i "trusted-artifact-signer\|rhtas" | head -1 | sed 's|clusterserviceversion.operators.coreos.com/||' || echo "")
+    fi
+    if [ -z "$CSV_NAME" ]; then
+        CSV_NAME=$(oc get csv -n openshift-operators -l operators.coreos.com/trusted-artifact-signer.openshift-operators -o jsonpath='{.items[0].metadata.name}' 2>/dev/null || echo "")
     fi
     
     if [ -n "$CSV_NAME" ]; then
-        CSV_PHASE=$(oc get csv "$CSV_NAME" -n openshift-operators -o jsonpath='{.status.phase}' 2>/dev/null || echo "")
-        if [ "$CSV_PHASE" = "Succeeded" ]; then
-            RHTAS_OPERATOR_READY=true
-            echo "✓ RHTAS Operator CSV is ready: $CSV_NAME"
-            break
-        fi
+        echo "✓ Found CSV: $CSV_NAME"
+        break
     fi
     
     sleep 5
     WAIT_COUNT=$((WAIT_COUNT + 5))
     if [ $((WAIT_COUNT % 30)) -eq 0 ] && [ $WAIT_COUNT -gt 0 ]; then
-        echo "  Still waiting for RHTAS Operator... (${WAIT_COUNT}s/${MAX_WAIT}s)"
+        echo "  Still waiting for CSV to appear... (${WAIT_COUNT}s/${MAX_WAIT_CSV}s)"
+        echo "    Checking available CSVs..."
+        oc get csv -n openshift-operators -o name 2>/dev/null | head -3 || echo "    No CSVs found yet"
     fi
 done
+
+if [ -z "$CSV_NAME" ]; then
+    echo "Warning: Could not find RHTAS Operator CSV after ${MAX_WAIT_CSV}s"
+    echo "Available CSVs in openshift-operators:"
+    oc get csv -n openshift-operators 2>/dev/null || echo "  No CSVs found"
+    echo "Subscription status:"
+    oc get subscription trusted-artifact-signer -n openshift-operators 2>/dev/null || echo "  Subscription not found"
+    echo "Proceeding anyway, but operator may not be ready..."
+else
+    # Wait for CSV to be in Succeeded phase
+    echo "Waiting for CSV to reach Succeeded phase..."
+    if oc wait --for=jsonpath='{.status.phase}'=Succeeded "csv/$CSV_NAME" -n openshift-operators --timeout=300s 2>/dev/null; then
+        RHTAS_OPERATOR_READY=true
+        echo "✓ RHTAS Operator CSV is ready: $CSV_NAME"
+    else
+        CSV_PHASE=$(oc get csv "$CSV_NAME" -n openshift-operators -o jsonpath='{.status.phase}' 2>/dev/null || echo "unknown")
+        CSV_MESSAGE=$(oc get csv "$CSV_NAME" -n openshift-operators -o jsonpath='{.status.message}' 2>/dev/null || echo "")
+        echo "Warning: CSV did not reach Succeeded phase within timeout. Current phase: $CSV_PHASE"
+        if [ -n "$CSV_MESSAGE" ]; then
+            echo "  CSV message: $CSV_MESSAGE"
+        fi
+        echo "Checking CSV details..."
+        oc get csv "$CSV_NAME" -n openshift-operators
+        # Check if it's already succeeded but oc wait didn't catch it
+        if [ "$CSV_PHASE" = "Succeeded" ]; then
+            RHTAS_OPERATOR_READY=true
+            echo "✓ CSV is already in Succeeded phase"
+        fi
+    fi
+fi
 
 if [ "$RHTAS_OPERATOR_READY" = false ]; then
     echo "Warning: RHTAS Operator may not be fully ready, but proceeding..."
