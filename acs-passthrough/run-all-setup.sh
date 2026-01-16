@@ -36,8 +36,6 @@ SCRIPTS=(
     "05-setup-perses-monitoring.sh"
     "06-scs-second-cluster.sh"
     "07-compliance-operator-second-cluster.sh"
-    # "08-setup-co-scan-schedule.sh"
-    # "09-trigger-compliance-scan.sh"
 )
 
 log "========================================================="

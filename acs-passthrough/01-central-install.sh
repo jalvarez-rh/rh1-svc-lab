@@ -57,7 +57,8 @@ if oc get namespace stackrox &>/dev/null; then
     # Find Central CR in stackrox namespace
     CENTRAL_RESOURCE=$(oc get central -n stackrox -o name 2>/dev/null | head -1 || echo "")
     if [ -n "$CENTRAL_RESOURCE" ]; then
-        CENTRAL_NAME=$(echo "$CENTRAL_RESOURCE" | sed 's|central.||')
+        # Extract just the resource name (everything after the last /)
+        CENTRAL_NAME=$(echo "$CENTRAL_RESOURCE" | sed 's|.*/||')
         log "Found Central CR: $CENTRAL_NAME in namespace stackrox"
     fi
 fi
@@ -67,7 +68,10 @@ if [ -z "$CENTRAL_RESOURCE" ]; then
     log "Searching for Central CR in all namespaces..."
     CENTRAL_RESOURCE=$(oc get central --all-namespaces -o name 2>/dev/null | head -1 || echo "")
     if [ -n "$CENTRAL_RESOURCE" ]; then
+        # Format is: namespace/kind.apiVersion/name or namespace/kind/name
+        # Extract namespace (first part before /)
         CENTRAL_NAMESPACE=$(echo "$CENTRAL_RESOURCE" | cut -d'/' -f1)
+        # Extract resource name (last part after final /)
         CENTRAL_NAME=$(echo "$CENTRAL_RESOURCE" | sed 's|.*/||')
         log "Found Central CR: $CENTRAL_NAME in namespace $CENTRAL_NAMESPACE"
     fi
@@ -77,7 +81,7 @@ if [ -z "$CENTRAL_RESOURCE" ]; then
     error "Central CR not found. Please ensure RHACS Central is installed."
 fi
 
-log "✓ Using Central: $CENTRAL_NAME in namespace: $CENTRAL_NAMESPACE"
+log "✓ Using Central CR: $CENTRAL_NAME in namespace: $CENTRAL_NAMESPACE"
 
 # Check current route configuration
 log ""

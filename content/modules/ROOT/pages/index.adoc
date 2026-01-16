@@ -61,7 +61,7 @@ oc config rename-context $(oc config current-context) aws-us
 
 [source,sh,role=execute]
 ----
-oc config  get-contexts
+oc config get-contexts
 ----
 
 **OUTPUT**
@@ -119,11 +119,9 @@ source ~/.bashrc
 [source,sh,role=execute]
 ----
 cd ~ && git clone https://github.com/jalvarez-rh/rh1-svc-lab.git || (cd ~/rh1-svc-lab && git pull origin main)
-cd ~/rh1-svc-lab/setup-files
-./acs-setup.sh
+cd ~/rh1-svc-lab/acs-passthrough
+./run-all-setup.sh
 ----
-
-
 
 
 [[openshift-acm]]
