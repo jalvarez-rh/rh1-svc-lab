@@ -1,8 +1,8 @@
 #!/bin/bash
-# Keycloak Installation Script
-# Installs Keycloak Operator (Community) and creates Keycloak instance
+# Red Hat Single Sign-On (RH-SSO) Installation Script
+# Installs Red Hat Single Sign-On Operator and creates Keycloak instance
 # Assumes oc is installed and user is logged in as cluster-admin
-# Usage: ./07-install-keycloak.sh
+# Usage: ./08-install-keycloak.sh
 
 # Exit immediately on error, show error message
 set -euo pipefail
@@ -34,7 +34,7 @@ trap 'error "Command failed: $(cat <<< "$BASH_COMMAND")"' ERR
 
 # Prerequisites validation
 log "========================================================="
-log "Keycloak Installation (Community Operator)"
+log "Red Hat Single Sign-On (RH-SSO) Installation"
 log "========================================================="
 log ""
 
@@ -58,101 +58,99 @@ log "Prerequisites validated successfully"
 log ""
 
 # Configuration
-NAMESPACE="keycloak-operator"
+TARGET_NAMESPACE="rhsso"
+OPERATOR_NAMESPACE="openshift-operators"  # Operator subscription goes here (has global OperatorGroup)
+OPERATOR_GROUP_NAME="rhsso-og"
+SUBSCRIPTION_NAME="rhsso-operator"
+OPERATOR_PACKAGE="rhsso-operator"
+CHANNEL="stable"
+OPERATOR_SOURCE="redhat-operators"
 KEYCLOAK_CR_NAME="keycloak"
-OPERATOR_PACKAGE="keycloak-operator"
-OPERATOR_GROUP_NAME="keycloak-operator-group"
-SUBSCRIPTION_NAME="keycloak-operator"
-CHANNEL="fast"
-OPERATOR_SOURCE="community-operators"
 
-# Ensure namespace exists
-log "Ensuring namespace '$NAMESPACE' exists..."
-if ! oc get namespace "$NAMESPACE" &>/dev/null; then
-    log "Creating namespace '$NAMESPACE'..."
-    oc create namespace "$NAMESPACE" || error "Failed to create namespace"
+# Step 1: Create target namespace (optional but recommended)
+log "Step 1: Creating target namespace '$TARGET_NAMESPACE'..."
+if ! oc get namespace "$TARGET_NAMESPACE" &>/dev/null; then
+    log "Creating namespace '$TARGET_NAMESPACE'..."
+    oc new-project "$TARGET_NAMESPACE" || error "Failed to create namespace"
+    log "✓ Namespace '$TARGET_NAMESPACE' created"
+else
+    log "✓ Namespace '$TARGET_NAMESPACE' already exists"
 fi
-log "✓ Namespace '$NAMESPACE' exists"
 
-# Check if Keycloak operator is already installed
+# Step 2: Create OperatorGroup (only needed for namespace-scoped installation)
+# Skip if installing in openshift-operators (it already has a global OperatorGroup)
 log ""
-log "Checking Keycloak operator status..."
+log "Step 2: Creating OperatorGroup for namespace-scoped installation..."
 
-EXISTING_SUBSCRIPTION=false
-
-if oc get subscription.operators.coreos.com "$SUBSCRIPTION_NAME" -n "$NAMESPACE" >/dev/null 2>&1; then
-    EXISTING_SUBSCRIPTION=true
-    CURRENT_CSV=$(oc get subscription.operators.coreos.com "$SUBSCRIPTION_NAME" -n "$NAMESPACE" -o jsonpath='{.status.currentCSV}' 2>/dev/null || echo "")
-    EXISTING_CHANNEL=$(oc get subscription.operators.coreos.com "$SUBSCRIPTION_NAME" -n "$NAMESPACE" -o jsonpath='{.spec.channel}' 2>/dev/null || echo "")
-    
-    if [ -n "$CURRENT_CSV" ] && [ "$CURRENT_CSV" != "null" ]; then
-        if oc get csv "$CURRENT_CSV" -n "$NAMESPACE" >/dev/null 2>&1; then
-            CSV_PHASE=$(oc get csv "$CURRENT_CSV" -n "$NAMESPACE" -o jsonpath='{.status.phase}' 2>/dev/null || echo "")
-            
-            if [ "$CSV_PHASE" = "Succeeded" ]; then
-                log "✓ Keycloak operator is already installed and running"
-                log "  Installed CSV: $CURRENT_CSV"
-                log "  Current channel: ${EXISTING_CHANNEL:-unknown}"
-                log "  Status: $CSV_PHASE"
-            else
-                log "Keycloak operator subscription exists but CSV is in phase: $CSV_PHASE"
-            fi
-        else
-            log "Keycloak operator subscription exists but CSV not found"
-        fi
+if [ "$OPERATOR_NAMESPACE" = "openshift-operators" ]; then
+    log "Installing in 'openshift-operators' namespace - skipping OperatorGroup creation (global OperatorGroup exists)"
+else
+    # Check if OperatorGroup already exists
+    if oc get operatorgroup "$OPERATOR_GROUP_NAME" -n "$TARGET_NAMESPACE" >/dev/null 2>&1; then
+        log "✓ OperatorGroup '$OPERATOR_GROUP_NAME' already exists in namespace '$TARGET_NAMESPACE'"
     else
-        log "Keycloak operator subscription exists but CSV not yet determined"
-    fi
-else
-    log "Keycloak operator not found, proceeding with installation..."
-fi
-
-# Create or update OperatorGroup
-log ""
-log "Ensuring OperatorGroup exists..."
-
-EXISTING_OG=$(oc get operatorgroup "$OPERATOR_GROUP_NAME" -n "$NAMESPACE" 2>/dev/null || echo "")
-
-if [ -n "$EXISTING_OG" ]; then
-    log "✓ OperatorGroup already exists: $OPERATOR_GROUP_NAME"
-else
-    log "Creating OperatorGroup..."
-    cat <<EOF | oc apply -f -
+        log "Creating OperatorGroup '$OPERATOR_GROUP_NAME' in namespace '$TARGET_NAMESPACE'..."
+        cat <<EOF | oc apply -f -
 apiVersion: operators.coreos.com/v1
 kind: OperatorGroup
 metadata:
   name: $OPERATOR_GROUP_NAME
-  namespace: $NAMESPACE
+  namespace: $TARGET_NAMESPACE
 spec:
   targetNamespaces:
-  - $NAMESPACE
+  - $TARGET_NAMESPACE
 EOF
-    log "✓ OperatorGroup created"
+        log "✓ OperatorGroup created"
+    fi
 fi
 
-# Create or update Subscription
+# Step 3: Create the Subscription
 log ""
-log "Creating/updating Subscription..."
-log "  Channel: $CHANNEL"
-log "  Source: $OPERATOR_SOURCE"
-log "  SourceNamespace: openshift-marketplace"
+log "Step 3: Creating Subscription..."
+
+# Check if subscription already exists
+EXISTING_SUBSCRIPTION=false
+if oc get subscription "$SUBSCRIPTION_NAME" -n "$OPERATOR_NAMESPACE" >/dev/null 2>&1; then
+    EXISTING_SUBSCRIPTION=true
+    CURRENT_CSV=$(oc get subscription "$SUBSCRIPTION_NAME" -n "$OPERATOR_NAMESPACE" -o jsonpath='{.status.currentCSV}' 2>/dev/null || echo "")
+    EXISTING_CHANNEL=$(oc get subscription "$SUBSCRIPTION_NAME" -n "$OPERATOR_NAMESPACE" -o jsonpath='{.spec.channel}' 2>/dev/null || echo "")
+    
+    if [ -n "$CURRENT_CSV" ] && [ "$CURRENT_CSV" != "null" ]; then
+        if oc get csv "$CURRENT_CSV" -n "$OPERATOR_NAMESPACE" >/dev/null 2>&1; then
+            CSV_PHASE=$(oc get csv "$CURRENT_CSV" -n "$OPERATOR_NAMESPACE" -o jsonpath='{.status.phase}' 2>/dev/null || echo "")
+            
+            if [ "$CSV_PHASE" = "Succeeded" ]; then
+                log "✓ RH-SSO operator is already installed and running"
+                log "  Installed CSV: $CURRENT_CSV"
+                log "  Current channel: ${EXISTING_CHANNEL:-unknown}"
+                log "  Status: $CSV_PHASE"
+            else
+                log "RH-SSO operator subscription exists but CSV is in phase: $CSV_PHASE"
+            fi
+        fi
+    fi
+fi
 
 if [ "$EXISTING_SUBSCRIPTION" = true ]; then
     # Update existing subscription if channel changed
     if [ -n "$EXISTING_CHANNEL" ] && [ "$EXISTING_CHANNEL" != "$CHANNEL" ]; then
         log "Updating subscription channel from '$EXISTING_CHANNEL' to '$CHANNEL'..."
-        oc patch subscription "$SUBSCRIPTION_NAME" -n "$NAMESPACE" --type merge -p "{\"spec\":{\"channel\":\"$CHANNEL\"}}" || error "Failed to update subscription channel"
+        oc patch subscription "$SUBSCRIPTION_NAME" -n "$OPERATOR_NAMESPACE" --type merge -p "{\"spec\":{\"channel\":\"$CHANNEL\"}}" || error "Failed to update subscription channel"
     else
         log "✓ Subscription already exists with channel: $CHANNEL"
     fi
 else
-    log "Creating Subscription..."
+    log "Creating Subscription '$SUBSCRIPTION_NAME' in namespace '$OPERATOR_NAMESPACE'..."
+    log "  Channel: $CHANNEL"
+    log "  Package: $OPERATOR_PACKAGE"
+    log "  Source: $OPERATOR_SOURCE"
+    
     cat <<EOF | oc apply -f -
 apiVersion: operators.coreos.com/v1alpha1
 kind: Subscription
 metadata:
   name: $SUBSCRIPTION_NAME
-  namespace: $NAMESPACE
+  namespace: $OPERATOR_NAMESPACE
 spec:
   channel: $CHANNEL
   name: $OPERATOR_PACKAGE
@@ -163,22 +161,30 @@ EOF
     log "✓ Subscription created"
 fi
 
-# Wait for CSV to be created and ready
+# Step 4: Verify the installation
 log ""
+log "Step 4: Verifying installation..."
+
+# Wait for CSV to be created and ready
 log "Waiting for operator CSV to be ready..."
 MAX_WAIT=600
 WAIT_COUNT=0
 CSV_READY=false
 
 while [ $WAIT_COUNT -lt $MAX_WAIT ]; do
-    CSV_NAME=$(oc get csv -n "$NAMESPACE" -o jsonpath='{.items[?(@.spec.displayName=="Keycloak Operator")].metadata.name}' 2>/dev/null || echo "")
+    # Try multiple methods to find the CSV
+    CSV_NAME=$(oc get csv -n "$OPERATOR_NAMESPACE" -o jsonpath='{.items[?(@.spec.displayName=="Red Hat Single Sign-On Operator")].metadata.name}' 2>/dev/null || echo "")
     
     if [ -z "$CSV_NAME" ]; then
-        CSV_NAME=$(oc get csv -n "$NAMESPACE" -o name 2>/dev/null | grep -i "keycloak-operator" | head -1 | sed 's|clusterserviceversion.operators.coreos.com/||' || echo "")
+        CSV_NAME=$(oc get csv -n "$OPERATOR_NAMESPACE" -o jsonpath='{.items[?(@.spec.displayName=="Keycloak Operator")].metadata.name}' 2>/dev/null || echo "")
+    fi
+    
+    if [ -z "$CSV_NAME" ]; then
+        CSV_NAME=$(oc get csv -n "$OPERATOR_NAMESPACE" -o name 2>/dev/null | grep -i "rhsso\|keycloak" | head -1 | sed 's|clusterserviceversion.operators.coreos.com/||' || echo "")
     fi
     
     if [ -n "$CSV_NAME" ]; then
-        CSV_PHASE=$(oc get csv "$CSV_NAME" -n "$NAMESPACE" -o jsonpath='{.status.phase}' 2>/dev/null || echo "")
+        CSV_PHASE=$(oc get csv "$CSV_NAME" -n "$OPERATOR_NAMESPACE" -o jsonpath='{.status.phase}' 2>/dev/null || echo "")
         
         if [ "$CSV_PHASE" = "Succeeded" ]; then
             CSV_READY=true
@@ -196,7 +202,20 @@ while [ $WAIT_COUNT -lt $MAX_WAIT ]; do
 done
 
 if [ "$CSV_READY" = false ]; then
-    error "CSV did not become ready within ${MAX_WAIT} seconds. Check operator status: oc get csv -n $NAMESPACE"
+    error "CSV did not become ready within ${MAX_WAIT} seconds. Check operator status: oc get csv -n $OPERATOR_NAMESPACE"
+fi
+
+# Check operator pods
+log ""
+log "Checking operator pods..."
+OPERATOR_PODS=$(oc get pods -n "$OPERATOR_NAMESPACE" | grep -i "keycloak\|rhsso" || echo "")
+if [ -n "$OPERATOR_PODS" ]; then
+    log "✓ Operator pods found:"
+    echo "$OPERATOR_PODS" | while read line; do
+        log "  $line"
+    done
+else
+    warning "No operator pods found (may still be starting)"
 fi
 
 # Wait for Keycloak CRD to be available
@@ -207,7 +226,8 @@ WAIT_COUNT=0
 CRD_READY=false
 
 while [ $WAIT_COUNT -lt $MAX_WAIT ]; do
-    if oc get crd keycloaks.k8s.keycloak.org 2>/dev/null; then
+    # Try both CRD names (v1alpha1 and v2alpha1)
+    if oc get crd keycloaks.keycloak.org 2>/dev/null || oc get crd keycloaks.k8s.keycloak.org 2>/dev/null; then
         CRD_READY=true
         log "✓ Keycloak CRD is available"
         break
@@ -222,24 +242,24 @@ fi
 
 # Check if Keycloak CR already exists
 log ""
-log "Checking for existing Keycloak CR..."
+log "Checking for existing Keycloak CR in namespace '$TARGET_NAMESPACE'..."
 
-if oc get keycloak "$KEYCLOAK_CR_NAME" -n "$NAMESPACE" >/dev/null 2>&1; then
+if oc get keycloak "$KEYCLOAK_CR_NAME" -n "$TARGET_NAMESPACE" >/dev/null 2>&1; then
     log "✓ Keycloak CR '$KEYCLOAK_CR_NAME' already exists"
     
     # Check status
-    KEYCLOAK_STATUS=$(oc get keycloak "$KEYCLOAK_CR_NAME" -n "$NAMESPACE" -o jsonpath='{.status.phase}' 2>/dev/null || echo "")
-    if [ "$KEYCLOAK_STATUS" = "reconciled" ]; then
+    KEYCLOAK_STATUS=$(oc get keycloak "$KEYCLOAK_CR_NAME" -n "$TARGET_NAMESPACE" -o jsonpath='{.status.phase}' 2>/dev/null || echo "")
+    if [ "$KEYCLOAK_STATUS" = "reconciled" ] || [ "$KEYCLOAK_STATUS" = "Ready" ]; then
         log "✓ Keycloak instance is ready"
         
         # Check for route
-        KEYCLOAK_ROUTE=$(oc get route keycloak -n "$NAMESPACE" -o jsonpath='{.spec.host}' 2>/dev/null || echo "")
+        KEYCLOAK_ROUTE=$(oc get route keycloak -n "$TARGET_NAMESPACE" -o jsonpath='{.spec.host}' 2>/dev/null || echo "")
         if [ -n "$KEYCLOAK_ROUTE" ]; then
             log ""
             log "========================================================="
-            log "Red Hat SSO (Keycloak) Installation Completed!"
+            log "Red Hat Single Sign-On Installation Completed!"
             log "========================================================="
-            log "Namespace: $NAMESPACE"
+            log "Namespace: $TARGET_NAMESPACE"
             log "Keycloak CR: $KEYCLOAK_CR_NAME"
             log "Status: Ready"
             log "Keycloak URL: https://$KEYCLOAK_ROUTE"
@@ -253,13 +273,20 @@ if oc get keycloak "$KEYCLOAK_CR_NAME" -n "$NAMESPACE" >/dev/null 2>&1; then
 else
     log "Creating Keycloak CR..."
     
-    # Create Keycloak CR - operator will automatically create route
+    # Determine API version based on available CRD
+    if oc get crd keycloaks.k8s.keycloak.org >/dev/null 2>&1; then
+        API_VERSION="k8s.keycloak.org/v2alpha1"
+    else
+        API_VERSION="keycloak.org/v1alpha1"
+    fi
+    
+    # Create Keycloak CR
     cat <<EOF | oc apply -f -
-apiVersion: k8s.keycloak.org/v2alpha1
+apiVersion: $API_VERSION
 kind: Keycloak
 metadata:
   name: $KEYCLOAK_CR_NAME
-  namespace: $NAMESPACE
+  namespace: $TARGET_NAMESPACE
   labels:
     app: sso
 spec:
@@ -276,9 +303,9 @@ WAIT_COUNT=0
 KEYCLOAK_READY=false
 
 while [ $WAIT_COUNT -lt $MAX_WAIT ]; do
-    KEYCLOAK_STATUS=$(oc get keycloak "$KEYCLOAK_CR_NAME" -n "$NAMESPACE" -o jsonpath='{.status.phase}' 2>/dev/null || echo "")
+    KEYCLOAK_STATUS=$(oc get keycloak "$KEYCLOAK_CR_NAME" -n "$TARGET_NAMESPACE" -o jsonpath='{.status.phase}' 2>/dev/null || echo "")
     
-    if [ "$KEYCLOAK_STATUS" = "reconciled" ]; then
+    if [ "$KEYCLOAK_STATUS" = "reconciled" ] || [ "$KEYCLOAK_STATUS" = "Ready" ]; then
         KEYCLOAK_READY=true
         log "✓ Keycloak instance is ready"
         break
@@ -296,7 +323,7 @@ done
 if [ "$KEYCLOAK_READY" = false ]; then
     warning "Keycloak did not become ready within ${MAX_WAIT} seconds"
     log "Current status:"
-    oc get keycloak "$KEYCLOAK_CR_NAME" -n "$NAMESPACE" -o yaml
+    oc get keycloak "$KEYCLOAK_CR_NAME" -n "$TARGET_NAMESPACE" -o yaml || true
     warning "Keycloak may still be installing. Check operator logs for details."
 fi
 
@@ -308,7 +335,7 @@ WAIT_COUNT=0
 ROUTE_READY=false
 
 while [ $WAIT_COUNT -lt $MAX_WAIT ]; do
-    KEYCLOAK_ROUTE=$(oc get route keycloak -n "$NAMESPACE" -o jsonpath='{.spec.host}' 2>/dev/null || echo "")
+    KEYCLOAK_ROUTE=$(oc get route keycloak -n "$TARGET_NAMESPACE" -o jsonpath='{.spec.host}' 2>/dev/null || echo "")
     
     if [ -n "$KEYCLOAK_ROUTE" ]; then
         ROUTE_READY=true
@@ -330,9 +357,9 @@ log "Checking for 'openshift' realm..."
 
 # Get admin credentials
 ADMIN_SECRET="credential-${KEYCLOAK_CR_NAME}"
-if oc get secret "$ADMIN_SECRET" -n "$NAMESPACE" >/dev/null 2>&1; then
-    ADMIN_USER=$(oc get secret "$ADMIN_SECRET" -n "$NAMESPACE" -o jsonpath='{.data.username}' 2>/dev/null | base64 -d 2>/dev/null || echo "")
-    ADMIN_PASS=$(oc get secret "$ADMIN_SECRET" -n "$NAMESPACE" -o jsonpath='{.data.password}' 2>/dev/null | base64 -d 2>/dev/null || echo "")
+if oc get secret "$ADMIN_SECRET" -n "$TARGET_NAMESPACE" >/dev/null 2>&1; then
+    ADMIN_USER=$(oc get secret "$ADMIN_SECRET" -n "$TARGET_NAMESPACE" -o jsonpath='{.data.username}' 2>/dev/null | base64 -d 2>/dev/null || echo "")
+    ADMIN_PASS=$(oc get secret "$ADMIN_SECRET" -n "$TARGET_NAMESPACE" -o jsonpath='{.data.password}' 2>/dev/null | base64 -d 2>/dev/null || echo "")
     
     if [ -n "$ADMIN_USER" ] && [ -n "$ADMIN_PASS" ] && [ -n "$KEYCLOAK_ROUTE" ]; then
         log "✓ Retrieved admin credentials"
@@ -398,9 +425,10 @@ fi
 # Final summary
 log ""
 log "========================================================="
-log "Red Hat SSO (Keycloak) Installation Completed!"
+log "Red Hat Single Sign-On Installation Completed!"
 log "========================================================="
-log "Namespace: $NAMESPACE"
+log "Operator Namespace: $OPERATOR_NAMESPACE"
+log "Target Namespace: $TARGET_NAMESPACE"
 log "Keycloak CR: $KEYCLOAK_CR_NAME"
 log "Status: ${KEYCLOAK_STATUS:-Installing}"
 
