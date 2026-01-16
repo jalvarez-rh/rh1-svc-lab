@@ -1,5 +1,191 @@
 = Data & AI
 
+[[sovereign-ai-overview]]
+
+== Sovereign AI: Bringing Intelligence to Your Data
+
+**AI Sovereignty** represents a critical evolution in how organizations approach artificial intelligence and machine learning. In an era where data privacy regulations are tightening, geopolitical tensions are reshaping technology supply chains, and organizations face increasing pressure to maintain control over their intellectual property, sovereign AI enables enterprises to build, train, and deploy AI models within their own controlled infrastructure—ensuring data never leaves your jurisdiction, models remain under your governance, and compliance requirements are met from the ground up.
+
+Traditional AI approaches often require sending sensitive data to external cloud providers, relying on third-party model training services, or depending on proprietary platforms that limit your ability to customize and control your AI infrastructure. This creates significant risks: data sovereignty violations, regulatory non-compliance, intellectual property exposure, and vendor lock-in that can limit your strategic flexibility.
+
+Red Hat OpenShift AI addresses these challenges by enabling you to run AI workloads on-premises or in your own cloud environments, bringing compute power directly to where your data resides. This approach ensures that:
+
+* **Data Residency**: Your training data, models, and inference workloads remain within your geographic boundaries and infrastructure
+* **Regulatory Compliance**: You maintain full control over data handling, meeting GDPR, HIPAA, and other regional compliance requirements
+* **Intellectual Property Protection**: Your proprietary models and data remain under your direct control, reducing exposure to external parties
+* **Operational Autonomy**: You can operate independently of external AI service providers, adapting to changing business and regulatory needs
+* **Cost Optimization**: By bringing AI compute to your data, you reduce data transfer costs and avoid vendor lock-in pricing models
+
+In this module, you will install Red Hat OpenShift AI and configure a DataScienceCluster that enables data scientists and developers to work with Jupyter notebooks, build machine learning pipelines, and deploy AI models—all while maintaining complete sovereignty over your data and infrastructure.
+
+[[openshift-ai-installation]]
+
+== Installing Red Hat OpenShift AI
+
+Before data scientists can begin working with Jupyter notebooks and building AI models, we need to install Red Hat OpenShift AI. This process involves two steps:
+
+1. Installing the OpenShift AI Operator (which provides the platform capabilities)
+2. Creating a DataScienceCluster custom resource (which configures and deploys the AI components)
+
+[[install-openshift-ai-operator]]
+
+=== Step 1: Install OpenShift AI Operator
+
+The first script installs the Red Hat OpenShift AI Operator, which provides the foundational platform for running AI workloads on OpenShift.
+
+*Procedure*
+
+[start=1]
+. Navigate to the acs-passthrough directory:
+
+[source,sh,role=execute]
+----
+cd ~/rh1-svc-lab/acs-passthrough
+----
+
+[start=2]
+. Run the OpenShift AI installation script:
+
+[source,sh,role=execute]
+----
+./09-install-openshift-ai.sh
+10-install-data-science-cluster.sh
+----
+
+[start=3]
+. Verify the installation completed successfully. You should see output indicating:
+
++
+[source,sh]
+----
+✓ CSV is ready: rhods-operator.vX.X.X
+✓ DataScienceCluster CRD is available
+----
+
+[start=4]
+. At the end of the script output, note the access information that will be displayed. This includes:
+* Dashboard URL (will be available after DataScienceCluster is created)
+* Username: admin
+* Password: {openshift_cluster_admin_password}
+
+
+[[install-datascience-cluster]]
+
+=== Step 2: Create DataScienceCluster
+
+Once the operator is installed, the second script creates a DataScienceCluster custom resource that configures and deploys the OpenShift AI components, including the dashboard and Jupyter notebook workbenches.
+
+*Procedure*
+
+[start=1]
+. Run the DataScienceCluster installation script:
+
+[source,sh,role=execute]
+----
+./10-install-data-science-cluster.sh
+----
+
+The script will:
+* Validate that the DataScienceCluster CRD exists (ensuring the operator is installed)
+* Create the `redhat-ods-applications` namespace
+* Create a DataScienceCluster CR named `default-dsc` with:
+** Dashboard component enabled (provides the web UI)
+** Workbenches component enabled (provides Jupyter notebook capabilities)
+** Other components set to "Removed" (can be enabled later as needed)
+* Wait for the DataScienceCluster to reach "Ready" status
+* Retrieve and display the dashboard route URL
+
+NOTE: The DataScienceCluster installation typically takes 10-15 minutes. The script will monitor the status and display progress updates every 60 seconds.
+
+[start=2]
+. Verify the installation completed successfully. You should see output indicating:
+
++
+[source,sh]
+----
+✓ DataScienceCluster is Ready
+Status: Ready
+----
+
+[start=3]
+. At the end of the script output, you will see the "OpenShift AI Access Information" section with:
+* Dashboard URL: `https://rhods-dashboard-redhat-ods-applications.apps.<cluster-domain>`
+* Username: admin
+* Password: OpenShift admin password
+
+IMPORTANT: Save the Dashboard URL, username, and password information. You will need these credentials to access the OpenShift AI dashboard and Jupyter notebooks in the next steps.
+
+[[verify-installation]]
+
+=== Verifying the Installation
+
+After both scripts complete, verify that OpenShift AI components are running:
+
+*Procedure*
+
+[start=1]
+. Check that the DataScienceCluster is Ready:
+
+[source,sh,role=execute]
+----
+oc get datasciencecluster default-dsc -n redhat-ods-applications
+----
+
+[start=2]
+. Verify the dashboard route exists:
+
+[source,sh,role=execute]
+----
+oc get route rhods-dashboard -n redhat-ods-applications
+----
+
+[start=3]
+. Check that the dashboard pod is running:
+
+[source,sh,role=execute]
+----
+oc get pods -n redhat-ods-applications -l app=odh-dashboard
+----
+
+You should see a pod in "Running" status.
+
+[[jupyter-notebooks-access]]
+
+== Accessing Jupyter Notebooks
+
+With OpenShift AI installed and the DataScienceCluster configured, data scientists can now access Jupyter notebooks through the OpenShift AI dashboard. The workbenches component provides a self-service environment where users can create and manage Jupyter notebook servers.
+
+*Procedure*
+
+[start=1]
+. Open the OpenShift AI Dashboard using the URL provided at the end of the installation script (or retrieve it with):
+
+[source,sh,role=execute]
+----
+oc get route rhods-dashboard -n redhat-ods-applications -o jsonpath='{.spec.host}'
+----
+
+[start=2]
+. Log in to the dashboard using:
+* Username: `admin`
+* Password: Your OpenShift admin password
+
+[start=3]
+. Once logged in, navigate to the *Applications* -> *Enabled* section to see available components
+
+[start=4]
+. To create a Jupyter notebook server:
+.. Click on *Applications* -> *Enabled* -> *Jupyter*
+.. Click *Create workbench*
+.. Select a notebook image (e.g., "Standard Data Science" or "Minimal Python")
+.. Configure the notebook server resources (CPU, memory) as needed
+.. Click *Create* to launch your notebook server
+
+[start=5]
+. Once your notebook server is running, click *Open* to access your Jupyter environment
+
+NOTE: The first time you create a workbench, it may take a few minutes to pull the container image and start the server. Subsequent starts will be faster.
+
 [[data-pipeline]]
 
 == Create Simple Data Pipeline Across Environments
