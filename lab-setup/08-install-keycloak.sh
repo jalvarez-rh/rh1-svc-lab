@@ -60,7 +60,7 @@ log ""
 # Configuration
 NAMESPACE="rhsso"
 KEYCLOAK_CR_NAME="keycloak"
-OPERATOR_PACKAGE="redhat-sso-operator"
+OPERATOR_PACKAGE="rhbk-operator"
 
 # Ensure namespace exists
 log "Ensuring namespace '$NAMESPACE' exists..."
@@ -207,10 +207,10 @@ WAIT_COUNT=0
 CSV_READY=false
 
 while [ $WAIT_COUNT -lt $MAX_WAIT ]; do
-    CSV_NAME=$(oc get csv -n "$NAMESPACE" -o jsonpath='{.items[?(@.spec.displayName=="Red Hat Single Sign-On Operator")].metadata.name}' 2>/dev/null || echo "")
+    CSV_NAME=$(oc get csv -n "$NAMESPACE" -o jsonpath='{.items[?(@.spec.displayName=="Red Hat build of Keycloak Operator")].metadata.name}' 2>/dev/null || echo "")
     
     if [ -z "$CSV_NAME" ]; then
-        CSV_NAME=$(oc get csv -n "$NAMESPACE" -o name 2>/dev/null | grep -i "redhat-sso\|keycloak" | head -1 | sed 's|clusterserviceversion.operators.coreos.com/||' || echo "")
+        CSV_NAME=$(oc get csv -n "$NAMESPACE" -o name 2>/dev/null | grep -i "rhbk-operator\|keycloak" | head -1 | sed 's|clusterserviceversion.operators.coreos.com/||' || echo "")
     fi
     
     if [ -n "$CSV_NAME" ]; then
@@ -243,7 +243,7 @@ WAIT_COUNT=0
 CRD_READY=false
 
 while [ $WAIT_COUNT -lt $MAX_WAIT ]; do
-    if oc get crd keycloaks.keycloak.org 2>/dev/null; then
+    if oc get crd keycloaks.k8s.keycloak.org 2>/dev/null; then
         CRD_READY=true
         log "✓ Keycloak CRD is available"
         break
@@ -289,9 +289,9 @@ if oc get keycloak "$KEYCLOAK_CR_NAME" -n "$NAMESPACE" >/dev/null 2>&1; then
 else
     log "Creating Keycloak CR..."
     
-    # Create Keycloak CR with external access enabled
+    # Create Keycloak CR - operator will automatically create route
     cat <<EOF | oc apply -f -
-apiVersion: keycloak.org/v1alpha1
+apiVersion: k8s.keycloak.org/v2alpha1
 kind: Keycloak
 metadata:
   name: $KEYCLOAK_CR_NAME
@@ -300,8 +300,6 @@ metadata:
     app: sso
 spec:
   instances: 1
-  externalAccess:
-    enabled: true
 EOF
     log "✓ Keycloak CR created"
 fi
