@@ -86,21 +86,15 @@ if oc get datasciencecluster "$DSC_CR_NAME" -n "$DSC_NAMESPACE" >/dev/null 2>&1;
     DSC_STATUS=$(oc get datasciencecluster "$DSC_CR_NAME" -n "$DSC_NAMESPACE" -o jsonpath='{.status.phase}' 2>/dev/null || echo "")
     if [ "$DSC_STATUS" = "Ready" ]; then
         log "✓ DataScienceCluster is Ready"
-        log ""
-        log "========================================================="
-        log "DataScienceCluster Installation Completed!"
-        log "========================================================="
-        log "Namespace: $DSC_NAMESPACE"
-        log "DataScienceCluster CR: $DSC_CR_NAME"
-        log "Status: Ready"
-        log "========================================================="
-        exit 0
+        DSC_READY=true
     else
         log "DataScienceCluster exists but status is: ${DSC_STATUS:-Unknown}"
         log "Waiting for it to become ready..."
+        DSC_READY=false
     fi
 else
     log "Creating DataScienceCluster CR..."
+    DSC_READY=false
     
     # Create DataScienceCluster CR with components enabled
     # Dashboard and workbenches are enabled by default
@@ -144,49 +138,54 @@ EOF
 fi
 
 # Wait for DataScienceCluster to be ready
-log ""
-log "Waiting for DataScienceCluster to become ready..."
-MAX_WAIT=900
-WAIT_COUNT=0
-DSC_READY=false
+if [ "$DSC_READY" != "true" ]; then
+    log ""
+    log "Waiting for DataScienceCluster to become ready..."
+    MAX_WAIT=900
+    WAIT_COUNT=0
+    DSC_READY=false
 
-while [ $WAIT_COUNT -lt $MAX_WAIT ]; do
-    DSC_STATUS=$(oc get datasciencecluster "$DSC_CR_NAME" -n "$DSC_NAMESPACE" -o jsonpath='{.status.phase}' 2>/dev/null || echo "")
-    
-    if [ "$DSC_STATUS" = "Ready" ]; then
-        DSC_READY=true
-        log "✓ DataScienceCluster is Ready"
-        break
-    fi
-    
-    if [ $((WAIT_COUNT % 60)) -eq 0 ] && [ $WAIT_COUNT -gt 0 ]; then
-        log "  Still waiting... (${WAIT_COUNT}s/${MAX_WAIT}s)"
-        log "  Current status: ${DSC_STATUS:-Unknown}"
+    while [ $WAIT_COUNT -lt $MAX_WAIT ]; do
+        DSC_STATUS=$(oc get datasciencecluster "$DSC_CR_NAME" -n "$DSC_NAMESPACE" -o jsonpath='{.status.phase}' 2>/dev/null || echo "")
         
-        # Show component status
-        INSTALLED_COMPONENTS=$(oc get datasciencecluster "$DSC_CR_NAME" -n "$DSC_NAMESPACE" -o jsonpath='{range .status.installedComponents}{@}{"\n"}{end}' 2>/dev/null || echo "")
-        if [ -n "$INSTALLED_COMPONENTS" ]; then
-            log "  Installed components:"
-            echo "$INSTALLED_COMPONENTS" | while read -r component; do
-                log "    - $component"
-            done
+        if [ "$DSC_STATUS" = "Ready" ]; then
+            DSC_READY=true
+            log "✓ DataScienceCluster is Ready"
+            break
         fi
-    fi
-    
-    sleep 10
-    WAIT_COUNT=$((WAIT_COUNT + 10))
-done
+        
+        if [ $((WAIT_COUNT % 60)) -eq 0 ] && [ $WAIT_COUNT -gt 0 ]; then
+            log "  Still waiting... (${WAIT_COUNT}s/${MAX_WAIT}s)"
+            log "  Current status: ${DSC_STATUS:-Unknown}"
+            
+            # Show component status
+            INSTALLED_COMPONENTS=$(oc get datasciencecluster "$DSC_CR_NAME" -n "$DSC_NAMESPACE" -o jsonpath='{range .status.installedComponents}{@}{"\n"}{end}' 2>/dev/null || echo "")
+            if [ -n "$INSTALLED_COMPONENTS" ]; then
+                log "  Installed components:"
+                echo "$INSTALLED_COMPONENTS" | while read -r component; do
+                    log "    - $component"
+                done
+            fi
+        fi
+        
+        sleep 10
+        WAIT_COUNT=$((WAIT_COUNT + 10))
+    done
 
-if [ "$DSC_READY" = false ]; then
-    warning "DataScienceCluster did not become ready within ${MAX_WAIT} seconds"
-    log "Current status:"
-    oc get datasciencecluster "$DSC_CR_NAME" -n "$DSC_NAMESPACE" -o yaml | head -50
-    warning "DataScienceCluster may still be installing. Check operator logs for details."
+    if [ "$DSC_READY" = false ]; then
+        warning "DataScienceCluster did not become ready within ${MAX_WAIT} seconds"
+        log "Current status:"
+        oc get datasciencecluster "$DSC_CR_NAME" -n "$DSC_NAMESPACE" -o yaml | head -50
+        warning "DataScienceCluster may still be installing. Check operator logs for details."
+    fi
 fi
 
-# Get component status
+# Get component status and refresh DSC_STATUS
 log ""
 log "Retrieving component status..."
+
+# Refresh status
+DSC_STATUS=$(oc get datasciencecluster "$DSC_CR_NAME" -n "$DSC_NAMESPACE" -o jsonpath='{.status.phase}' 2>/dev/null || echo "")
 
 # Try to get dashboard route - check for rhods-dashboard first, then fallback to odh-dashboard
 DASHBOARD_ROUTE=$(oc get route rhods-dashboard -n "$DSC_NAMESPACE" -o jsonpath='{.spec.host}' 2>/dev/null || echo "")
