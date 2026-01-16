@@ -115,12 +115,13 @@ metadata:
   name: rhsso-operator-group
   namespace: $NAMESPACE
 spec:
-  targetNamespaces: []
+  targetNamespaces:
+    - $NAMESPACE
 EOF
 then
     error "Failed to create OperatorGroup"
 fi
-log "✓ OperatorGroup created successfully (AllNamespaces mode)"
+log "✓ OperatorGroup created successfully (targeting namespace: $NAMESPACE)"
 
 # Step 3: Create or verify CatalogSource
 log ""
