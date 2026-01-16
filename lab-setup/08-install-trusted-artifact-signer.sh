@@ -53,9 +53,10 @@ metadata:
 spec:
   channel: stable
   installPlanApproval: Automatic
-  name: trusted-artifact-signer
+  name: rhtas-operator
   source: redhat-operators
   sourceNamespace: openshift-marketplace
+  startingCSV: rhtas-operator.v1.3.1
 EOF
 
 # Wait for RHTAS Operator to be ready

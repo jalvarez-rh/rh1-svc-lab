@@ -132,7 +132,36 @@ if [ ${#FAILED_SCRIPTS[@]} -eq 0 ]; then
         fi
         
         # Get admin password from secret
-        ADMIN_PASSWORD_B64=$(oc get secret central-htpasswd -n "$RHACS_NAMESPACE" -o jsonpath='{.data.password}' 2>/dev/null || echo "")
+        ADMIN_PASSWORD_B64=""
+        if oc get secret central-htpasswd -n "$RHACS_NAMESPACE" >/dev/null 2>&1; then
+            # Secret exists, try to extract password
+            ADMIN_PASSWORD_B64=$(oc get secret central-htpasswd -n "$RHACS_NAMESPACE" -o jsonpath='{.data.password}' 2>/dev/null || echo "")
+            
+            # If password key not found, try alternative key names
+            if [ -z "$ADMIN_PASSWORD_B64" ]; then
+                ADMIN_PASSWORD_B64=$(oc get secret central-htpasswd -n "$RHACS_NAMESPACE" -o jsonpath='{.data.adminPassword}' 2>/dev/null || echo "")
+            fi
+            
+            # If still not found, try to get all keys and use the first one
+            if [ -z "$ADMIN_PASSWORD_B64" ]; then
+                SECRET_DATA=$(oc get secret central-htpasswd -n "$RHACS_NAMESPACE" -o json 2>/dev/null || echo "")
+                if [ -n "$SECRET_DATA" ] && command -v jq >/dev/null 2>&1; then
+                    FIRST_KEY=$(echo "$SECRET_DATA" | jq -r '.data | keys[0]' 2>/dev/null || echo "")
+                    if [ -n "$FIRST_KEY" ] && [ "$FIRST_KEY" != "null" ]; then
+                        ADMIN_PASSWORD_B64=$(echo "$SECRET_DATA" | jq -r ".data.$FIRST_KEY" 2>/dev/null || echo "")
+                    fi
+                fi
+            fi
+            
+            # If still not found, try environment variable as fallback
+            if [ -z "$ADMIN_PASSWORD_B64" ] && [ -n "$ACS_PORTAL_PASSWORD" ]; then
+                ADMIN_PASSWORD_B64="$ACS_PORTAL_PASSWORD"
+            fi
+        elif [ -n "$ACS_PORTAL_PASSWORD" ]; then
+            # Secret doesn't exist but environment variable is available
+            ADMIN_PASSWORD_B64="$ACS_PORTAL_PASSWORD"
+        fi
+        
         if [ -n "$ADMIN_PASSWORD_B64" ]; then
             ADMIN_PASSWORD=$(echo "$ADMIN_PASSWORD_B64" | base64 -d 2>/dev/null || echo "")
             if [ -n "$ADMIN_PASSWORD" ]; then
@@ -142,7 +171,7 @@ if [ ${#FAILED_SCRIPTS[@]} -eq 0 ]; then
                 log "Admin Password: Could not decode password from secret"
             fi
         else
-            log "Admin Password: Not found (secret 'central-htpasswd' not found in namespace '$RHACS_NAMESPACE')"
+            log "Admin Password: Not found (secret 'central-htpasswd' not accessible in namespace '$RHACS_NAMESPACE' and ACS_PORTAL_PASSWORD not set)"
         fi
     fi
     
