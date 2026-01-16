@@ -102,3 +102,11 @@ if [ -n "$CENTRAL_ROUTE_HOST" ]; then
 fi
 log "========================================================="
 log ""
+
+
+# Scale down operator to stop reconciliation
+oc scale deployment/central -n stackrox --replicas=0
+sleep 60  # wait for it to stop
+
+# Edit route to passthrough
+oc -n stackrox edit route central 
