@@ -188,7 +188,11 @@ fi
 log ""
 log "Retrieving component status..."
 
-DASHBOARD_ROUTE=$(oc get route -n "$DSC_NAMESPACE" -l app=odh-dashboard -o jsonpath='{.items[0].spec.host}' 2>/dev/null || echo "")
+# Try to get dashboard route - check for rhods-dashboard first, then fallback to odh-dashboard
+DASHBOARD_ROUTE=$(oc get route rhods-dashboard -n "$DSC_NAMESPACE" -o jsonpath='{.spec.host}' 2>/dev/null || echo "")
+if [ -z "$DASHBOARD_ROUTE" ]; then
+    DASHBOARD_ROUTE=$(oc get route -n "$DSC_NAMESPACE" -l app=odh-dashboard -o jsonpath='{.items[0].spec.host}' 2>/dev/null || echo "")
+fi
 
 # Get installed components
 INSTALLED_COMPONENTS=$(oc get datasciencecluster "$DSC_CR_NAME" -n "$DSC_NAMESPACE" -o jsonpath='{.status.installedComponents}' 2>/dev/null || echo "{}")
@@ -226,12 +230,9 @@ log "========================================================="
 if [ -n "$DASHBOARD_ROUTE" ]; then
     log "Dashboard URL: https://$DASHBOARD_ROUTE"
 fi
-if [ -n "$OPENSHIFT_CONSOLE_URL" ]; then
-    log "OpenShift Console: $OPENSHIFT_CONSOLE_URL"
-fi
 if [ -n "$CURRENT_USER" ]; then
-    log "Username: $CURRENT_USER"
+    log "Username: admin"
 fi
-log "Password: Use your OpenShift cluster credentials"
+log "Password: OpenShift admin password"
 log "========================================================="
 log ""
