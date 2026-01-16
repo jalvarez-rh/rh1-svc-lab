@@ -58,9 +58,12 @@ log "Prerequisites validated successfully"
 log ""
 
 # Configuration
-NAMESPACE="rhsso"
+NAMESPACE="keycloak-operator"
 KEYCLOAK_CR_NAME="keycloak"
 OPERATOR_PACKAGE="rhbk-operator"
+OPERATOR_GROUP_NAME="rhbk-operator-group"
+SUBSCRIPTION_NAME="rhbk-operator"
+CHANNEL="stable-v26"
 
 # Ensure namespace exists
 log "Ensuring namespace '$NAMESPACE' exists..."
@@ -76,10 +79,10 @@ log "Checking Red Hat SSO operator status..."
 
 EXISTING_SUBSCRIPTION=false
 
-if oc get subscription.operators.coreos.com "$OPERATOR_PACKAGE" -n "$NAMESPACE" >/dev/null 2>&1; then
+if oc get subscription.operators.coreos.com "$SUBSCRIPTION_NAME" -n "$NAMESPACE" >/dev/null 2>&1; then
     EXISTING_SUBSCRIPTION=true
-    CURRENT_CSV=$(oc get subscription.operators.coreos.com "$OPERATOR_PACKAGE" -n "$NAMESPACE" -o jsonpath='{.status.currentCSV}' 2>/dev/null || echo "")
-    EXISTING_CHANNEL=$(oc get subscription.operators.coreos.com "$OPERATOR_PACKAGE" -n "$NAMESPACE" -o jsonpath='{.spec.channel}' 2>/dev/null || echo "")
+    CURRENT_CSV=$(oc get subscription.operators.coreos.com "$SUBSCRIPTION_NAME" -n "$NAMESPACE" -o jsonpath='{.status.currentCSV}' 2>/dev/null || echo "")
+    EXISTING_CHANNEL=$(oc get subscription.operators.coreos.com "$SUBSCRIPTION_NAME" -n "$NAMESPACE" -o jsonpath='{.spec.channel}' 2>/dev/null || echo "")
     
     if [ -n "$CURRENT_CSV" ] && [ "$CURRENT_CSV" != "null" ]; then
         if oc get csv "$CURRENT_CSV" -n "$NAMESPACE" >/dev/null 2>&1; then
@@ -103,65 +106,25 @@ else
     log "Red Hat SSO operator not found, proceeding with installation..."
 fi
 
-# Determine preferred channel
-log ""
-log "Determining available channel for Red Hat SSO operator..."
-
-CHANNEL=""
-if oc get packagemanifest "$OPERATOR_PACKAGE" -n openshift-marketplace >/dev/null 2>&1; then
-    AVAILABLE_CHANNELS=$(oc get packagemanifest "$OPERATOR_PACKAGE" -n openshift-marketplace -o jsonpath='{.status.channels[*].name}' 2>/dev/null || echo "")
-    
-    if [ -n "$AVAILABLE_CHANNELS" ]; then
-        log "Available channels: $AVAILABLE_CHANNELS"
-        
-        # Prefer stable channel
-        PREFERRED_CHANNELS=("stable" "7.6" "7.5" "7.4")
-        
-        for pref_channel in "${PREFERRED_CHANNELS[@]}"; do
-            if echo "$AVAILABLE_CHANNELS" | grep -q "\b$pref_channel\b"; then
-                CHANNEL="$pref_channel"
-                log "✓ Selected channel: $CHANNEL"
-                break
-            fi
-        done
-        
-        # If no preferred channel found, use the first available channel
-        if [ -z "$CHANNEL" ]; then
-            CHANNEL=$(echo "$AVAILABLE_CHANNELS" | awk '{print $1}')
-            log "✓ Using first available channel: $CHANNEL"
-        fi
-    else
-        warning "Could not determine available channels from packagemanifest"
-    fi
-else
-    warning "Package manifest not found in catalog (may still be syncing)"
-fi
-
-# Fallback to default channel if we couldn't determine it
-if [ -z "$CHANNEL" ]; then
-    CHANNEL="stable"
-    log "Using default channel: $CHANNEL"
-fi
-
 # Create or update OperatorGroup
 log ""
 log "Ensuring OperatorGroup exists..."
 
-EXISTING_OG=$(oc get operatorgroup -n "$NAMESPACE" -o jsonpath='{.items[0].metadata.name}' 2>/dev/null || echo "")
+EXISTING_OG=$(oc get operatorgroup "$OPERATOR_GROUP_NAME" -n "$NAMESPACE" 2>/dev/null || echo "")
 
 if [ -n "$EXISTING_OG" ]; then
-    log "✓ OperatorGroup already exists: $EXISTING_OG"
+    log "✓ OperatorGroup already exists: $OPERATOR_GROUP_NAME"
 else
     log "Creating OperatorGroup..."
     cat <<EOF | oc apply -f -
 apiVersion: operators.coreos.com/v1
 kind: OperatorGroup
 metadata:
-  name: rhsso-operator-group
+  name: $OPERATOR_GROUP_NAME
   namespace: $NAMESPACE
 spec:
   targetNamespaces:
-    - $NAMESPACE
+  - $NAMESPACE
 EOF
     log "✓ OperatorGroup created"
 fi
@@ -177,7 +140,7 @@ if [ "$EXISTING_SUBSCRIPTION" = true ]; then
     # Update existing subscription if channel changed
     if [ -n "$EXISTING_CHANNEL" ] && [ "$EXISTING_CHANNEL" != "$CHANNEL" ]; then
         log "Updating subscription channel from '$EXISTING_CHANNEL' to '$CHANNEL'..."
-        oc patch subscription "$OPERATOR_PACKAGE" -n "$NAMESPACE" --type merge -p "{\"spec\":{\"channel\":\"$CHANNEL\"}}" || error "Failed to update subscription channel"
+        oc patch subscription "$SUBSCRIPTION_NAME" -n "$NAMESPACE" --type merge -p "{\"spec\":{\"channel\":\"$CHANNEL\"}}" || error "Failed to update subscription channel"
     else
         log "✓ Subscription already exists with channel: $CHANNEL"
     fi
@@ -187,14 +150,14 @@ else
 apiVersion: operators.coreos.com/v1alpha1
 kind: Subscription
 metadata:
-  name: $OPERATOR_PACKAGE
+  name: $SUBSCRIPTION_NAME
   namespace: $NAMESPACE
 spec:
   channel: $CHANNEL
-  installPlanApproval: Automatic
   name: $OPERATOR_PACKAGE
   source: redhat-operators
   sourceNamespace: openshift-marketplace
+  installPlanApproval: Automatic
 EOF
     log "✓ Subscription created"
 fi
