@@ -229,25 +229,54 @@ else
     log "No operator pods found"
 fi
 
-# Step 7: Delete namespace (this will cascade delete remaining resources)
+# Step 7: Delete Keycloak CR(s)
 log ""
 log "========================================================="
-log "Step 7: Deleting namespace"
+log "Step 7: Deleting Keycloak CR(s)"
+log "========================================================="
+log ""
+
+KEYCLOAK_CRS=$(oc get keycloak -n $NAMESPACE -o name 2>/dev/null || echo "")
+
+if [ -n "$KEYCLOAK_CRS" ]; then
+    log "Found Keycloak CR(s), deleting..."
+    echo "$KEYCLOAK_CRS" | while read -r cr; do
+        CR_NAME=$(echo "$cr" | sed 's|keycloak.keycloak.org/||')
+        log "  Deleting Keycloak CR: $CR_NAME"
+        oc delete "$cr" -n $NAMESPACE --ignore-not-found=true || warning "Failed to delete $CR_NAME"
+    done
+    log "✓ Keycloak CR(s) deletion initiated"
+    
+    # Wait for Keycloak CRs to be deleted
+    log "Waiting for Keycloak CR(s) to be deleted..."
+    MAX_WAIT=120
+    WAIT_COUNT=0
+    while [ $WAIT_COUNT -lt $MAX_WAIT ]; do
+        REMAINING_CRS=$(oc get keycloak -n $NAMESPACE -o name 2>/dev/null || echo "")
+        if [ -z "$REMAINING_CRS" ]; then
+            log "✓ All Keycloak CR(s) deleted"
+            break
+        fi
+        sleep 2
+        WAIT_COUNT=$((WAIT_COUNT + 2))
+    done
+    
+    if [ -n "$(oc get keycloak -n $NAMESPACE -o name 2>/dev/null || echo "")" ]; then
+        warning "Some Keycloak CR(s) still exist after ${MAX_WAIT} seconds. They may have finalizers."
+    fi
+else
+    log "No Keycloak CR(s) found (may already be deleted)"
+fi
+
+# Step 8: Delete namespace (this will cascade delete remaining resources)
+log ""
+log "========================================================="
+log "Step 8: Deleting namespace"
 log "========================================================="
 log ""
 
 log "Deleting namespace '$NAMESPACE' (this will delete all remaining resources)..."
-log "Warning: This will delete ALL resources in the namespace, including any Keycloak instances!"
-
-# Check if there are any Keycloak CRs before deleting
-KEYCLOAK_CRS=$(oc get keycloak -n $NAMESPACE -o name 2>/dev/null || echo "")
-if [ -n "$KEYCLOAK_CRS" ]; then
-    warning "Found Keycloak CR(s) in namespace:"
-    echo "$KEYCLOAK_CRS" | while read -r cr; do
-        warning "  - $cr"
-    done
-    warning "These will be deleted along with the namespace."
-fi
+log "Warning: This will delete ALL resources in the namespace!"
 
 # Delete the namespace
 if oc delete namespace $NAMESPACE --ignore-not-found=true; then
@@ -323,6 +352,7 @@ log "RHSSO Operator uninstallation completed!"
 log "========================================================="
 log ""
 log "Summary:"
+log "  - Keycloak CR(s): Deleted"
 log "  - Subscription: Deleted"
 log "  - CSV: Deleted"
 log "  - InstallPlan: Deleted"

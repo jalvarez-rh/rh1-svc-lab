@@ -334,15 +334,137 @@ if [ -n "$CSV_NAME" ]; then
 fi
 log "========================================================="
 log ""
-log "Next steps:"
-log "  1. Create a Keycloak CR to deploy a Keycloak instance"
-log "  2. Example: oc apply -f - <<EOF"
-log "     apiVersion: keycloak.org/v1alpha1"
-log "     kind: Keycloak"
-log "     metadata:"
-log "       name: example-keycloak"
-log "       namespace: $NAMESPACE"
-log "     spec:"
-log "       instances: 1"
-log "     EOF"
+
+# Step 8: Deploy Keycloak instance
+log ""
+log "========================================================="
+log "Step 8: Deploying Keycloak instance"
+log "========================================================="
+log ""
+
+KEYCLOAK_CR_NAME="rhsso-instance"
+
+# Check if Keycloak CR already exists
+if oc get keycloak $KEYCLOAK_CR_NAME -n $NAMESPACE >/dev/null 2>&1; then
+    log "Keycloak CR '$KEYCLOAK_CR_NAME' already exists"
+    
+    # Check if it's ready
+    KEYCLOAK_READY=$(oc get keycloak $KEYCLOAK_CR_NAME -n $NAMESPACE -o jsonpath='{.status.ready}' 2>/dev/null || echo "false")
+    KEYCLOAK_PHASE=$(oc get keycloak $KEYCLOAK_CR_NAME -n $NAMESPACE -o jsonpath='{.status.phase}' 2>/dev/null || echo "")
+    
+    if [ "$KEYCLOAK_READY" = "true" ]; then
+        log "✓ Keycloak instance is already ready"
+        KEYCLOAK_EXTERNAL_URL=$(oc get keycloak $KEYCLOAK_CR_NAME -n $NAMESPACE -o jsonpath='{.status.externalURL}' 2>/dev/null || echo "")
+        if [ -n "$KEYCLOAK_EXTERNAL_URL" ]; then
+            log "  External URL: $KEYCLOAK_EXTERNAL_URL"
+        fi
+    else
+        log "Keycloak instance exists but is not ready yet (phase: ${KEYCLOAK_PHASE:-unknown})"
+        log "Waiting for it to become ready..."
+    fi
+else
+    log "Creating Keycloak CR '$KEYCLOAK_CR_NAME'..."
+    
+    if ! cat <<EOF | oc apply -f -
+apiVersion: keycloak.org/v1alpha1
+kind: Keycloak
+metadata:
+  name: $KEYCLOAK_CR_NAME
+  namespace: $NAMESPACE
+  labels:
+    app: sso
+spec:
+  externalAccess:
+    enabled: true
+  instances: 1
+EOF
+    then
+        error "Failed to create Keycloak CR"
+    fi
+    log "✓ Keycloak CR created successfully"
+fi
+
+# Wait for Keycloak instance to be ready
+log ""
+log "Waiting for Keycloak instance to be ready..."
+MAX_WAIT=600
+WAIT_COUNT=0
+KEYCLOAK_READY=false
+
+while [ $WAIT_COUNT -lt $MAX_WAIT ]; do
+    KEYCLOAK_READY_STATUS=$(oc get keycloak $KEYCLOAK_CR_NAME -n $NAMESPACE -o jsonpath='{.status.ready}' 2>/dev/null || echo "false")
+    KEYCLOAK_PHASE=$(oc get keycloak $KEYCLOAK_CR_NAME -n $NAMESPACE -o jsonpath='{.status.phase}' 2>/dev/null || echo "")
+    
+    if [ "$KEYCLOAK_READY_STATUS" = "true" ]; then
+        KEYCLOAK_READY=true
+        log "✓ Keycloak instance is ready"
+        break
+    fi
+    
+    # Show progress every 30 seconds
+    if [ $((WAIT_COUNT % 30)) -eq 0 ] && [ $WAIT_COUNT -gt 0 ]; then
+        log "  Progress check (${WAIT_COUNT}s/${MAX_WAIT}s):"
+        log "  Phase: ${KEYCLOAK_PHASE:-unknown}"
+        log "  Ready: ${KEYCLOAK_READY_STATUS:-false}"
+        
+        # Show pod status
+        KEYCLOAK_PODS=$(oc get pods -n $NAMESPACE -l app=keycloak -o jsonpath='{.items[*].status.phase}' 2>/dev/null || echo "")
+        if [ -n "$KEYCLOAK_PODS" ]; then
+            log "  Keycloak pods: $KEYCLOAK_PODS"
+        fi
+        log ""
+    fi
+    
+    sleep 5
+    WAIT_COUNT=$((WAIT_COUNT + 5))
+done
+
+if [ "$KEYCLOAK_READY" = false ]; then
+    warning "Keycloak instance did not become ready within ${MAX_WAIT} seconds"
+    log "Current status:"
+    oc get keycloak $KEYCLOAK_CR_NAME -n $NAMESPACE
+    warning "Keycloak may still be installing. Check status with: oc get keycloak $KEYCLOAK_CR_NAME -n $NAMESPACE"
+else
+    log "✓ Keycloak instance is ready"
+fi
+
+# Get Keycloak URLs and credentials
+log ""
+log "Retrieving Keycloak access information..."
+
+KEYCLOAK_EXTERNAL_URL=$(oc get keycloak $KEYCLOAK_CR_NAME -n $NAMESPACE -o jsonpath='{.status.externalURL}' 2>/dev/null || echo "")
+KEYCLOAK_INTERNAL_URL=$(oc get keycloak $KEYCLOAK_CR_NAME -n $NAMESPACE -o jsonpath='{.status.internalURL}' 2>/dev/null || echo "")
+KEYCLOAK_CREDENTIAL_SECRET=$(oc get keycloak $KEYCLOAK_CR_NAME -n $NAMESPACE -o jsonpath='{.status.credentialSecret}' 2>/dev/null || echo "")
+
+KEYCLOAK_USERNAME=""
+KEYCLOAK_PASSWORD=""
+
+if [ -n "$KEYCLOAK_CREDENTIAL_SECRET" ]; then
+    KEYCLOAK_USERNAME=$(oc get secret $KEYCLOAK_CREDENTIAL_SECRET -n $NAMESPACE -o jsonpath='{.data.username}' 2>/dev/null | base64 -d 2>/dev/null || echo "")
+    KEYCLOAK_PASSWORD=$(oc get secret $KEYCLOAK_CREDENTIAL_SECRET -n $NAMESPACE -o jsonpath='{.data.password}' 2>/dev/null | base64 -d 2>/dev/null || echo "")
+fi
+
+log ""
+log "========================================================="
+log "Keycloak Installation Summary"
+log "========================================================="
+log "Namespace: $NAMESPACE"
+log "Keycloak CR: $KEYCLOAK_CR_NAME"
+log "Status: Ready"
+log ""
+if [ -n "$KEYCLOAK_EXTERNAL_URL" ]; then
+    log "External URL: $KEYCLOAK_EXTERNAL_URL"
+fi
+if [ -n "$KEYCLOAK_INTERNAL_URL" ]; then
+    log "Internal URL: $KEYCLOAK_INTERNAL_URL"
+fi
+if [ -n "$KEYCLOAK_USERNAME" ] && [ -n "$KEYCLOAK_PASSWORD" ]; then
+    log "Username: $KEYCLOAK_USERNAME"
+    log "Password: $KEYCLOAK_PASSWORD"
+elif [ -n "$KEYCLOAK_CREDENTIAL_SECRET" ]; then
+    log "Credentials: Stored in secret '$KEYCLOAK_CREDENTIAL_SECRET'"
+    log "  To retrieve: oc get secret $KEYCLOAK_CREDENTIAL_SECRET -n $NAMESPACE -o jsonpath='{.data.username}' | base64 -d"
+    log "  To retrieve: oc get secret $KEYCLOAK_CREDENTIAL_SECRET -n $NAMESPACE -o jsonpath='{.data.password}' | base64 -d"
+fi
+log "========================================================="
 log ""
