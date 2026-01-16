@@ -59,7 +59,7 @@ log ""
 
 # Configuration
 TARGET_NAMESPACE="rhsso"
-OPERATOR_NAMESPACE="openshift-operators"  # Operator subscription goes here (has global OperatorGroup)
+OPERATOR_NAMESPACE="rhsso"  # Operator must be installed in target namespace (SingleNamespace mode only)
 OPERATOR_GROUP_NAME="rhsso-og"
 SUBSCRIPTION_NAME="rhsso-operator"
 OPERATOR_PACKAGE="rhsso-operator"
@@ -77,20 +77,16 @@ else
     log "✓ Namespace '$TARGET_NAMESPACE' already exists"
 fi
 
-# Step 2: Create OperatorGroup (only needed for namespace-scoped installation)
-# Skip if installing in openshift-operators (it already has a global OperatorGroup)
+# Step 2: Create OperatorGroup (required for namespace-scoped installation)
 log ""
 log "Step 2: Creating OperatorGroup for namespace-scoped installation..."
 
-if [ "$OPERATOR_NAMESPACE" = "openshift-operators" ]; then
-    log "Installing in 'openshift-operators' namespace - skipping OperatorGroup creation (global OperatorGroup exists)"
+# Check if OperatorGroup already exists
+if oc get operatorgroup "$OPERATOR_GROUP_NAME" -n "$TARGET_NAMESPACE" >/dev/null 2>&1; then
+    log "✓ OperatorGroup '$OPERATOR_GROUP_NAME' already exists in namespace '$TARGET_NAMESPACE'"
 else
-    # Check if OperatorGroup already exists
-    if oc get operatorgroup "$OPERATOR_GROUP_NAME" -n "$TARGET_NAMESPACE" >/dev/null 2>&1; then
-        log "✓ OperatorGroup '$OPERATOR_GROUP_NAME' already exists in namespace '$TARGET_NAMESPACE'"
-    else
-        log "Creating OperatorGroup '$OPERATOR_GROUP_NAME' in namespace '$TARGET_NAMESPACE'..."
-        cat <<EOF | oc apply -f -
+    log "Creating OperatorGroup '$OPERATOR_GROUP_NAME' in namespace '$TARGET_NAMESPACE'..."
+    cat <<EOF | oc apply -f -
 apiVersion: operators.coreos.com/v1
 kind: OperatorGroup
 metadata:
@@ -100,8 +96,7 @@ spec:
   targetNamespaces:
   - $TARGET_NAMESPACE
 EOF
-        log "✓ OperatorGroup created"
-    fi
+    log "✓ OperatorGroup created"
 fi
 
 # Step 3: Create the Subscription
