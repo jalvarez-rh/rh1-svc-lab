@@ -38,7 +38,7 @@ This lab is organized into four modules:
 
 == Getting Started
 
-Before proceeding with the lab modules, you'll need to configure kubectl contexts for the clusters and install the roxctl CLI tool.
+Before proceeding with the lab modules, you'll need to configure kubectl contexts for the clusters, install a few insecure applciations and the roxctl CLI tool.
 
 ==== Configure kubectl Contexts
 
@@ -107,22 +107,22 @@ EOF
 source ~/.bashrc
 ----
 
-. Source the ~/.bashrc file:
-[source,sh]
-----
-source ~/.bashrc
-----
-
-
+[start=2]
 . Clone the repository and run the ACS setup script to install `roxctl` and configure RHACS access:
 
 [source,sh,role=execute]
 ----
 cd ~ && git clone https://github.com/jalvarez-rh/rh1-svc-lab.git || (cd ~/rh1-svc-lab && git pull origin main)
-cd ~/rh1-svc-lab/acs-passthrough
+cd ~/rh1-svc-lab/lab-setup
 ./run-all-setup.sh
 ----
 
+**OUTPUT**
+
+[source,sh]
+----
+
+----
 
 [[openshift-acm]]
 === OpenShift Console Access

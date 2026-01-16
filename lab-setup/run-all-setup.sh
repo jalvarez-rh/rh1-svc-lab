@@ -29,13 +29,14 @@ warning() {
 
 # Array of scripts to execute in order
 SCRIPTS=(
-    "01-central-install.sh"
+    "00-install-roxctl.sh"
+    # "01-central-install.sh"
     "02-compliance-operator-install.sh"
     "03-deploy-applications.sh"
     "04-configure-rhacs-settings.sh"
     "05-setup-perses-monitoring.sh"
-    "06-scs-second-cluster.sh"
-    "07-compliance-operator-second-cluster.sh"
+    # "06-scs-second-cluster.sh"
+    # "07-compliance-operator-second-cluster.sh"
 )
 
 log "========================================================="
