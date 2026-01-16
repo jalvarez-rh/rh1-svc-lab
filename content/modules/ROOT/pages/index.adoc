@@ -127,7 +127,7 @@ cd ~/rh1-svc-lab/acs-passthrough
 [[openshift-acm]]
 === OpenShift Console Access
 
-The Red Hat Advanced Cluster Management for Kubernetes (RHACM) Console is now integrated with OpenShift Console. To access it, select *All Clusters* from the dropdown menu once you log in.
+The Red Hat Advanced Cluster Management for Kubernetes (RHACM) Console is now integrated with OpenShift Console. To access it, select *Fleet Management* from the dropdown menu on the left once you log in.
 
 Your OpenShift cluster console is available in the right panel. In case you want to open it in another window it is here: {openshift_cluster_console_url}[window=blank]
 

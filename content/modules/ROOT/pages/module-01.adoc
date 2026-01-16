@@ -6,16 +6,16 @@
 
 == Multi-environment OCP Cluster & Virtual Machine Creation & Management.
 
-Cluster creation and management marks the essential first step in building a truly sovereign cloud environment. By owning the full lifecycle of your clusters—from initial deployment to ongoing operations—your organization maintains direct control over infrastructure, security policies, and data locality. This foundational capability ensures that critical workloads and data remain within your jurisdiction, enabling you to adapt rapidly to regulatory changes, respond to evolving business needs, and operate independently of external providers. Flexible cluster management empowers you to design cloud environments tailored specifically to your sovereignty requirements—ensuring resilience, autonomy, and full compliance from the ground up.
+Cluster creation and management marks the essential first step in building a truly sovereign cloud environment. By owning the full lifecycle of your clusters—from initial deployment to ongoing operations—your organization maintains direct control over infrastructure, security policies, and data locality. This foundational capability ensures that critical workloads and data remain within your jurisdiction, enabling you to adapt rapidly to regulatory changes, respond to evolving business needs, and operate independently of external providers. Flexible cluster and virtual machine management empowers you to design cloud environments tailored specifically to your sovereignty requirements—ensuring resilience, autonomy, and full compliance from the ground up.
 
 [[hub-cluster-overview]]
 === RHACM Management Cluster Overview
 
-The hub cluster in Red Hat Advanced Cluster Management (RHACM) serves as the central control plane for managing your entire fleet of OpenShift clusters. It provides a unified interface for cluster lifecycle management, policy enforcement, application deployment, and observability across multiple environments.
+The hub cluster in Red Hat Advanced Cluster Management (RHACM) serves as the central control plane of your sovereign cloud environment for managing your entire fleet of OpenShift clusters. It provides a single point of authority and unified interface for cluster lifecycle management, policy enforcement, application deployment, and observability across multiple environments.
 
 === Create and Manage Kubernetes Clusters
 
-Red Hat Advanced Cluster Management for Kubernetes (RHACM) simplifies the deployment and management of additional clusters. While Red Hat OpenShift offers easy deployment methods like IPI and the Assisted Installer, RHACM takes it a step further, allowing you to deploy new clusters with just a few clicks using the cluster creation wizard.
+Red Hat Advanced Cluster Management for Kubernetes (RHACM) simplifies the deployment and management of new clusters. While Red Hat OpenShift offers easy deployment methods like IPI and the Assisted Installer, RHACM takes it a step further, allowing you to deploy new clusters with just a few clicks using the cluster creation wizard.
 
 From the Clusters screen, you can quickly see how simple it is to deploy a new cluster.
 
@@ -27,7 +27,7 @@ From the Clusters screen, you can quickly see how simple it is to deploy a new c
 
 image::103-create-cluster.png[link=self, window=blank, width=100%, Create Cluster]
 
-NOTE: You’ll notice that the only option already highlighted is Red Hat OpenShift Virtualization, indicating that your credentials are saved. You will use this to deploy the new cluster, but feel free to explore the window to see other available cluster types.
+NOTE: You’ll notice that the only option already highlighted is Red Hat OpenShift Virtualization, indicating that your credentials are saved for the purpose of speeding up this lab. You will use this to deploy the new cluster, but feel free to explore the window to see other available cluster types.
 
 [start=3]
 . Click on the Red Hat OpenShift Virtualization button. You will see one options for the control plane type: *Hosted*
@@ -84,6 +84,27 @@ image::03-cluster-creation.png[link=self, window=blank, width=100%, View New Clu
 
 NOTE: Deploying this Hosted Control Plane (HCP) cluster will take about 5 to 10 minutes. You’ll continue the lab while waiting for this cluster to provision, we will use it later on.
 
+== Label an existing Cluster
+
+While we wait for the cluster to deploy, lets tag the existing *aws-us* cluster with a location tag, we will leverage this tag once we deploy an application.
+
+[start=1]
+. On the *Fleet Managment* cluster view, locate the *aws-us* cluster 
+. Locate the elipses next to creatation date and select *Edit Labels* 
+
+image::04-cluster-label.png[link=self, window=blank, width=100%, Edit Labels]
+
+[start=3]
+
+. Enter *location=us* and click *Save*
+
+image::05-cluster-label2.png[link=self, window=blank, width=100%, Edit Labels Save]
+
+[TIP]
+====
+Cluster Labels serve as the metadata targeting system in RHACM, allowing you to categorize environments by attributes like region, environment, or sovereignty level. By using these labels within Placement resources, you can automate the dynamic distribution of workloads, security policies, and configurations across your entire fleet based on specific business or regulatory requirements.
+====
+
 [[multi-env-workloads]]
 
 == Multi-environment Workload Creation, Management, and Observability
@@ -95,7 +116,7 @@ Workload management across multiple environments enables organizations to deploy
 
 == Create and Manage Virtual Machine
 
-Red Hat Advanced Cluster Management (RHACM) with OpenShift Virtualization delivers centralized, policy-driven control—labeling clusters/VMs (e.g., location=emea), enforcing placement rules, and automating compliance to keep sovereign workloads in approved geographies via a unified console. In traditional environments, administrators often struggle with context switching—jumping between virtualization hypervisors to manage legacy workloads and Kubernetes consoles to manage modern applications. This fragmentation slows down operations and complicates governance. This single-pane-of-glass approach for VMs alongside Kubernetes resources simplifies operations, ensures auditability, and applies consistent sovereign controls to legacy and cloud-native workloads, mirroring real-world architect workflows for scalable, secure multi-cluster solutions.
+Red Hat Advanced Cluster Management (RHACM) with OpenShift Virtualization delivers centralized, policy-driven control—labeling clusters/VMs (e.g., location=emea/us), enforcing placement rules, and automating compliance to keep sovereign workloads in approved geographies via a unified console. In traditional environments, administrators often struggle with context switching—jumping between virtualization hypervisors to manage legacy workloads and Kubernetes consoles to manage modern applications. This fragmentation slows down operations and complicates governance. This single-pane-of-glass approach for VMs alongside Kubernetes resources simplifies operations, ensures auditability, and applies consistent sovereign controls to legacy and cloud-native workloads, mirroring real-world architect workflows for scalable, secure multi-cluster solutions.
 
 By the end of this exercise, you will:
 
@@ -185,7 +206,7 @@ In this next step, you'll use Red Hat® OpenShift® GitOps with Argo CD to decla
 . Navigate to *Applications* from the left side menu.
 . Click *Create application*, select *ArgoCD AppicationSet-Push Model*.
 . Enter the following information:
-* *Name:* skupper-patient-demo
+* *Name:* skupper-patient-demo-us
 * *Argo Server:* openshift-gitops
 . Click *NEXT*
 
@@ -227,23 +248,39 @@ NOTE: These changes are only required as you will be modifying the application Y
 . Under *Placement* for application deployment, verify that *New Placement* is selected.
 * Cluster set: managed
 . Under *Label expressions* click *add label* and select the following
-* *Label:* name
+* *Label:* location
 * *Operator:* equals any off
-* *Values:* aws-us & local-cluster & hcp-emea
+* *Values:* us
 
-image::03-app-placement.png[link=self, window=blank, width=100%, ACM App Placement]
+image::03-app-placement-us.png[link=self, window=blank, width=100%, ACM App Placement US]
 
 [start=14]
 . Verify all of the information is correct and click *Submit*.
 
-NOTE: It will take a few minutes to deploy the application
+NOTE: It will take a few minutes to deploy the application, during this time you might see the Cluster / Application have a red X, this is expected and normal.
 
 [start=15]
+. While this application deploys, Repeat the steps to deploy the application to the *hcp-emea* cluster. Make sure the application name is set to *skupper-patient-demo-emea*
+
+. Under *Placement* for application deployment, verify that *New Placement* is selected.
+* Cluster set: managed
+. Under *Label expressions* click *add label* and select the following
+* *Label:* location
+* *Operator:* equals any off
+* *Values:* emea
+
+NOTE: We will use these applications in other modules of the lab hence why we have you deploy it twice in two different locations. 
+
+image::03-app-placement-emea.png[link=self, window=blank, width=100%, ACM App Placement EMEA]
+
+[start=16]
+. Navigate back to the application view, find the filter and select *Application Set*
+. Find the *skupper-patient-demo-us* app 
 . Click on the *Topology Tab* to view and verify that *all of the circles are green*.
 
 image::03-application-topology-git.png[link=self, window=blank, width=100%, Application Topology]
 
-[start=16]
+[start=17]
 . Under the topology view, Select the *Route* and click on the *Launch Route URL*
 
 NOTE: This will take you to the Front end for the Patient Portal application, which is now running in our Hosted Controlled Plane (HCP) CLuster.
@@ -252,19 +289,8 @@ IMPORTANT: If you get a "Application is not available" page change the URL to us
 
 image::03-application-route-git.png[link=self, window=blank, width=100%, Application Route]
 
+== Conclusion
+
 Congratulations! 
 
 You have successfully deployed an application using RHACM and OpenShift GitOps. This approach utilized a Git repository containing the manifests that defined your application. RHACM took those manifests and used them as deployables, which were then deployed to the target cluster.
-
-[[cross-cloud-networking]]
-
-== Cross-cloud Networking
-
-Cross-cloud networking enables secure connectivity between workloads running in different clusters, cloud providers, or geographic regions. This capability is essential for sovereign cloud environments where data and applications must remain within specific jurisdictions while still enabling collaboration and data sharing across approved boundaries.
-
-[[cross-cloud-migration]]
-
-== Cross-cloud Migration
-
-Cross-cloud migration capabilities allow you to move workloads between clusters and environments while maintaining data sovereignty and compliance requirements. This includes both planned migrations for optimization and emergency migrations for disaster recovery scenarios.
-
