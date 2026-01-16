@@ -1,13 +1,12 @@
 #!/bin/bash
-# Red Hat Single Sign-On (RH-SSO) Installation Script
-# Installs Red Hat Single Sign-On Operator and creates Keycloak instance
-# Assumes oc is installed and user is logged in as cluster-admin
-# Usage: ./08-install-keycloak.sh
+# Red Hat Single Sign-On (RHSSO) Installation Script
+# Installs Red Hat Single Sign-On 7.6 using OpenShift templates
+#
+# Usage:
+#   ./08-install-keycloak.sh
 
 # Exit immediately on error, show error message
 set -euo pipefail
-
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 # Colors
 RED='\033[0;31m'
@@ -16,16 +15,16 @@ YELLOW='\033[1;33m'
 NC='\033[0m'
 
 log() {
-    echo -e "${GREEN}[RH-SSO]${NC} $1"
+    echo -e "${GREEN}[RHSSO]${NC} $1"
 }
 
 warning() {
-    echo -e "${YELLOW}[RH-SSO]${NC} $1"
+    echo -e "${YELLOW}[RHSSO]${NC} $1"
 }
 
 error() {
-    echo -e "${RED}[RH-SSO] ERROR:${NC} $1" >&2
-    echo -e "${RED}[RH-SSO] Script failed at line ${BASH_LINENO[0]}${NC}" >&2
+    echo -e "${RED}[RHSSO] ERROR:${NC} $1" >&2
+    echo -e "${RED}[RHSSO] Script failed at line ${BASH_LINENO[0]}${NC}" >&2
     exit 1
 }
 
@@ -34,7 +33,7 @@ trap 'error "Command failed: $(cat <<< "$BASH_COMMAND")"' ERR
 
 # Prerequisites validation
 log "========================================================="
-log "Red Hat Single Sign-On (RH-SSO) Installation"
+log "Red Hat Single Sign-On (RHSSO) Installation"
 log "========================================================="
 log ""
 
@@ -49,8 +48,8 @@ log "✓ OpenShift CLI connected as: $(oc whoami)"
 
 # Check if we have cluster admin privileges
 log "Checking cluster admin privileges..."
-if ! oc auth can-i create subscriptions --all-namespaces &>/dev/null; then
-    error "Cluster admin privileges required to install operators. Current user: $(oc whoami)"
+if ! oc auth can-i create templates --namespace=openshift &>/dev/null; then
+    error "Cluster admin privileges required to install templates. Current user: $(oc whoami)"
 fi
 log "✓ Cluster admin privileges confirmed"
 
@@ -58,283 +57,186 @@ log "Prerequisites validated successfully"
 log ""
 
 # Configuration
-TARGET_NAMESPACE="rhsso"
-OPERATOR_NAMESPACE="rhsso"  # Operator must be installed in target namespace (SingleNamespace mode only)
-OPERATOR_GROUP_NAME="rhsso-og"
-SUBSCRIPTION_NAME="rhsso-operator"
-OPERATOR_PACKAGE="rhsso-operator"
-CHANNEL="stable"
-OPERATOR_SOURCE="redhat-operators"
-KEYCLOAK_CR_NAME="keycloak"
+SSO_NAMESPACE="sso"
+TEMPLATE_NAME="sso76-ocp4-x509-postgresql-persistent"
+IMAGE_STREAM_URL="https://raw.githubusercontent.com/jboss-container-images/redhat-sso-7-openshift-image/sso76-dev/templates/sso76-image-stream.json"
+TEMPLATE_URL="https://raw.githubusercontent.com/jboss-container-images/redhat-sso-7-openshift-image/sso76-dev/templates/reencrypt/ocp-4.x/sso76-ocp4-x509-postgresql-persistent.json"
+IMAGE_STREAM_NAME="rh-sso-7/sso76-openshift-rhel8:7.6"
+IMAGE_SOURCE="registry.redhat.io/rh-sso-7/sso76-openshift-rhel8:7.6"
 
-# Step 1: Create target namespace (optional but recommended)
-log "Step 1: Creating target namespace '$TARGET_NAMESPACE'..."
-if ! oc get namespace "$TARGET_NAMESPACE" &>/dev/null; then
-    log "Creating namespace '$TARGET_NAMESPACE'..."
-    oc new-project "$TARGET_NAMESPACE" || error "Failed to create namespace"
-    log "✓ Namespace '$TARGET_NAMESPACE' created"
-else
-    log "✓ Namespace '$TARGET_NAMESPACE' already exists"
-fi
-
-# Step 2: Create OperatorGroup (required for namespace-scoped installation)
-log ""
-log "Step 2: Creating OperatorGroup for namespace-scoped installation..."
-
-# Check if OperatorGroup already exists
-if oc get operatorgroup "$OPERATOR_GROUP_NAME" -n "$TARGET_NAMESPACE" >/dev/null 2>&1; then
-    log "✓ OperatorGroup '$OPERATOR_GROUP_NAME' already exists in namespace '$TARGET_NAMESPACE'"
-else
-    log "Creating OperatorGroup '$OPERATOR_GROUP_NAME' in namespace '$TARGET_NAMESPACE'..."
-    cat <<EOF | oc apply -f -
-apiVersion: operators.coreos.com/v1
-kind: OperatorGroup
-metadata:
-  name: $OPERATOR_GROUP_NAME
-  namespace: $TARGET_NAMESPACE
-spec:
-  targetNamespaces:
-  - $TARGET_NAMESPACE
-EOF
-    log "✓ OperatorGroup created"
-fi
-
-# Step 3: Create the Subscription
-log ""
-log "Step 3: Creating Subscription..."
-
-# Check if subscription already exists
-EXISTING_SUBSCRIPTION=false
-if oc get subscription "$SUBSCRIPTION_NAME" -n "$OPERATOR_NAMESPACE" >/dev/null 2>&1; then
-    EXISTING_SUBSCRIPTION=true
-    CURRENT_CSV=$(oc get subscription "$SUBSCRIPTION_NAME" -n "$OPERATOR_NAMESPACE" -o jsonpath='{.status.currentCSV}' 2>/dev/null || echo "")
-    EXISTING_CHANNEL=$(oc get subscription "$SUBSCRIPTION_NAME" -n "$OPERATOR_NAMESPACE" -o jsonpath='{.spec.channel}' 2>/dev/null || echo "")
+# Check if RHSSO is already deployed
+log "Checking if RHSSO is already deployed..."
+if oc get project "$SSO_NAMESPACE" &>/dev/null; then
+    log "Project '$SSO_NAMESPACE' already exists"
     
-    if [ -n "$CURRENT_CSV" ] && [ "$CURRENT_CSV" != "null" ]; then
-        if oc get csv "$CURRENT_CSV" -n "$OPERATOR_NAMESPACE" >/dev/null 2>&1; then
-            CSV_PHASE=$(oc get csv "$CURRENT_CSV" -n "$OPERATOR_NAMESPACE" -o jsonpath='{.status.phase}' 2>/dev/null || echo "")
+    # Check if application is already deployed
+    if oc get deployment -n "$SSO_NAMESPACE" 2>/dev/null | grep -q "sso"; then
+        log "✓ RHSSO appears to be already deployed in namespace '$SSO_NAMESPACE'"
+        log "Checking pod status..."
+        oc get pods -n "$SSO_NAMESPACE" || true
+        
+        # Try to get credentials from secret
+        log ""
+        log "Retrieving existing credentials..."
+        if oc get secret credential-sso -n "$SSO_NAMESPACE" &>/dev/null; then
+            SSO_USERNAME=$(oc get secret credential-sso -n "$SSO_NAMESPACE" -o jsonpath='{.data.ADMIN_USERNAME}' 2>/dev/null | base64 -d 2>/dev/null || echo "")
+            SSO_PASSWORD=$(oc get secret credential-sso -n "$SSO_NAMESPACE" -o jsonpath='{.data.ADMIN_PASSWORD}' 2>/dev/null | base64 -d 2>/dev/null || echo "")
             
-            if [ "$CSV_PHASE" = "Succeeded" ]; then
-                log "✓ RH-SSO operator is already installed and running"
-                log "  Installed CSV: $CURRENT_CSV"
-                log "  Current channel: ${EXISTING_CHANNEL:-unknown}"
-                log "  Status: $CSV_PHASE"
-            else
-                log "RH-SSO operator subscription exists but CSV is in phase: $CSV_PHASE"
+            if [ -n "$SSO_USERNAME" ] && [ -n "$SSO_PASSWORD" ]; then
+                log ""
+                log "========================================================="
+                log "RHSSO Installation Already Complete"
+                log "========================================================="
+                log "Namespace: $SSO_NAMESPACE"
+                log "Admin Username: $SSO_USERNAME"
+                log "Admin Password: $SSO_PASSWORD"
+                log ""
+                log "To access the admin console, get the route:"
+                log "  oc get route -n $SSO_NAMESPACE"
+                log "========================================================="
+                exit 0
             fi
         fi
-    fi
-fi
-
-if [ "$EXISTING_SUBSCRIPTION" = true ]; then
-    # Update existing subscription if channel changed
-    if [ -n "$EXISTING_CHANNEL" ] && [ "$EXISTING_CHANNEL" != "$CHANNEL" ]; then
-        log "Updating subscription channel from '$EXISTING_CHANNEL' to '$CHANNEL'..."
-        oc patch subscription "$SUBSCRIPTION_NAME" -n "$OPERATOR_NAMESPACE" --type merge -p "{\"spec\":{\"channel\":\"$CHANNEL\"}}" || error "Failed to update subscription channel"
-    else
-        log "✓ Subscription already exists with channel: $CHANNEL"
-    fi
-else
-    log "Creating Subscription '$SUBSCRIPTION_NAME' in namespace '$OPERATOR_NAMESPACE'..."
-    log "  Channel: $CHANNEL"
-    log "  Package: $OPERATOR_PACKAGE"
-    log "  Source: $OPERATOR_SOURCE"
-    
-    cat <<EOF | oc apply -f -
-apiVersion: operators.coreos.com/v1alpha1
-kind: Subscription
-metadata:
-  name: $SUBSCRIPTION_NAME
-  namespace: $OPERATOR_NAMESPACE
-spec:
-  channel: $CHANNEL
-  name: $OPERATOR_PACKAGE
-  source: $OPERATOR_SOURCE
-  sourceNamespace: openshift-marketplace
-  installPlanApproval: Automatic
-EOF
-    log "✓ Subscription created"
-fi
-
-# Step 4: Verify the installation
-log ""
-log "Step 4: Verifying installation..."
-
-# Wait for CSV to be created and ready
-log "Waiting for operator CSV to be ready..."
-MAX_WAIT=600
-WAIT_COUNT=0
-CSV_READY=false
-
-while [ $WAIT_COUNT -lt $MAX_WAIT ]; do
-    # Try multiple methods to find the CSV
-    CSV_NAME=$(oc get csv -n "$OPERATOR_NAMESPACE" -o jsonpath='{.items[?(@.spec.displayName=="Red Hat Single Sign-On Operator")].metadata.name}' 2>/dev/null || echo "")
-    
-    if [ -z "$CSV_NAME" ]; then
-        CSV_NAME=$(oc get csv -n "$OPERATOR_NAMESPACE" -o jsonpath='{.items[?(@.spec.displayName=="Keycloak Operator")].metadata.name}' 2>/dev/null || echo "")
-    fi
-    
-    if [ -z "$CSV_NAME" ]; then
-        CSV_NAME=$(oc get csv -n "$OPERATOR_NAMESPACE" -o name 2>/dev/null | grep -i "rhsso\|keycloak" | head -1 | sed 's|clusterserviceversion.operators.coreos.com/||' || echo "")
-    fi
-    
-    if [ -n "$CSV_NAME" ]; then
-        CSV_PHASE=$(oc get csv "$CSV_NAME" -n "$OPERATOR_NAMESPACE" -o jsonpath='{.status.phase}' 2>/dev/null || echo "")
         
-        if [ "$CSV_PHASE" = "Succeeded" ]; then
-            CSV_READY=true
-            log "✓ CSV is ready: $CSV_NAME"
-            break
-        fi
+        warning "RHSSO is deployed but credentials could not be retrieved"
+        log "Continuing to ensure proper setup..."
+    else
+        log "Project exists but RHSSO not fully deployed, proceeding with installation..."
     fi
-    
-    if [ $((WAIT_COUNT % 30)) -eq 0 ] && [ $WAIT_COUNT -gt 0 ]; then
-        log "  Still waiting... (${WAIT_COUNT}s/${MAX_WAIT}s)"
-    fi
-    
-    sleep 5
-    WAIT_COUNT=$((WAIT_COUNT + 5))
-done
-
-if [ "$CSV_READY" = false ]; then
-    error "CSV did not become ready within ${MAX_WAIT} seconds. Check operator status: oc get csv -n $OPERATOR_NAMESPACE"
-fi
-
-# Check operator pods
-log ""
-log "Checking operator pods..."
-OPERATOR_PODS=$(oc get pods -n "$OPERATOR_NAMESPACE" | grep -i "keycloak\|rhsso" || echo "")
-if [ -n "$OPERATOR_PODS" ]; then
-    log "✓ Operator pods found:"
-    echo "$OPERATOR_PODS" | while read line; do
-        log "  $line"
-    done
 else
-    warning "No operator pods found (may still be starting)"
+    log "RHSSO not found, proceeding with installation..."
 fi
 
-# Wait for Keycloak CRD to be available
+# Step 1: Create/replace templates and install image stream
 log ""
-log "Waiting for Keycloak CRD to be available..."
+log "========================================================="
+log "Step 1: Installing RHSSO templates and image stream"
+log "========================================================="
+log ""
+
+log "Creating/replacing image stream template..."
+if ! oc replace -n openshift --force -f "$IMAGE_STREAM_URL" 2>/dev/null; then
+    # If replace fails, try create
+    oc create -n openshift -f "$IMAGE_STREAM_URL" || error "Failed to create image stream template"
+fi
+log "✓ Image stream template created"
+
+log "Creating/replacing RHSSO template..."
+if ! oc replace -n openshift --force -f "$TEMPLATE_URL" 2>/dev/null; then
+    # If replace fails, try create
+    oc create -n openshift -f "$TEMPLATE_URL" || error "Failed to create RHSSO template"
+fi
+log "✓ RHSSO template created"
+
+log "Importing RHSSO image..."
+if ! oc -n openshift import-image "$IMAGE_STREAM_NAME" --from="$IMAGE_SOURCE" --confirm 2>/dev/null; then
+    warning "Image import may have failed or image already exists, continuing..."
+else
+    log "✓ Image imported successfully"
+fi
+
+# Step 2: Create new project
+log ""
+log "========================================================="
+log "Step 2: Creating project"
+log "========================================================="
+log ""
+
+log "Creating project '$SSO_NAMESPACE'..."
+if ! oc get project "$SSO_NAMESPACE" &>/dev/null; then
+    oc new-project "$SSO_NAMESPACE" || error "Failed to create project"
+    log "✓ Project created successfully"
+else
+    log "✓ Project already exists"
+    # Switch to the project
+    oc project "$SSO_NAMESPACE" || error "Failed to switch to project"
+fi
+
+# Step 3: Add view role to default service account
+log ""
+log "========================================================="
+log "Step 3: Configuring service account permissions"
+log "========================================================="
+log ""
+
+log "Adding view role to default service account..."
+if oc policy add-role-to-user view -z default -n "$SSO_NAMESPACE" 2>/dev/null; then
+    log "✓ View role added to default service account"
+else
+    # Check if role already exists
+    if oc get rolebinding -n "$SSO_NAMESPACE" 2>/dev/null | grep -q "view.*default"; then
+        log "✓ View role already exists for default service account"
+    else
+        warning "Failed to add view role (may already exist or be non-critical)"
+    fi
+fi
+
+# Step 4: Deploy the template
+log ""
+log "========================================================="
+log "Step 4: Deploying RHSSO template"
+log "========================================================="
+log ""
+
+log "Deploying template '$TEMPLATE_NAME'..."
+log "This will create the RHSSO deployment with PostgreSQL database"
+log ""
+
+# Check if application already exists
+if oc get deployment -n "$SSO_NAMESPACE" 2>/dev/null | grep -q "sso"; then
+    log "✓ RHSSO deployment already exists"
+    log "Skipping template deployment..."
+else
+    # Deploy the template
+    oc new-app --template="$TEMPLATE_NAME" -n "$SSO_NAMESPACE" || error "Failed to deploy template"
+    log "✓ Template deployed successfully"
+fi
+
+# Step 5: Wait for deployment and retrieve credentials
+log ""
+log "========================================================="
+log "Step 5: Waiting for deployment and retrieving credentials"
+log "========================================================="
+log ""
+
+log "Waiting for pods to be created..."
 MAX_WAIT=120
 WAIT_COUNT=0
-CRD_READY=false
+PODS_CREATED=false
 
 while [ $WAIT_COUNT -lt $MAX_WAIT ]; do
-    # Try both CRD names (v1alpha1 and v2alpha1)
-    if oc get crd keycloaks.keycloak.org 2>/dev/null || oc get crd keycloaks.k8s.keycloak.org 2>/dev/null; then
-        CRD_READY=true
-        log "✓ Keycloak CRD is available"
+    POD_COUNT=$(oc get pods -n "$SSO_NAMESPACE" --no-headers 2>/dev/null | wc -l | tr -d '[:space:]' || echo "0")
+    
+    if [ "$POD_COUNT" -gt 0 ]; then
+        PODS_CREATED=true
+        log "✓ Pods created ($POD_COUNT pods found)"
         break
     fi
+    
+    if [ $((WAIT_COUNT % 10)) -eq 0 ] && [ $WAIT_COUNT -gt 0 ]; then
+        log "  Still waiting for pods... (${WAIT_COUNT}s/${MAX_WAIT}s)"
+    fi
+    
     sleep 5
     WAIT_COUNT=$((WAIT_COUNT + 5))
 done
 
-if [ "$CRD_READY" = false ]; then
-    error "Keycloak CRD not available after ${MAX_WAIT}s"
+if [ "$PODS_CREATED" = false ]; then
+    warning "Pods not created after ${MAX_WAIT} seconds. Checking status..."
+    oc get all -n "$SSO_NAMESPACE" || true
+    warning "Deployment may still be in progress. Check status with: oc get pods -n $SSO_NAMESPACE"
 fi
 
-# Check if Keycloak CR already exists
-log ""
-log "Checking for existing Keycloak CR in namespace '$TARGET_NAMESPACE'..."
-
-if oc get keycloak "$KEYCLOAK_CR_NAME" -n "$TARGET_NAMESPACE" >/dev/null 2>&1; then
-    log "✓ Keycloak CR '$KEYCLOAK_CR_NAME' already exists"
-    
-    # Check status
-    KEYCLOAK_STATUS=$(oc get keycloak "$KEYCLOAK_CR_NAME" -n "$TARGET_NAMESPACE" -o jsonpath='{.status.phase}' 2>/dev/null || echo "")
-    if [ "$KEYCLOAK_STATUS" = "reconciled" ] || [ "$KEYCLOAK_STATUS" = "Ready" ]; then
-        log "✓ Keycloak instance is ready"
-        
-        # Check for route
-        KEYCLOAK_ROUTE=$(oc get route keycloak -n "$TARGET_NAMESPACE" -o jsonpath='{.spec.host}' 2>/dev/null || echo "")
-        if [ -n "$KEYCLOAK_ROUTE" ]; then
-            log ""
-            log "========================================================="
-            log "Red Hat Single Sign-On Installation Completed!"
-            log "========================================================="
-            log "Namespace: $TARGET_NAMESPACE"
-            log "Keycloak CR: $KEYCLOAK_CR_NAME"
-            log "Status: Ready"
-            log "Keycloak URL: https://$KEYCLOAK_ROUTE"
-            log "========================================================="
-            exit 0
-        fi
-    else
-        log "Keycloak exists but status is: ${KEYCLOAK_STATUS:-Unknown}"
-        log "Waiting for it to become ready..."
-    fi
-else
-    log "Creating Keycloak CR..."
-    
-    # Determine API version based on available CRD
-    if oc get crd keycloaks.k8s.keycloak.org >/dev/null 2>&1; then
-        API_VERSION="k8s.keycloak.org/v2alpha1"
-    else
-        API_VERSION="keycloak.org/v1alpha1"
-    fi
-    
-    # Create Keycloak CR
-    cat <<EOF | oc apply -f -
-apiVersion: $API_VERSION
-kind: Keycloak
-metadata:
-  name: $KEYCLOAK_CR_NAME
-  namespace: $TARGET_NAMESPACE
-  labels:
-    app: sso
-spec:
-  instances: 1
-EOF
-    log "✓ Keycloak CR created"
-fi
-
-# Wait for Keycloak to be ready
-log ""
-log "Waiting for Keycloak instance to become ready..."
-MAX_WAIT=900
+# Wait for secret to be created
+log "Waiting for credentials secret to be created..."
+MAX_WAIT=60
 WAIT_COUNT=0
-KEYCLOAK_READY=false
+SECRET_CREATED=false
 
 while [ $WAIT_COUNT -lt $MAX_WAIT ]; do
-    KEYCLOAK_STATUS=$(oc get keycloak "$KEYCLOAK_CR_NAME" -n "$TARGET_NAMESPACE" -o jsonpath='{.status.phase}' 2>/dev/null || echo "")
-    
-    if [ "$KEYCLOAK_STATUS" = "reconciled" ] || [ "$KEYCLOAK_STATUS" = "Ready" ]; then
-        KEYCLOAK_READY=true
-        log "✓ Keycloak instance is ready"
-        break
-    fi
-    
-    if [ $((WAIT_COUNT % 60)) -eq 0 ] && [ $WAIT_COUNT -gt 0 ]; then
-        log "  Still waiting... (${WAIT_COUNT}s/${MAX_WAIT}s)"
-        log "  Current status: ${KEYCLOAK_STATUS:-Unknown}"
-    fi
-    
-    sleep 10
-    WAIT_COUNT=$((WAIT_COUNT + 10))
-done
-
-if [ "$KEYCLOAK_READY" = false ]; then
-    warning "Keycloak did not become ready within ${MAX_WAIT} seconds"
-    log "Current status:"
-    oc get keycloak "$KEYCLOAK_CR_NAME" -n "$TARGET_NAMESPACE" -o yaml || true
-    warning "Keycloak may still be installing. Check operator logs for details."
-fi
-
-# Wait for route to be created
-log ""
-log "Waiting for Keycloak route to be created..."
-MAX_WAIT=120
-WAIT_COUNT=0
-ROUTE_READY=false
-
-while [ $WAIT_COUNT -lt $MAX_WAIT ]; do
-    KEYCLOAK_ROUTE=$(oc get route keycloak -n "$TARGET_NAMESPACE" -o jsonpath='{.spec.host}' 2>/dev/null || echo "")
-    
-    if [ -n "$KEYCLOAK_ROUTE" ]; then
-        ROUTE_READY=true
-        log "✓ Keycloak route is ready: $KEYCLOAK_ROUTE"
+    if oc get secret credential-sso -n "$SSO_NAMESPACE" &>/dev/null; then
+        SECRET_CREATED=true
+        log "✓ Credentials secret found"
         break
     fi
     
@@ -342,103 +244,103 @@ while [ $WAIT_COUNT -lt $MAX_WAIT ]; do
     WAIT_COUNT=$((WAIT_COUNT + 5))
 done
 
-if [ "$ROUTE_READY" = false ]; then
-    warning "Keycloak route not found after ${MAX_WAIT} seconds"
+if [ "$SECRET_CREATED" = false ]; then
+    warning "Credentials secret not found after ${MAX_WAIT} seconds"
+    log "Credentials may be generated later. Check with: oc get secret credential-sso -n $SSO_NAMESPACE"
 fi
 
-# Create openshift realm if it doesn't exist
+# Retrieve credentials
 log ""
-log "Checking for 'openshift' realm..."
+log "Retrieving RHSSO admin credentials..."
 
-# Get admin credentials
-ADMIN_SECRET="credential-${KEYCLOAK_CR_NAME}"
-if oc get secret "$ADMIN_SECRET" -n "$TARGET_NAMESPACE" >/dev/null 2>&1; then
-    ADMIN_USER=$(oc get secret "$ADMIN_SECRET" -n "$TARGET_NAMESPACE" -o jsonpath='{.data.username}' 2>/dev/null | base64 -d 2>/dev/null || echo "")
-    ADMIN_PASS=$(oc get secret "$ADMIN_SECRET" -n "$TARGET_NAMESPACE" -o jsonpath='{.data.password}' 2>/dev/null | base64 -d 2>/dev/null || echo "")
+SSO_USERNAME=""
+SSO_PASSWORD=""
+
+if oc get secret credential-sso -n "$SSO_NAMESPACE" &>/dev/null; then
+    SSO_USERNAME=$(oc get secret credential-sso -n "$SSO_NAMESPACE" -o jsonpath='{.data.ADMIN_USERNAME}' 2>/dev/null | base64 -d 2>/dev/null || echo "")
+    SSO_PASSWORD=$(oc get secret credential-sso -n "$SSO_NAMESPACE" -o jsonpath='{.data.ADMIN_PASSWORD}' 2>/dev/null | base64 -d 2>/dev/null || echo "")
     
-    if [ -n "$ADMIN_USER" ] && [ -n "$ADMIN_PASS" ] && [ -n "$KEYCLOAK_ROUTE" ]; then
-        log "✓ Retrieved admin credentials"
+    if [ -z "$SSO_USERNAME" ] || [ -z "$SSO_PASSWORD" ]; then
+        # Try alternative secret names or methods
+        log "Trying alternative method to retrieve credentials..."
         
-        # Try to get admin token
-        TOKEN_RESPONSE=$(curl -s -X POST "https://${KEYCLOAK_ROUTE}/auth/realms/master/protocol/openid-connect/token" \
-            -H "Content-Type: application/x-www-form-urlencoded" \
-            -d "username=${ADMIN_USER}" \
-            -d "password=${ADMIN_PASS}" \
-            -d "grant_type=password" \
-            -d "client_id=admin-cli" 2>/dev/null || echo "")
-        
-        ADMIN_TOKEN=$(echo "$TOKEN_RESPONSE" | grep -o '"access_token":"[^"]*' | cut -d'"' -f4 || echo "")
-        
-        if [ -n "$ADMIN_TOKEN" ]; then
-            log "✓ Authenticated to Keycloak admin console"
-            
-            # Check if openshift realm exists
-            REALM_CHECK=$(curl -s -o /dev/null -w "%{http_code}" \
-                -H "Authorization: Bearer ${ADMIN_TOKEN}" \
-                "https://${KEYCLOAK_ROUTE}/auth/admin/realms/openshift" 2>/dev/null || echo "000")
-            
-            if [ "$REALM_CHECK" = "200" ]; then
-                log "✓ Realm 'openshift' already exists"
-            else
-                log "Creating realm 'openshift'..."
-                
-                REALM_CONFIG=$(cat <<EOF
-{
-  "realm": "openshift",
-  "enabled": true,
-  "displayName": "OpenShift Realm"
-}
-EOF
-)
-                
-                REALM_CREATE_RESPONSE=$(curl -s -o /dev/null -w "%{http_code}" \
-                    -X POST \
-                    -H "Authorization: Bearer ${ADMIN_TOKEN}" \
-                    -H "Content-Type: application/json" \
-                    -d "${REALM_CONFIG}" \
-                    "https://${KEYCLOAK_ROUTE}/auth/admin/realms" 2>/dev/null || echo "000")
-                
-                if [ "$REALM_CREATE_RESPONSE" = "201" ]; then
-                    log "✓ Realm 'openshift' created successfully"
-                else
-                    warning "Failed to create realm 'openshift' (HTTP $REALM_CREATE_RESPONSE)"
-                    warning "You may need to create it manually in the Keycloak admin console"
-                fi
-            fi
-        else
-            warning "Could not authenticate to Keycloak admin console"
-            warning "You may need to create the 'openshift' realm manually"
+        # Check if credentials are in the deployment config or other secrets
+        ALL_SECRETS=$(oc get secrets -n "$SSO_NAMESPACE" -o name 2>/dev/null | grep -i "sso\|credential" || echo "")
+        if [ -n "$ALL_SECRETS" ]; then
+            log "Found secrets: $ALL_SECRETS"
         fi
-    else
-        warning "Could not retrieve admin credentials"
     fi
-else
-    warning "Admin secret '$ADMIN_SECRET' not found"
-    warning "You may need to create the 'openshift' realm manually"
 fi
+
+# If credentials not found, check the deployment output
+if [ -z "$SSO_USERNAME" ] || [ -z "$SSO_PASSWORD" ]; then
+    log "Credentials not yet available in secret. Checking deployment output..."
+    
+    # The template usually outputs credentials when deployed
+    # Check the deployment config or try to get from the app
+    DEPLOYMENT_OUTPUT=$(oc get all -n "$SSO_NAMESPACE" -o yaml 2>/dev/null | grep -i "username\|password" || echo "")
+    
+    if [ -n "$DEPLOYMENT_OUTPUT" ]; then
+        log "Found credentials in deployment output"
+    else
+        warning "Could not retrieve credentials automatically"
+        log "Credentials will be generated by the template. Check the deployment output or secret."
+    fi
+fi
+
+# Step 6: Verify deployment status
+log ""
+log "========================================================="
+log "Step 6: Verifying deployment status"
+log "========================================================="
+log ""
+
+log "Checking pod status..."
+oc get pods -n "$SSO_NAMESPACE" || true
+
+log ""
+log "Checking services..."
+oc get svc -n "$SSO_NAMESPACE" || true
+
+log ""
+log "Checking routes..."
+oc get route -n "$SSO_NAMESPACE" || true
+
+# Get route URL
+SSO_ROUTE=$(oc get route -n "$SSO_NAMESPACE" -o jsonpath='{.items[0].spec.host}' 2>/dev/null | head -1 || echo "")
 
 # Final summary
 log ""
 log "========================================================="
-log "Red Hat Single Sign-On Installation Completed!"
+log "RHSSO Installation Completed!"
 log "========================================================="
-log "Operator Namespace: $OPERATOR_NAMESPACE"
-log "Target Namespace: $TARGET_NAMESPACE"
-log "Keycloak CR: $KEYCLOAK_CR_NAME"
-log "Status: ${KEYCLOAK_STATUS:-Installing}"
+log "Namespace: $SSO_NAMESPACE"
+log "Template: $TEMPLATE_NAME"
+log ""
 
-if [ -n "$KEYCLOAK_ROUTE" ]; then
-    log "Keycloak URL: https://$KEYCLOAK_ROUTE"
-    log "Admin Console: https://$KEYCLOAK_ROUTE/auth/admin"
-fi
-
-if [ -n "$ADMIN_USER" ]; then
-    log "Admin Username: $ADMIN_USER"
+if [ -n "$SSO_USERNAME" ] && [ -n "$SSO_PASSWORD" ]; then
+    log "RH-SSO Administrator Username: $SSO_USERNAME"
+    log "RH-SSO Administrator Password: $SSO_PASSWORD"
+else
+    log "Credentials:"
+    log "  Username: Check secret 'credential-sso' in namespace '$SSO_NAMESPACE'"
+    log "  Password: Check secret 'credential-sso' in namespace '$SSO_NAMESPACE'"
+    log ""
+    log "To retrieve credentials manually:"
+    log "  oc get secret credential-sso -n $SSO_NAMESPACE -o jsonpath='{.data.ADMIN_USERNAME}' | base64 -d"
+    log "  oc get secret credential-sso -n $SSO_NAMESPACE -o jsonpath='{.data.ADMIN_PASSWORD}' | base64 -d"
 fi
 
 log ""
-log "Next steps:"
-log "1. Access the Keycloak admin console to configure realms and clients"
-log "2. Run the RHTAS installation script to create OAuth clients"
+if [ -n "$SSO_ROUTE" ]; then
+    log "Admin Console URL: https://$SSO_ROUTE"
+else
+    log "Admin Console URL: Get route with: oc get route -n $SSO_NAMESPACE"
+fi
+
+log ""
+log "To verify all pods are running:"
+log "  oc get pods -n $SSO_NAMESPACE"
+log ""
 log "========================================================="
 log ""
