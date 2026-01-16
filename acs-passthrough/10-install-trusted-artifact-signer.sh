@@ -2,14 +2,7 @@
 
 # Script to install Red Hat Trusted Artifact Signer (RHTAS) with Red Hat SSO as OIDC provider on OpenShift
 # Assumes oc is installed and user is logged in as cluster-admin
-# Usage: ./install_rhtas.sh <image_to_sign> (e.g., ttl.sh/rhtas/test-image:1h)
-# Note: The signing step will require browser interaction for OIDC authentication
-
-IMAGE_TO_SIGN="$1"
-if [ -z "$IMAGE_TO_SIGN" ]; then
-  echo "Usage: $0 <image_to_sign>"
-  exit 1
-fi
+# Usage: ./10-install-trusted-artifact-signer.sh
 
 # Step 1: Install Red Hat Single Sign-On (RH SSO) Operator
 echo "Installing RH SSO Operator..."
@@ -155,44 +148,19 @@ oc wait --for=condition=Ready rekor/securesign-sample-rekor -n trusted-artifact-
 oc wait --for=condition=Ready trillian/securesign-sample-trillian -n trusted-artifact-signer --timeout=600s
 oc wait --for=condition=Ready tuf/securesign-sample-tuf -n trusted-artifact-signer --timeout=600s
 
-# Step 9: Set up environment for signing
-echo "Setting up environment variables for signing..."
-export FULCIO_URL=$(oc get fulcio -o jsonpath='{.items[0].status.url}' -n trusted-artifact-signer)
-export REKOR_URL=$(oc get rekor -o jsonpath='{.items[0].status.url}' -n trusted-artifact-signer)
-export TUF_URL=$(oc get tuf -o jsonpath='{.items[0].status.url}' -n trusted-artifact-signer)
-export COSIGN_FULCIO_URL=$FULCIO_URL
-export COSIGN_REKOR_URL=$REKOR_URL
-export COSIGN_MIRROR=$TUF_URL
-export COSIGN_ROOT=$TUF_URL/root.json
-export COSIGN_OIDC_ISSUER=$OIDC_ISSUER_URL
-export COSIGN_OIDC_CLIENT_ID=trusted-artifact-signer
-export COSIGN_YES=true
-
-# Initialize Cosign with TUF
-cosign initialize
-
-# Step 10: Sign the image
-echo "Signing the image: $IMAGE_TO_SIGN"
-cosign sign -y $IMAGE_TO_SIGN
-
-# Step 11: Attest the image (example with SLSA predicate)
-echo "Creating predicate.json for attestation..."
-cat <<EOF > predicate.json
-{
-  "builder": {"id": "https://localhost/dummy-id"},
-  "buildType": "https://example.com/tekton-pipeline",
-  "invocation": {},
-  "buildConfig": {},
-  "metadata": {"completeness": {"parameters": false, "environment": false, "materials": false}, "reproducible": false},
-  "materials": []
-}
-EOF
-
-echo "Attesting the image: $IMAGE_TO_SIGN"
-cosign attest -y --predicate ./predicate.json --type slsaprovenance $IMAGE_TO_SIGN
-
-# Cleanup temporary file
-rm predicate.json
-
-echo "Installation and signing/attestation complete!"
-echo "To verify: cosign verify --certificate-identity-regexp '<your-email>' --certificate-oidc-issuer-regexp '${OIDC_ISSUER_URL}' $IMAGE_TO_SIGN"
+echo "Installation complete!"
+echo "RHTAS is now installed and ready to use."
+echo ""
+echo "To sign an image, set up the following environment variables:"
+echo "  export FULCIO_URL=\$(oc get fulcio -o jsonpath='{.items[0].status.url}' -n trusted-artifact-signer)"
+echo "  export REKOR_URL=\$(oc get rekor -o jsonpath='{.items[0].status.url}' -n trusted-artifact-signer)"
+echo "  export TUF_URL=\$(oc get tuf -o jsonpath='{.items[0].status.url}' -n trusted-artifact-signer)"
+echo "  export COSIGN_FULCIO_URL=\$FULCIO_URL"
+echo "  export COSIGN_REKOR_URL=\$REKOR_URL"
+echo "  export COSIGN_MIRROR=\$TUF_URL"
+echo "  export COSIGN_ROOT=\$TUF_URL/root.json"
+echo "  export COSIGN_OIDC_ISSUER=${OIDC_ISSUER_URL}"
+echo "  export COSIGN_OIDC_CLIENT_ID=trusted-artifact-signer"
+echo ""
+echo "Then initialize cosign: cosign initialize"
+echo "And sign an image: cosign sign -y <image>"
