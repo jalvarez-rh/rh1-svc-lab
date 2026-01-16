@@ -2,7 +2,7 @@
 # RHACS Central Passthrough Route Configuration Script
 # Ensures Central route uses passthrough termination (TLS terminated at backend service)
 
-# Exit immediately on error, show exact error message
+# Exit immediately on error, show error message
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
