@@ -104,35 +104,46 @@ if [ ${#FAILED_SCRIPTS[@]} -eq 0 ]; then
     log "RHACS Access Information"
     log "========================================================="
     
-    RHACS_OPERATOR_NAMESPACE="rhacs-operator"
-    
-    # Get RHACS Central URL from route
-    CENTRAL_ROUTE=$(oc get route central -n "$RHACS_OPERATOR_NAMESPACE" -o jsonpath='{.spec.host}' 2>/dev/null || echo "")
-    if [ -n "$CENTRAL_ROUTE" ]; then
-        # Check if route uses TLS
-        CENTRAL_TLS=$(oc get route central -n "$RHACS_OPERATOR_NAMESPACE" -o jsonpath='{.spec.tls}' 2>/dev/null || echo "")
-        if [ -n "$CENTRAL_TLS" ] && [ "$CENTRAL_TLS" != "null" ]; then
-            CENTRAL_URL="https://${CENTRAL_ROUTE}"
-        else
-            CENTRAL_URL="http://${CENTRAL_ROUTE}"
-        fi
-        log "RHACS Central URL: $CENTRAL_URL"
-    else
-        log "RHACS Central URL: Not found (route 'central' not found in namespace '$RHACS_OPERATOR_NAMESPACE')"
+    # Detect RHACS namespace - check stackrox first (newer installations), then rhacs-operator (older installations)
+    RHACS_NAMESPACE=""
+    if oc get route central -n "stackrox" -o jsonpath='{.spec.host}' >/dev/null 2>&1; then
+        RHACS_NAMESPACE="stackrox"
+    elif oc get route central -n "rhacs-operator" -o jsonpath='{.spec.host}' >/dev/null 2>&1; then
+        RHACS_NAMESPACE="rhacs-operator"
     fi
     
-    # Get admin password from secret
-    ADMIN_PASSWORD_B64=$(oc get secret central-htpasswd -n "$RHACS_OPERATOR_NAMESPACE" -o jsonpath='{.data.password}' 2>/dev/null || echo "")
-    if [ -n "$ADMIN_PASSWORD_B64" ]; then
-        ADMIN_PASSWORD=$(echo "$ADMIN_PASSWORD_B64" | base64 -d 2>/dev/null || echo "")
-        if [ -n "$ADMIN_PASSWORD" ]; then
-            log "Admin Username: admin"
-            log "Admin Password: $ADMIN_PASSWORD"
-        else
-            log "Admin Password: Could not decode password from secret"
-        fi
+    if [ -z "$RHACS_NAMESPACE" ]; then
+        log "RHACS Central URL: Not found (route 'central' not found in 'stackrox' or 'rhacs-operator' namespace)"
+        log "Admin Password: Not found (RHACS not detected)"
     else
-        log "Admin Password: Not found (secret 'central-htpasswd' not found in namespace '$RHACS_OPERATOR_NAMESPACE')"
+        # Get RHACS Central URL from route
+        CENTRAL_ROUTE=$(oc get route central -n "$RHACS_NAMESPACE" -o jsonpath='{.spec.host}' 2>/dev/null || echo "")
+        if [ -n "$CENTRAL_ROUTE" ]; then
+            # Check if route uses TLS
+            CENTRAL_TLS=$(oc get route central -n "$RHACS_NAMESPACE" -o jsonpath='{.spec.tls}' 2>/dev/null || echo "")
+            if [ -n "$CENTRAL_TLS" ] && [ "$CENTRAL_TLS" != "null" ]; then
+                CENTRAL_URL="https://${CENTRAL_ROUTE}"
+            else
+                CENTRAL_URL="http://${CENTRAL_ROUTE}"
+            fi
+            log "RHACS Central URL: $CENTRAL_URL"
+        else
+            log "RHACS Central URL: Not found (route 'central' not found in namespace '$RHACS_NAMESPACE')"
+        fi
+        
+        # Get admin password from secret
+        ADMIN_PASSWORD_B64=$(oc get secret central-htpasswd -n "$RHACS_NAMESPACE" -o jsonpath='{.data.password}' 2>/dev/null || echo "")
+        if [ -n "$ADMIN_PASSWORD_B64" ]; then
+            ADMIN_PASSWORD=$(echo "$ADMIN_PASSWORD_B64" | base64 -d 2>/dev/null || echo "")
+            if [ -n "$ADMIN_PASSWORD" ]; then
+                log "Admin Username: admin"
+                log "Admin Password: $ADMIN_PASSWORD"
+            else
+                log "Admin Password: Could not decode password from secret"
+            fi
+        else
+            log "Admin Password: Not found (secret 'central-htpasswd' not found in namespace '$RHACS_NAMESPACE')"
+        fi
     fi
     
     log "========================================================="

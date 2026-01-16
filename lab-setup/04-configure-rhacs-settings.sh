@@ -33,23 +33,33 @@ trap 'error "Command failed: $(cat <<< "$BASH_COMMAND")"' ERR
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(dirname "$SCRIPT_DIR")"
 
-# RHACS operator namespace
-RHACS_OPERATOR_NAMESPACE="rhacs-operator"
+# Detect RHACS namespace - check stackrox first (newer installations), then rhacs-operator (older installations)
+log "Detecting RHACS namespace..."
+RHACS_NAMESPACE=""
+if oc get route central -n "stackrox" -o jsonpath='{.spec.host}' >/dev/null 2>&1; then
+    RHACS_NAMESPACE="stackrox"
+    log "✓ Found RHACS in namespace: stackrox"
+elif oc get route central -n "rhacs-operator" -o jsonpath='{.spec.host}' >/dev/null 2>&1; then
+    RHACS_NAMESPACE="rhacs-operator"
+    log "✓ Found RHACS in namespace: rhacs-operator"
+else
+    error "Central route not found in 'stackrox' or 'rhacs-operator' namespace. Please ensure RHACS Central is installed."
+fi
 
 # Generate ROX_ENDPOINT from Central route
 log "Extracting ROX_ENDPOINT from Central route..."
-CENTRAL_ROUTE=$(oc get route central -n "$RHACS_OPERATOR_NAMESPACE" -o jsonpath='{.spec.host}' 2>/dev/null || echo "")
+CENTRAL_ROUTE=$(oc get route central -n "$RHACS_NAMESPACE" -o jsonpath='{.spec.host}' 2>/dev/null || echo "")
 if [ -z "$CENTRAL_ROUTE" ]; then
-    error "Central route not found in namespace '$RHACS_OPERATOR_NAMESPACE'. Please ensure RHACS Central is installed."
+    error "Central route not found in namespace '$RHACS_NAMESPACE'. Please ensure RHACS Central is installed."
 fi
 ROX_ENDPOINT="$CENTRAL_ROUTE"
 log "✓ Extracted ROX_ENDPOINT: $ROX_ENDPOINT"
 
 # Get ADMIN_PASSWORD from secret (needed for token generation)
 log "Extracting admin password from secret..."
-ADMIN_PASSWORD_B64=$(oc get secret central-htpasswd -n "$RHACS_OPERATOR_NAMESPACE" -o jsonpath='{.data.password}' 2>/dev/null || echo "")
+ADMIN_PASSWORD_B64=$(oc get secret central-htpasswd -n "$RHACS_NAMESPACE" -o jsonpath='{.data.password}' 2>/dev/null || echo "")
 if [ -z "$ADMIN_PASSWORD_B64" ]; then
-    error "Admin password secret 'central-htpasswd' not found in namespace '$RHACS_OPERATOR_NAMESPACE'"
+    error "Admin password secret 'central-htpasswd' not found in namespace '$RHACS_NAMESPACE'"
 fi
 ADMIN_PASSWORD=$(echo "$ADMIN_PASSWORD_B64" | base64 -d)
 if [ -z "$ADMIN_PASSWORD" ]; then
