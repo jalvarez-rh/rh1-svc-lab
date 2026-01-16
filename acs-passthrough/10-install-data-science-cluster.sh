@@ -212,15 +212,26 @@ log ""
 log "Note: To enable additional components, edit the DataScienceCluster CR:"
 log "  oc edit datasciencecluster $DSC_CR_NAME -n $DSC_NAMESPACE"
 log ""
-log "Available components:"
-log "  - datasciencepipelines"
-log "  - kserve (requires Service Mesh and Serverless)"
-log "  - modelmeshserving"
-log "  - trainingoperator"
-log "  - trustyai"
-log "  - codeflare"
-log "  - ray"
-log "  - kueue"
-log "  - llamastackoperator"
+
+# Get OpenShift console URL and credentials
+log "Retrieving access information..."
+
+OPENSHIFT_CONSOLE_URL=$(oc whoami --show-console 2>/dev/null || echo "")
+CURRENT_USER=$(oc whoami 2>/dev/null || echo "")
+
+log ""
+log "========================================================="
+log "OpenShift AI Access Information"
+log "========================================================="
+if [ -n "$DASHBOARD_ROUTE" ]; then
+    log "Dashboard URL: https://$DASHBOARD_ROUTE"
+fi
+if [ -n "$OPENSHIFT_CONSOLE_URL" ]; then
+    log "OpenShift Console: $OPENSHIFT_CONSOLE_URL"
+fi
+if [ -n "$CURRENT_USER" ]; then
+    log "Username: $CURRENT_USER"
+fi
+log "Password: Use your OpenShift cluster credentials"
 log "========================================================="
 log ""
