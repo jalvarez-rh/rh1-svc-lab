@@ -44,7 +44,12 @@ fi
 
 # Step 3: Install RHTAS Operator
 echo "Installing RHTAS Operator..."
-cat <<EOF | oc apply -f -
+
+# Check if subscription already exists
+if oc get subscription trusted-artifact-signer -n openshift-operators 2>/dev/null; then
+    echo "RHTAS Operator subscription 'trusted-artifact-signer' already exists, skipping creation"
+else
+    cat <<EOF | oc apply -f -
 apiVersion: operators.coreos.com/v1alpha1
 kind: Subscription
 metadata:
@@ -58,6 +63,8 @@ spec:
   sourceNamespace: openshift-marketplace
   startingCSV: rhtas-operator.v1.3.1
 EOF
+    echo "✓ RHTAS Operator subscription created"
+fi
 
 # Wait for RHTAS Operator to be ready
 echo "Waiting for RHTAS Operator to be ready..."
