@@ -1,12 +1,12 @@
 #!/bin/bash
-# Red Hat Single Sign-On (RHSSO) Installation Script
-# Installs Red Hat Single Sign-On 7.6 using OpenShift templates
-#
-# Usage:
-#   ./08-install-keycloak.sh
+# Red Hat Single Sign-On (RHSSO) / Keycloak Operator Installation Script
+# Installs the RHSSO Operator using the provided subscription configuration
 
-# Exit immediately on error, show error message
+# Exit immediately on error, show exact error message
 set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+PROJECT_ROOT="$(dirname "$SCRIPT_DIR")"
 
 # Colors
 RED='\033[0;31m'
@@ -15,16 +15,16 @@ YELLOW='\033[1;33m'
 NC='\033[0m'
 
 log() {
-    echo -e "${GREEN}[RHSSO]${NC} $1"
+    echo -e "${GREEN}[RHSSO-INSTALL]${NC} $1"
 }
 
 warning() {
-    echo -e "${YELLOW}[RHSSO]${NC} $1"
+    echo -e "${YELLOW}[RHSSO-INSTALL]${NC} $1"
 }
 
 error() {
-    echo -e "${RED}[RHSSO] ERROR:${NC} $1" >&2
-    echo -e "${RED}[RHSSO] Script failed at line ${BASH_LINENO[0]}${NC}" >&2
+    echo -e "${RED}[RHSSO-INSTALL] ERROR:${NC} $1" >&2
+    echo -e "${RED}[RHSSO-INSTALL] Script failed at line ${BASH_LINENO[0]}${NC}" >&2
     exit 1
 }
 
@@ -33,7 +33,7 @@ trap 'error "Command failed: $(cat <<< "$BASH_COMMAND")"' ERR
 
 # Prerequisites validation
 log "========================================================="
-log "Red Hat Single Sign-On (RHSSO) Installation"
+log "Red Hat Single Sign-On (RHSSO) Operator Installation"
 log "========================================================="
 log ""
 
@@ -41,306 +41,307 @@ log "Validating prerequisites..."
 
 # Check if oc is available and connected
 log "Checking OpenShift CLI connection..."
-if ! oc whoami &>/dev/null; then
+if ! oc whoami; then
     error "OpenShift CLI not connected. Please login first with: oc login"
 fi
 log "✓ OpenShift CLI connected as: $(oc whoami)"
 
 # Check if we have cluster admin privileges
 log "Checking cluster admin privileges..."
-if ! oc auth can-i create templates --namespace=openshift &>/dev/null; then
-    error "Cluster admin privileges required to install templates. Current user: $(oc whoami)"
+if ! oc auth can-i create subscriptions --all-namespaces; then
+    error "Cluster admin privileges required to install operators. Current user: $(oc whoami)"
 fi
 log "✓ Cluster admin privileges confirmed"
 
 log "Prerequisites validated successfully"
 log ""
 
-# Configuration
-SSO_NAMESPACE="sso"
-TEMPLATE_NAME="sso76-ocp4-x509-postgresql-persistent"
-IMAGE_STREAM_URL="https://raw.githubusercontent.com/jboss-container-images/redhat-sso-7-openshift-image/sso76-dev/templates/sso76-image-stream.json"
-TEMPLATE_URL="https://raw.githubusercontent.com/jboss-container-images/redhat-sso-7-openshift-image/sso76-dev/templates/reencrypt/ocp-4.x/sso76-ocp4-x509-postgresql-persistent.json"
-IMAGE_STREAM_NAME="rh-sso-7/sso76-openshift-rhel8:7.6"
-IMAGE_SOURCE="registry.redhat.io/rh-sso-7/sso76-openshift-rhel8:7.6"
+# Check if RHSSO Operator is already installed
+log "Checking if RHSSO Operator is already installed..."
+NAMESPACE="rhsso"
 
-# Check if RHSSO is already deployed
-log "Checking if RHSSO is already deployed..."
-if oc get project "$SSO_NAMESPACE" &>/dev/null; then
-    log "Project '$SSO_NAMESPACE' already exists"
+if oc get namespace $NAMESPACE >/dev/null 2>&1; then
+    log "Namespace $NAMESPACE already exists"
     
-    # Check if application is already deployed
-    if oc get deployment -n "$SSO_NAMESPACE" 2>/dev/null | grep -q "sso"; then
-        log "✓ RHSSO appears to be already deployed in namespace '$SSO_NAMESPACE'"
-        log "Checking pod status..."
-        oc get pods -n "$SSO_NAMESPACE" || true
+    # Check for existing subscription
+    if oc get subscription.operators.coreos.com rhsso-operator -n $NAMESPACE >/dev/null 2>&1; then
+        CURRENT_CSV=$(oc get subscription.operators.coreos.com rhsso-operator -n $NAMESPACE -o jsonpath='{.status.currentCSV}' 2>/dev/null || echo "")
+        if [ -z "$CURRENT_CSV" ]; then
+            log "Subscription exists but CSV not yet determined, proceeding with installation..."
+        else
+            CSV_PHASE=$(oc get csv $CURRENT_CSV -n $NAMESPACE -o jsonpath='{.status.phase}' 2>/dev/null || echo "")
         
-        # Try to get credentials from secret
-        log ""
-        log "Retrieving existing credentials..."
-        if oc get secret credential-sso -n "$SSO_NAMESPACE" &>/dev/null; then
-            SSO_USERNAME=$(oc get secret credential-sso -n "$SSO_NAMESPACE" -o jsonpath='{.data.ADMIN_USERNAME}' 2>/dev/null | base64 -d 2>/dev/null || echo "")
-            SSO_PASSWORD=$(oc get secret credential-sso -n "$SSO_NAMESPACE" -o jsonpath='{.data.ADMIN_PASSWORD}' 2>/dev/null | base64 -d 2>/dev/null || echo "")
-            
-            if [ -n "$SSO_USERNAME" ] && [ -n "$SSO_PASSWORD" ]; then
-                log ""
-                log "========================================================="
-                log "RHSSO Installation Already Complete"
-                log "========================================================="
-                log "Namespace: $SSO_NAMESPACE"
-                log "Admin Username: $SSO_USERNAME"
-                log "Admin Password: $SSO_PASSWORD"
-                log ""
-                log "To access the admin console, get the route:"
-                log "  oc get route -n $SSO_NAMESPACE"
-                log "========================================================="
+            if [ "$CSV_PHASE" = "Succeeded" ]; then
+                log "✓ RHSSO Operator is already installed and running"
+                log "  Installed CSV: $CURRENT_CSV"
+                log "  Status: $CSV_PHASE"
+                log "Skipping installation..."
                 exit 0
+            else
+                log "RHSSO Operator subscription exists but CSV is in phase: $CSV_PHASE"
+                log "Continuing with installation to ensure proper setup..."
             fi
         fi
-        
-        warning "RHSSO is deployed but credentials could not be retrieved"
-        log "Continuing to ensure proper setup..."
     else
-        log "Project exists but RHSSO not fully deployed, proceeding with installation..."
+        log "Namespace exists but no subscription found, proceeding with installation..."
     fi
 else
-    log "RHSSO not found, proceeding with installation..."
+    log "RHSSO Operator not found, proceeding with installation..."
 fi
 
-# Step 1: Create/replace templates and install image stream
+# Install Red Hat Single Sign-On Operator
 log ""
 log "========================================================="
-log "Step 1: Installing RHSSO templates and image stream"
+log "Installing Red Hat Single Sign-On Operator"
 log "========================================================="
+log ""
+log "Following idempotent installation steps (safe to run multiple times)..."
 log ""
 
-log "Creating/replacing image stream template..."
-if ! oc replace -n openshift --force -f "$IMAGE_STREAM_URL" 2>/dev/null; then
-    # If replace fails, try create
-    oc create -n openshift -f "$IMAGE_STREAM_URL" || error "Failed to create image stream template"
+# Step 1: Create the namespace (idempotent)
+log "Step 1: Creating namespace $NAMESPACE..."
+if ! oc create ns $NAMESPACE --dry-run=client -o yaml | oc apply -f -; then
+    error "Failed to create $NAMESPACE namespace"
 fi
-log "✓ Image stream template created"
+log "✓ Namespace created successfully"
 
-log "Creating/replacing RHSSO template..."
-if ! oc replace -n openshift --force -f "$TEMPLATE_URL" 2>/dev/null; then
-    # If replace fails, try create
-    oc create -n openshift -f "$TEMPLATE_URL" || error "Failed to create RHSSO template"
+# Step 2: Create OperatorGroup
+log ""
+log "Step 2: Creating OperatorGroup..."
+if ! cat <<EOF | oc apply -f -
+apiVersion: operators.coreos.com/v1
+kind: OperatorGroup
+metadata:
+  name: rhsso-operator-group
+  namespace: $NAMESPACE
+spec:
+  targetNamespaces: []
+EOF
+then
+    error "Failed to create OperatorGroup"
 fi
-log "✓ RHSSO template created"
+log "✓ OperatorGroup created successfully (AllNamespaces mode)"
 
-log "Importing RHSSO image..."
-if ! oc -n openshift import-image "$IMAGE_STREAM_NAME" --from="$IMAGE_SOURCE" --confirm 2>/dev/null; then
-    warning "Image import may have failed or image already exists, continuing..."
-else
-    log "✓ Image imported successfully"
-fi
-
-# Step 2: Create new project
+# Step 3: Create or verify CatalogSource
 log ""
-log "========================================================="
-log "Step 2: Creating project"
-log "========================================================="
-log ""
+log "Step 3: Creating/verifying CatalogSource..."
 
-log "Creating project '$SSO_NAMESPACE'..."
-if ! oc get project "$SSO_NAMESPACE" &>/dev/null; then
-    oc new-project "$SSO_NAMESPACE" || error "Failed to create project"
-    log "✓ Project created successfully"
-else
-    log "✓ Project already exists"
-    # Switch to the project
-    oc project "$SSO_NAMESPACE" || error "Failed to switch to project"
-fi
+CATALOG_SOURCE_NAME="rhsso-operator-catalogsource"
+CATALOG_SOURCE_EXISTS=false
 
-# Step 3: Add view role to default service account
-log ""
-log "========================================================="
-log "Step 3: Configuring service account permissions"
-log "========================================================="
-log ""
-
-log "Adding view role to default service account..."
-if oc policy add-role-to-user view -z default -n "$SSO_NAMESPACE" 2>/dev/null; then
-    log "✓ View role added to default service account"
-else
-    # Check if role already exists
-    if oc get rolebinding -n "$SSO_NAMESPACE" 2>/dev/null | grep -q "view.*default"; then
-        log "✓ View role already exists for default service account"
+if oc get catalogsource $CATALOG_SOURCE_NAME -n $NAMESPACE >/dev/null 2>&1; then
+    log "CatalogSource '$CATALOG_SOURCE_NAME' already exists"
+    CATALOG_SOURCE_EXISTS=true
+    
+    # Check if it's healthy
+    CATALOG_STATUS=$(oc get catalogsource $CATALOG_SOURCE_NAME -n $NAMESPACE -o jsonpath='{.status.connectionState.lastObservedState}' 2>/dev/null || echo "")
+    if [ "$CATALOG_STATUS" = "READY" ]; then
+        log "✓ CatalogSource is READY"
     else
-        warning "Failed to add view role (may already exist or be non-critical)"
+        log "CatalogSource status: ${CATALOG_STATUS:-unknown}"
+    fi
+else
+    log "Creating CatalogSource '$CATALOG_SOURCE_NAME'..."
+    
+    # Create CatalogSource pointing to redhat-operators
+    # Note: This creates a custom catalog source that mirrors redhat-operators
+    # If you have a specific catalog image, replace the image reference below
+    if ! cat <<EOF | oc apply -f -
+apiVersion: operators.coreos.com/v1alpha1
+kind: CatalogSource
+metadata:
+  name: $CATALOG_SOURCE_NAME
+  namespace: $NAMESPACE
+spec:
+  sourceType: grpc
+  image: registry.redhat.io/redhat/redhat-operator-index:v4.15
+  displayName: RHSSO Operator Catalog
+  publisher: Red Hat
+  updateStrategy:
+    registryPoll:
+      interval: 30m
+EOF
+    then
+        error "Failed to create CatalogSource"
+    fi
+    log "✓ CatalogSource created"
+    
+    # Wait for catalog source to be ready
+    log "Waiting for CatalogSource to be ready..."
+    CATALOG_READY=false
+    for i in {1..30}; do
+        CATALOG_STATUS=$(oc get catalogsource $CATALOG_SOURCE_NAME -n $NAMESPACE -o jsonpath='{.status.connectionState.lastObservedState}' 2>/dev/null || echo "")
+        if [ "$CATALOG_STATUS" = "READY" ]; then
+            CATALOG_READY=true
+            log "✓ CatalogSource is READY"
+            break
+        else
+            if [ $((i % 5)) -eq 0 ]; then
+                log "  CatalogSource status: ${CATALOG_STATUS:-unknown} (waiting for READY...)"
+            fi
+        fi
+        sleep 2
+    done
+    
+    if [ "$CATALOG_READY" = false ]; then
+        warning "CatalogSource may not be ready yet, but continuing..."
     fi
 fi
 
-# Step 4: Deploy the template
+# Step 4: Create the Subscription
 log ""
-log "========================================================="
-log "Step 4: Deploying RHSSO template"
-log "========================================================="
-log ""
+log "Step 4: Creating Subscription..."
+log "  Channel: stable"
+log "  Source: $CATALOG_SOURCE_NAME"
+log "  SourceNamespace: $NAMESPACE"
+log "  StartingCSV: rhsso-operator.7.6.11-opr-004"
 
-log "Deploying template '$TEMPLATE_NAME'..."
-log "This will create the RHSSO deployment with PostgreSQL database"
-log ""
-
-# Check if application already exists
-if oc get deployment -n "$SSO_NAMESPACE" 2>/dev/null | grep -q "sso"; then
-    log "✓ RHSSO deployment already exists"
-    log "Skipping template deployment..."
-else
-    # Deploy the template
-    oc new-app --template="$TEMPLATE_NAME" -n "$SSO_NAMESPACE" || error "Failed to deploy template"
-    log "✓ Template deployed successfully"
+if ! cat <<EOF | oc apply -f -
+apiVersion: operators.coreos.com/v1alpha1
+kind: Subscription
+metadata:
+  name: rhsso-operator
+  namespace: $NAMESPACE
+  labels:
+    operators.coreos.com/rhsso-operator.rhsso: ''
+spec:
+  channel: stable
+  installPlanApproval: Automatic
+  name: rhsso-operator
+  source: $CATALOG_SOURCE_NAME
+  sourceNamespace: $NAMESPACE
+  startingCSV: rhsso-operator.7.6.11-opr-004
+EOF
+then
+    error "Failed to create Subscription"
 fi
+log "✓ Subscription created successfully"
 
-# Step 5: Wait for deployment and retrieve credentials
+# Verify subscription was created
+log "Verifying subscription..."
+sleep 3
+
+SUBSCRIPTION_STATUS=$(oc get subscription rhsso-operator -n $NAMESPACE -o jsonpath='{.status.state}' 2>/dev/null || echo "")
+log "Subscription state: ${SUBSCRIPTION_STATUS:-unknown}"
+
+# Step 5: Wait for CSV to be created and installed
 log ""
-log "========================================================="
-log "Step 5: Waiting for deployment and retrieving credentials"
-log "========================================================="
+log "Step 5: Waiting for installation (60-120 seconds)..."
+log "Watching install progress..."
 log ""
 
-log "Waiting for pods to be created..."
+# Wait for CSV to be created
 MAX_WAIT=120
 WAIT_COUNT=0
-PODS_CREATED=false
+CSV_CREATED=false
 
 while [ $WAIT_COUNT -lt $MAX_WAIT ]; do
-    POD_COUNT=$(oc get pods -n "$SSO_NAMESPACE" --no-headers 2>/dev/null | wc -l | tr -d '[:space:]' || echo "0")
-    
-    if [ "$POD_COUNT" -gt 0 ]; then
-        PODS_CREATED=true
-        log "✓ Pods created ($POD_COUNT pods found)"
+    if oc get csv -n $NAMESPACE 2>/dev/null | grep -q rhsso-operator; then
+        CSV_CREATED=true
+        log "✓ CSV created"
         break
     fi
     
+    # Show progress every 10 seconds
     if [ $((WAIT_COUNT % 10)) -eq 0 ] && [ $WAIT_COUNT -gt 0 ]; then
-        log "  Still waiting for pods... (${WAIT_COUNT}s/${MAX_WAIT}s)"
+        log "  Progress check (${WAIT_COUNT}s/${MAX_WAIT}s):"
+        oc get csv,subscription,installplan -n $NAMESPACE 2>/dev/null | head -5 || true
+        log ""
     fi
     
-    sleep 5
-    WAIT_COUNT=$((WAIT_COUNT + 5))
+    sleep 1
+    WAIT_COUNT=$((WAIT_COUNT + 1))
 done
 
-if [ "$PODS_CREATED" = false ]; then
-    warning "Pods not created after ${MAX_WAIT} seconds. Checking status..."
-    oc get all -n "$SSO_NAMESPACE" || true
-    warning "Deployment may still be in progress. Check status with: oc get pods -n $SSO_NAMESPACE"
+if [ "$CSV_CREATED" = false ]; then
+    warning "CSV not created after ${MAX_WAIT} seconds. Current status:"
+    oc get csv,subscription,installplan -n $NAMESPACE
+    warning "CSV may still be installing. Check subscription status: oc get subscription rhsso-operator -n $NAMESPACE"
 fi
 
-# Wait for secret to be created
-log "Waiting for credentials secret to be created..."
-MAX_WAIT=60
-WAIT_COUNT=0
-SECRET_CREATED=false
-
-while [ $WAIT_COUNT -lt $MAX_WAIT ]; do
-    if oc get secret credential-sso -n "$SSO_NAMESPACE" &>/dev/null; then
-        SECRET_CREATED=true
-        log "✓ Credentials secret found"
-        break
-    fi
-    
-    sleep 5
-    WAIT_COUNT=$((WAIT_COUNT + 5))
-done
-
-if [ "$SECRET_CREATED" = false ]; then
-    warning "Credentials secret not found after ${MAX_WAIT} seconds"
-    log "Credentials may be generated later. Check with: oc get secret credential-sso -n $SSO_NAMESPACE"
+# Get the CSV name
+CSV_NAME=$(oc get csv -n $NAMESPACE -o name 2>/dev/null | grep rhsso-operator | head -1 | sed 's|clusterserviceversion.operators.coreos.com/||' || echo "")
+if [ -z "$CSV_NAME" ]; then
+    CSV_NAME=$(oc get csv -n $NAMESPACE -l operators.coreos.com/rhsso-operator.rhsso -o jsonpath='{.items[0].metadata.name}' 2>/dev/null || echo "")
+fi
+if [ -z "$CSV_NAME" ]; then
+    warning "Failed to find CSV name for rhsso-operator. It may still be installing."
+    CSV_NAME="rhsso-operator.7.6.11-opr-004"
 fi
 
-# Retrieve credentials
-log ""
-log "Retrieving RHSSO admin credentials..."
-
-SSO_USERNAME=""
-SSO_PASSWORD=""
-
-if oc get secret credential-sso -n "$SSO_NAMESPACE" &>/dev/null; then
-    SSO_USERNAME=$(oc get secret credential-sso -n "$SSO_NAMESPACE" -o jsonpath='{.data.ADMIN_USERNAME}' 2>/dev/null | base64 -d 2>/dev/null || echo "")
-    SSO_PASSWORD=$(oc get secret credential-sso -n "$SSO_NAMESPACE" -o jsonpath='{.data.ADMIN_PASSWORD}' 2>/dev/null | base64 -d 2>/dev/null || echo "")
-    
-    if [ -z "$SSO_USERNAME" ] || [ -z "$SSO_PASSWORD" ]; then
-        # Try alternative secret names or methods
-        log "Trying alternative method to retrieve credentials..."
-        
-        # Check if credentials are in the deployment config or other secrets
-        ALL_SECRETS=$(oc get secrets -n "$SSO_NAMESPACE" -o name 2>/dev/null | grep -i "sso\|credential" || echo "")
-        if [ -n "$ALL_SECRETS" ]; then
-            log "Found secrets: $ALL_SECRETS"
-        fi
-    fi
-fi
-
-# If credentials not found, check the deployment output
-if [ -z "$SSO_USERNAME" ] || [ -z "$SSO_PASSWORD" ]; then
-    log "Credentials not yet available in secret. Checking deployment output..."
-    
-    # The template usually outputs credentials when deployed
-    # Check the deployment config or try to get from the app
-    DEPLOYMENT_OUTPUT=$(oc get all -n "$SSO_NAMESPACE" -o yaml 2>/dev/null | grep -i "username\|password" || echo "")
-    
-    if [ -n "$DEPLOYMENT_OUTPUT" ]; then
-        log "Found credentials in deployment output"
+# Wait for CSV to be in Succeeded phase
+if [ -n "$CSV_NAME" ]; then
+    log "Waiting for CSV '$CSV_NAME' to reach Succeeded phase..."
+    if ! oc wait --for=jsonpath='{.status.phase}'=Succeeded "csv/$CSV_NAME" -n $NAMESPACE --timeout=300s 2>/dev/null; then
+        CSV_STATUS=$(oc get csv "$CSV_NAME" -n $NAMESPACE -o jsonpath='{.status.phase}' 2>/dev/null || echo "unknown")
+        warning "CSV did not reach Succeeded phase within timeout. Current status: $CSV_STATUS"
+        log "Checking CSV details..."
+        oc get csv "$CSV_NAME" -n $NAMESPACE
     else
-        warning "Could not retrieve credentials automatically"
-        log "Credentials will be generated by the template. Check the deployment output or secret."
+        log "✓ CSV is in Succeeded phase"
     fi
 fi
 
-# Step 6: Verify deployment status
+# Step 6: Final check – verify CSV and pods
 log ""
-log "========================================================="
-log "Step 6: Verifying deployment status"
-log "========================================================="
+log "Step 6: Final check - verifying CSV and pods..."
 log ""
-
-log "Checking pod status..."
-oc get pods -n "$SSO_NAMESPACE" || true
-
+log "CSV status:"
+oc get csv -n $NAMESPACE 2>/dev/null || log "  No CSV found"
 log ""
-log "Checking services..."
-oc get svc -n "$SSO_NAMESPACE" || true
-
+log "Subscription status:"
+oc get subscription rhsso-operator -n $NAMESPACE 2>/dev/null || log "  No subscription found"
 log ""
-log "Checking routes..."
-oc get route -n "$SSO_NAMESPACE" || true
-
-# Get route URL
-SSO_ROUTE=$(oc get route -n "$SSO_NAMESPACE" -o jsonpath='{.items[0].spec.host}' 2>/dev/null | head -1 || echo "")
-
-# Final summary
-log ""
-log "========================================================="
-log "RHSSO Installation Completed!"
-log "========================================================="
-log "Namespace: $SSO_NAMESPACE"
-log "Template: $TEMPLATE_NAME"
+log "Pod status:"
+oc get pods -n $NAMESPACE 2>/dev/null || log "  No pods found"
 log ""
 
-if [ -n "$SSO_USERNAME" ] && [ -n "$SSO_PASSWORD" ]; then
-    log "RH-SSO Administrator Username: $SSO_USERNAME"
-    log "RH-SSO Administrator Password: $SSO_PASSWORD"
+# Step 7: Verify final status
+log "Step 7: Final verification..."
+log ""
+
+if [ -n "$CSV_NAME" ]; then
+    CSV_PHASE=$(oc get csv "$CSV_NAME" -n $NAMESPACE -o jsonpath='{.status.phase}' 2>/dev/null || echo "unknown")
+    
+    if [ "$CSV_PHASE" = "Succeeded" ]; then
+        log "✓ CSV Phase: Succeeded"
+    else
+        warning "CSV Phase: $CSV_PHASE (expected: Succeeded)"
+    fi
 else
-    log "Credentials:"
-    log "  Username: Check secret 'credential-sso' in namespace '$SSO_NAMESPACE'"
-    log "  Password: Check secret 'credential-sso' in namespace '$SSO_NAMESPACE'"
-    log ""
-    log "To retrieve credentials manually:"
-    log "  oc get secret credential-sso -n $SSO_NAMESPACE -o jsonpath='{.data.ADMIN_USERNAME}' | base64 -d"
-    log "  oc get secret credential-sso -n $SSO_NAMESPACE -o jsonpath='{.data.ADMIN_PASSWORD}' | base64 -d"
+    warning "CSV name not found"
+fi
+
+POD_STATUS=$(oc get pods -n $NAMESPACE -o jsonpath='{.items[*].status.phase}' 2>/dev/null || echo "")
+if echo "$POD_STATUS" | grep -q "Running"; then
+    RUNNING_COUNT=$(echo "$POD_STATUS" | grep -o "Running" | wc -l | tr -d '[:space:]')
+    log "✓ Found $RUNNING_COUNT Running pod(s)"
+else
+    warning "No Running pods found. Status: $POD_STATUS"
 fi
 
 log ""
-if [ -n "$SSO_ROUTE" ]; then
-    log "Admin Console URL: https://$SSO_ROUTE"
-else
-    log "Admin Console URL: Get route with: oc get route -n $SSO_NAMESPACE"
-fi
-
-log ""
-log "To verify all pods are running:"
-log "  oc get pods -n $SSO_NAMESPACE"
-log ""
 log "========================================================="
+log "RHSSO Operator installation completed!"
+log "========================================================="
+log "Namespace: $NAMESPACE"
+log "Operator: rhsso-operator"
+if [ -n "$CSV_NAME" ]; then
+    log "CSV: $CSV_NAME"
+    CSV_PHASE=$(oc get csv "$CSV_NAME" -n $NAMESPACE -o jsonpath='{.status.phase}' 2>/dev/null || echo "unknown")
+    log "CSV Phase: $CSV_PHASE"
+fi
+log "========================================================="
+log ""
+log "Next steps:"
+log "  1. Create a Keycloak CR to deploy a Keycloak instance"
+log "  2. Example: oc apply -f - <<EOF"
+log "     apiVersion: keycloak.org/v1alpha1"
+log "     kind: Keycloak"
+log "     metadata:"
+log "       name: example-keycloak"
+log "       namespace: $NAMESPACE"
+log "     spec:"
+log "       instances: 1"
+log "     EOF"
 log ""
