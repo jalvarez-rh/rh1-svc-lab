@@ -71,17 +71,8 @@ log "✓ OIDC Client ID: ${OIDC_CLIENT_ID}"
 log "Prerequisites validated successfully"
 log ""
 
-# Detect API version
-log "Detecting RHTAS API version..."
+# API version is confirmed from CRDs
 RHTAS_API_VERSION="rhtas.redhat.com/v1alpha1"
-if ! oc api-resources | grep -q "rhtas.redhat.com"; then
-    # Try alternative API group
-    if oc api-resources | grep -q "trustedartifactsigner"; then
-        RHTAS_API_VERSION="trustedartifactsigner.redhat.com/v1alpha1"
-    else
-        warning "Could not detect RHTAS API version, using default: ${RHTAS_API_VERSION}"
-    fi
-fi
 log "Using API version: ${RHTAS_API_VERSION}"
 log ""
 
@@ -103,13 +94,13 @@ log ""
 log "Step 2: Deploying TUF (The Update Framework)..."
 
 TUF_NAME="tuf"
-if oc get tuf $TUF_NAME -n $RHTAS_NAMESPACE >/dev/null 2>&1; then
+if oc get tufs $TUF_NAME -n $RHTAS_NAMESPACE >/dev/null 2>&1; then
     log "✓ TUF CR '${TUF_NAME}' already exists"
 else
     log "Creating TUF CR..."
     if ! cat <<EOF | oc apply -f -
 apiVersion: ${RHTAS_API_VERSION}
-kind: TUF
+kind: Tuf
 metadata:
   name: ${TUF_NAME}
   namespace: ${RHTAS_NAMESPACE}
@@ -130,8 +121,8 @@ WAIT_COUNT=0
 TUF_READY=false
 
 while [ $WAIT_COUNT -lt $MAX_WAIT_TUF ]; do
-    TUF_STATUS=$(oc get tuf $TUF_NAME -n $RHTAS_NAMESPACE -o jsonpath='{.status.phase}' 2>/dev/null || echo "")
-    TUF_URL=$(oc get tuf $TUF_NAME -n $RHTAS_NAMESPACE -o jsonpath='{.status.url}' 2>/dev/null || echo "")
+    TUF_STATUS=$(oc get tufs $TUF_NAME -n $RHTAS_NAMESPACE -o jsonpath='{.status.phase}' 2>/dev/null || echo "")
+    TUF_URL=$(oc get tufs $TUF_NAME -n $RHTAS_NAMESPACE -o jsonpath='{.status.url}' 2>/dev/null || echo "")
     
     if [ "$TUF_STATUS" = "PhaseReady" ] && [ -n "$TUF_URL" ]; then
         TUF_READY=true
@@ -148,7 +139,7 @@ done
 
 if [ "$TUF_READY" = false ]; then
     warning "TUF did not become ready within ${MAX_WAIT_TUF} seconds"
-    TUF_URL=$(oc get tuf $TUF_NAME -n $RHTAS_NAMESPACE -o jsonpath='{.status.url}' 2>/dev/null || echo "")
+    TUF_URL=$(oc get tufs $TUF_NAME -n $RHTAS_NAMESPACE -o jsonpath='{.status.url}' 2>/dev/null || echo "")
     if [ -z "$TUF_URL" ]; then
         warning "TUF URL not yet available"
     fi
@@ -159,7 +150,7 @@ log ""
 log "Step 3: Deploying Fulcio with Keycloak OIDC integration..."
 
 FULCIO_NAME="fulcio-server"
-if oc get fulcio $FULCIO_NAME -n $RHTAS_NAMESPACE >/dev/null 2>&1; then
+if oc get fulcios $FULCIO_NAME -n $RHTAS_NAMESPACE >/dev/null 2>&1; then
     log "✓ Fulcio CR '${FULCIO_NAME}' already exists"
 else
     log "Creating Fulcio CR with Keycloak OIDC..."
@@ -189,8 +180,8 @@ WAIT_COUNT=0
 FULCIO_READY=false
 
 while [ $WAIT_COUNT -lt $MAX_WAIT_FULCIO ]; do
-    FULCIO_STATUS=$(oc get fulcio $FULCIO_NAME -n $RHTAS_NAMESPACE -o jsonpath='{.status.phase}' 2>/dev/null || echo "")
-    FULCIO_URL=$(oc get fulcio $FULCIO_NAME -n $RHTAS_NAMESPACE -o jsonpath='{.status.url}' 2>/dev/null || echo "")
+    FULCIO_STATUS=$(oc get fulcios $FULCIO_NAME -n $RHTAS_NAMESPACE -o jsonpath='{.status.phase}' 2>/dev/null || echo "")
+    FULCIO_URL=$(oc get fulcios $FULCIO_NAME -n $RHTAS_NAMESPACE -o jsonpath='{.status.url}' 2>/dev/null || echo "")
     
     if [ "$FULCIO_STATUS" = "PhaseReady" ] && [ -n "$FULCIO_URL" ]; then
         FULCIO_READY=true
@@ -207,7 +198,7 @@ done
 
 if [ "$FULCIO_READY" = false ]; then
     warning "Fulcio did not become ready within ${MAX_WAIT_FULCIO} seconds"
-    FULCIO_URL=$(oc get fulcio $FULCIO_NAME -n $RHTAS_NAMESPACE -o jsonpath='{.status.url}' 2>/dev/null || echo "")
+    FULCIO_URL=$(oc get fulcios $FULCIO_NAME -n $RHTAS_NAMESPACE -o jsonpath='{.status.url}' 2>/dev/null || echo "")
     if [ -z "$FULCIO_URL" ]; then
         warning "Fulcio URL not yet available"
     fi
@@ -218,7 +209,7 @@ log ""
 log "Step 4: Deploying Rekor (Transparency Log)..."
 
 REKOR_NAME="rekor-server"
-if oc get rekor $REKOR_NAME -n $RHTAS_NAMESPACE >/dev/null 2>&1; then
+if oc get rekors $REKOR_NAME -n $RHTAS_NAMESPACE >/dev/null 2>&1; then
     log "✓ Rekor CR '${REKOR_NAME}' already exists"
 else
     log "Creating Rekor CR..."
@@ -245,8 +236,8 @@ WAIT_COUNT=0
 REKOR_READY=false
 
 while [ $WAIT_COUNT -lt $MAX_WAIT_REKOR ]; do
-    REKOR_STATUS=$(oc get rekor $REKOR_NAME -n $RHTAS_NAMESPACE -o jsonpath='{.status.phase}' 2>/dev/null || echo "")
-    REKOR_URL=$(oc get rekor $REKOR_NAME -n $RHTAS_NAMESPACE -o jsonpath='{.status.url}' 2>/dev/null || echo "")
+    REKOR_STATUS=$(oc get rekors $REKOR_NAME -n $RHTAS_NAMESPACE -o jsonpath='{.status.phase}' 2>/dev/null || echo "")
+    REKOR_URL=$(oc get rekors $REKOR_NAME -n $RHTAS_NAMESPACE -o jsonpath='{.status.url}' 2>/dev/null || echo "")
     
     if [ "$REKOR_STATUS" = "PhaseReady" ] && [ -n "$REKOR_URL" ]; then
         REKOR_READY=true
@@ -263,7 +254,7 @@ done
 
 if [ "$REKOR_READY" = false ]; then
     warning "Rekor did not become ready within ${MAX_WAIT_REKOR} seconds"
-    REKOR_URL=$(oc get rekor $REKOR_NAME -n $RHTAS_NAMESPACE -o jsonpath='{.status.url}' 2>/dev/null || echo "")
+    REKOR_URL=$(oc get rekors $REKOR_NAME -n $RHTAS_NAMESPACE -o jsonpath='{.status.url}' 2>/dev/null || echo "")
     if [ -z "$REKOR_URL" ]; then
         warning "Rekor URL not yet available"
     fi
@@ -302,7 +293,7 @@ fi
 
 log ""
 log "To check status:"
-log "  oc get tuf,fulcio,rekor -n ${RHTAS_NAMESPACE}"
+log "  oc get tufs,fulcios,rekors -n ${RHTAS_NAMESPACE}"
 log "  oc get pods -n ${RHTAS_NAMESPACE}"
 log ""
 log "To get URLs for cosign configuration:"
