@@ -11,7 +11,7 @@ echo "Retrieving Red Hat SSO (Keycloak) OIDC Issuer URL..."
 # Check if Keycloak namespace exists
 if ! oc get namespace rhsso >/dev/null 2>&1; then
     echo "Error: Namespace 'rhsso' does not exist"
-    echo "Please install Red Hat SSO (Keycloak) first by running: ./07-install-keycloak.sh"
+    echo "Please install Red Hat SSO (Keycloak) first by running: ./01-keycloak.sh"
     exit 1
 fi
 
@@ -51,7 +51,7 @@ else
         KEYCLOAK_CR_EXISTS=false
     else
         echo "Error: Keycloak custom resource not found in rhsso namespace and resources are not running"
-        echo "Please install Red Hat SSO (Keycloak) first by running: ./08-install-keycloak.sh"
+        echo "Please install Red Hat SSO (Keycloak) first by running: ./01-keycloak.sh"
         exit 1
     fi
 fi
@@ -59,7 +59,7 @@ fi
 KEYCLOAK_ROUTE=$(oc get route keycloak -n rhsso -o jsonpath='{.spec.host}' 2>/dev/null || echo "")
 if [ -z "$KEYCLOAK_ROUTE" ]; then
     echo "Error: Could not retrieve Keycloak route from rhsso namespace"
-    echo "Keycloak may still be installing. Please wait for it to be ready, or run: ./07-install-keycloak.sh"
+    echo "Keycloak may still be installing. Please wait for it to be ready, or run: ./01-keycloak.sh"
     exit 1
 fi
 

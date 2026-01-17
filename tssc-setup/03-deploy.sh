@@ -3,7 +3,7 @@
 # Script to deploy Red Hat Trusted Artifact Signer (RHTAS) components
 # Assumes oc is installed and user is logged in as cluster-admin
 # Assumes RHTAS Operator is installed and Keycloak is configured
-# Usage: ./TSSC-deploy-trusted-artifact-signer.sh
+# Usage: ./03-deploy.sh
 
 set -euo pipefail
 
@@ -45,7 +45,7 @@ log "✓ OpenShift CLI connected as: $(oc whoami)"
 # Check if RHTAS Operator is installed
 log "Checking if RHTAS Operator is installed..."
 if ! oc get csv -n openshift-operators | grep -qi "trusted-artifact-signer\|rhtas"; then
-    error "RHTAS Operator not found. Please install it first by running: ./TSSC-install-trusted-artifact-signer.sh"
+    error "RHTAS Operator not found. Please install it first by running: ./02-operator.sh"
 fi
 log "✓ RHTAS Operator found"
 

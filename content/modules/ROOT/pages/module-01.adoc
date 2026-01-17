@@ -1,3 +1,5 @@
+[[operations-security]]
+
 = Operations & Security
 
 **Operations and Security Sovereignty** means ensuring organizations can operate their technology independently and autonomously, with full control over their data, infrastructure, and security postures.
@@ -84,6 +86,8 @@ image::03-cluster-creation.png[link=self, window=blank, width=100%, View New Clu
 
 NOTE: Deploying this Hosted Control Plane (HCP) cluster will take about 5 to 10 minutes. You’ll continue the lab while waiting for this cluster to provision, we will use it later on.
 
+[[label-an-existing-cluster]]
+
 == Label an existing Cluster
 
 While we wait for the cluster to deploy, lets tag the existing *aws-us* cluster with a location tag, we will leverage this tag once we deploy an application.
@@ -109,9 +113,8 @@ Cluster Labels serve as the metadata targeting system in RHACM, allowing you to 
 
 == Multi-environment Workload Creation, Management, and Observability
 
-Workload management across multiple environments enables organizations to deploy and manage applications consistently while maintaining sovereignty requirements. This includes support for virtual machines, container workloads, and AI/ML workloads, all managed through a unified interface.
+Sovereign cloud operations require that organizations retain full control over where and how their applications run. RHACM empowers you to manage all workloads—VMs, containers, and AI/ML—centrally, ensuring policy-driven governance and compliance across multiple environments.
 
-[[vm-workloads]]
 [[create-manage-vms]]
 
 == Create and Manage Virtual Machine
@@ -187,15 +190,7 @@ image::13-argo.png[link=self, window=blank, width=100%, ArgoCD Create]
 
 image::03-argoconfig.png[link=self, window=blank, width=100%, ArgoCD Config]
 
-[[ai-workloads]]
-=== AI Workloads
-
-AI and machine learning workloads require specialized compute resources and data locality considerations. RHACM enables you to deploy AI workloads across your cluster fleet while maintaining sovereignty requirements for data and compute resources.
-
-[[workload-observability]]
-=== Workload Observability
-
-Workload observability provides insights into application performance, resource utilization, and health across your multi-cluster environment. This includes metrics, logs, and traces aggregated from applications running in different clusters and environments.
+[[deploy-applications-using-openshift-gitops]]
 
 == Deploy Applications Using OpenShift GitOps
 
@@ -288,6 +283,8 @@ NOTE: This will take you to the Front end for the Patient Portal application, wh
 IMPORTANT: If you get a "Application is not available" page change the URL to use http:// and that should fix the issue. 
 
 image::03-application-route-git.png[link=self, window=blank, width=100%, Application Route]
+
+[[conclusion]]
 
 == Conclusion
 

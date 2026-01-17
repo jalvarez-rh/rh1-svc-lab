@@ -1,3 +1,5 @@
+[[labname]]
+
 = {lab_name}
 
 [[introduction]]

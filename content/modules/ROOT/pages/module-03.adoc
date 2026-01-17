@@ -1,8 +1,29 @@
+[[technology-supply-chain]]
+
 = Technology & Supply Chain
+
+[[module-goals]]
 
 == Module Goals
 
 The goal of this lab is to learn about the features from the Trusted Software Supply Chain suite of products from Red Hat. In sovereign cloud environments, maintaining control over your software supply chain is essential. This module demonstrates how cryptographic signing, verification, and Software Bills of Materials (SBOMs) enable you to maintain sovereignty over your software artifacts and dependencies.
+
+[[setup]]
+
+== Setup
+
+First, we need to set up the applications for this module.
+
+IMPORTANT: Run the following command to ensure the environment is up to date:
+
+[source,sh,subs="attributes",role=execute]
+----
+~/rh1-svc-lab/lab-setup/
+curl -fsSL https://raw.githubusercontent.com/redhat-tssc-tmm/security-roadshow/main/cosign_gitsign_installer.sh | bash
+----
+
+
+[[trusted-artifact-signer]]
 
 == Trusted Artifact Signer
 
@@ -32,23 +53,21 @@ Sigstore is designed to address the pain points and limitations of GPG in the co
 * Reduces risks from long-term private key compromises.
 * Aligns with modern software practices and supply chain security requirements.
 
-== Setup
-
-IMPORTANT: Run the following command to ensure the environment is up to date:
-
-[source,sh,subs="attributes",role=execute]
-----
-curl -fsSL https://raw.githubusercontent.com/redhat-tssc-tmm/security-roadshow/main/cosign_gitsign_installer.sh | bash
-----
+[[signing-our-software]]
 
 == Signing our software
 
 *Procedure*
 
-. Run the following command in the terminal:
+. Run the following commands in the terminal to retrieve your Quay user and registry URL using oc:
 
 [source,sh,subs="attributes",role=execute]
 ----
+cat <<EOF >> ~/.bashrc
+export QUAY_USER="{quay_admin_username}"
+export QUAY_URL="{acs_portal_username}"
+EOF
+source ~/.bashrc
 echo $QUAY_USER
 echo $QUAY_URL
 ----
@@ -57,7 +76,7 @@ echo $QUAY_URL
 [source,bash,subs="+macros,+attributes"]
 ----
 quayadmin
-quay-88k5s.apps.cluster-88k5s.88k5s.sandbox139.opentlc.com
+quay.apps.cluster-gk5g4.dynamic.redhatworkshops.io
 ----
 
 For signing and verification of container images, we'll be using the `cosign` CLI binary, which has already been installed on your bastion host (and can also be downloaded from the OpenShift Console).
@@ -966,6 +985,8 @@ The artifact is now:
 
 
 
+[[trusted-profile-analyzer]]
+
 == Trusted Profile Analyzer
 
 The Trusted Profile Analyzer adds management capabilities for *Software Bills of Materials (SBOMs)* to OpenShift. In sovereign cloud environments, SBOMs are essential for maintaining visibility and control over software dependencies, ensuring compliance with data residency requirements, and enabling organizations to make informed decisions about software components that process sensitive data.
@@ -1076,6 +1097,8 @@ Here you will find further information about the detected vulnerabilities. Click
 The same can be done with the Transitive Vulnerabilities next to the struts2-core entry.
 
 image::lab11.4-sbom.gif[lab11.4]
+
+[[module-cleanup]]
 
 == Module Cleanup
 

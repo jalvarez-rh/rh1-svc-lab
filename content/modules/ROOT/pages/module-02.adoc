@@ -1,3 +1,5 @@
+[[assurance]]
+
 = Assurance
 
 [[cluster-conformance]]
@@ -7,6 +9,8 @@ Assurance is critical for sovereignty, ensuring that applications operate in a c
 *Achieving this level of assurance requires a practical and structured approach.*
 
 So let's get practical in our example of an EMEA environment and a US environment and observe, audit, police and manage our clusters and application applications. We will start by looking at the security, compliance and environment insights that we can get from Red Hat Advanced Cluster Security for Kubernetes (RHACS).
+
+[[security-and-environment-insights]]
 
 == Security and Environment Insights
 
@@ -47,6 +51,8 @@ Administrator login is available with:
 | *RHACS Console Password:* | {acs_portal_password} 
 |===
 
+[[rhacs-compliance-operator-installation-and-compliance-checks]]
+
 == RHACS Compliance Operator Installation and Compliance Checks
 
 [[conformance-tests]]
@@ -72,13 +78,13 @@ image::assurance-02.png[link=self, window=blank, width=100%]
 
 * Name:
 +
-[source,bash]
+[source,sh,subs="attributes",role=execute]
 ----
 acs-catch-all
 ----
 * Description:
 +
-[source,bash]
+[source,sh,subs="attributes",role=execute]
 ----
 Daily compliance scan for all profiles covering CIS, E8, Moderate, NERC-CIP, PCI-DSS, and STIG standards for both platform and node-level checks
 ----
@@ -86,7 +92,7 @@ Daily compliance scan for all profiles covering CIS, E8, Moderate, NERC-CIP, PCI
 * Time: 00:00 UTC
 
 . Click Next
-. Select the clusters: *production*
+. Select the clusters: *production* (We haven't installed RHACS into the other clusters yet. A huge mistake if you ask us!)
 . Click Next
 . Add the following profiles (in order):
     * ocp4-cis (99 rules, Platform, Version 1.5.0)
@@ -127,10 +133,7 @@ image::assurance-06.png[link=self, window=blank, width=100%]
 
 image::assurance-07.png[link=self, window=blank, width=100%]
 
-[IMPORTANT]
-====
- The RHACS compliance coverage dashboard provides a comprehensive overview of your scan schedules and results. In the Coverage tab, you can review all scan schedules or filter to view specific schedules such as the "acs-catch-all". Each scan displays coverage across a variety of compliance standards—including CIS, OCP, E8, NERC-CIP, NIST 853, PCI-DSS, and DISA-STIG. You can filter results by specific checks for greater detail. On the right side of the dashboard, you’ll see the cluster’s overall compliance status, along with a breakdown of which checks are passing or failing.
-====
+IMPORTANT: The RHACS compliance coverage dashboard provides a comprehensive overview of your scan schedules and results. In the Coverage tab, you can review all scan schedules or filter to view specific schedules such as the "acs-catch-all". Each scan displays coverage across a variety of compliance standards—including CIS, OCP, E8, NERC-CIP, NIST 853, PCI-DSS, and DISA-STIG. You can filter results by specific checks for greater detail. On the right side of the dashboard, you’ll see the cluster’s overall compliance status, along with a breakdown of which checks are passing or failing.
 
 === Analyze Compliance Results
 
@@ -166,11 +169,7 @@ To address this, limit the set of container registries that OpenShift is allowed
 [start=5]
 . Create the Image Configuration YAML by copying and pasting the following into the bastion host terminal.
 
-[IMPORTANT]
-====
-Ensure you are logged in to OpenShift before running this command. If you receive an "Unauthorized" error, log in first using:
-
-[source,sh]
+[source,bash,subs="+macros,+attributes"]
 ----
 oc config use-context local-cluster
 oc apply -f - <<EOF
@@ -190,23 +189,26 @@ spec:
 EOF
 ----
 
-[INFORMATION]
+[TIP]
+.For some extra context
 ====
-- `image-registry.openshift-image-registry.svc:5000` is needed for OpenShift’s own internal image registry.
-- Add/remove registries as needed for your environment.
-- Any registry used in your cluster must be in this list to pass the policy.
+Here are the notes on the allowed registries policy:
+
+* `image-registry.openshift-image-registry.svc:5000` is required for OpenShift’s internal image registry.
+* Add or remove registries according to your environment’s needs.
+* Every registry accessed by the cluster must be included in this list for the policy to pass.
 ====
 
 [start=6]
 . Check that your changes have been accepted:
 
-[source,sh]
+[source,bash,subs="+macros,+attributes"]
 ----
 oc get image.config.openshift.io/cluster -o yaml | grep allowedRegistries -A 10
 ----
 
 **Output**
-[source,sh]
+[source,bash,subs="+macros,+attributes"]
 ----
     allowedRegistries:
     - quay.io
@@ -248,11 +250,15 @@ Updating your allowed image registries is one of the fastest and most effective 
 
 For even better results, you can automate these settings so new clusters are secure and compliant from the moment they are created. Tools like Ansible, Advanced Cluster Management (RHACM), or GitOps workflows make this automation straightforward and reliable.
 
+[[maintaining-control-in-sovereign-multi-region-environments]]
+
 == Maintaining Control in Sovereign & Multi-Region Environments
 
 In sovereign cloud setups, strict control over what runs inside your infrastructure is essential for data protection, regulatory compliance, and operational independence.
 
 Red Hat Advanced Cluster Security (RHACS) includes built-in policies that detect and block risky behaviors such as unauthorized access attempts, persistent threats, lateral movement, and data exfiltration. These policies help you enforce the immutable container principle — containers should only run exactly what you approved, with no unexpected changes.
+
+[[next-step-block-package-managers-at-runtime]]
 
 == Next Step: Block Package Managers at Runtime
 
@@ -410,6 +416,8 @@ NOTE: After a few seconds, you can see the pod is deleted and recreated. In your
 
 Congrats! You have successfully stopped yourself from downloading malicious packages! However, the security investigative process continues, as you have now raised a flag that must be triaged! you will triage our violations after you look at deploy time policies.
 
+[[report-and-resolve-violations]]
+
 == Report and Resolve Violations
 
 In this section, you will resolve a few of the issues that you have created.
@@ -439,6 +447,8 @@ oc delete -f $TUTORIAL_HOME/skupper-demo/frontend.yml
 
 image::04-acs-resolve.png[link=self, window=blank, width=100%]
 
+[[implement-policy-as-code-in-acm-with-openshift-gitops]]
+
 == Implement Policy-as-Code in ACM with OpenShift GitOps
 
 Your last task is to externally manage ACS policies through OpenShift GitOps. To make this easier, the policies from before have already been exported to a GitHub repository.
@@ -463,6 +473,8 @@ Name: Give the application a name, e.g., pac-custom-policies.
 * Label: *local-cluster*
 * Operator: *equals any of*
 * Value: *true*
+
+[[conclusion]]
 
 == Conclusion
 
