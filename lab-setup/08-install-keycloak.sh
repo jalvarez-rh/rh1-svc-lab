@@ -370,17 +370,78 @@ log ""
 
 KEYCLOAK_CR_NAME="rhsso-instance"
 
+# Determine the correct resource name (try both singular and plural)
+# The error message showed "keycloaks.k8s.keycloak.org", so try plural first
+KEYCLOAK_CRD="keycloaks"
+if oc get crd keycloaks.k8s.keycloak.org >/dev/null 2>&1 || oc get crd keycloaks.keycloak.org >/dev/null 2>&1; then
+    log "Detected Keycloak CRD: keycloaks"
+    KEYCLOAK_CRD="keycloaks"
+elif oc get crd keycloak.k8s.keycloak.org >/dev/null 2>&1 || oc get crd keycloak.keycloak.org >/dev/null 2>&1; then
+    log "Detected Keycloak CRD: keycloak"
+    KEYCLOAK_CRD="keycloak"
+else
+    # Try to determine by attempting to list resources
+    if oc get keycloaks -n $NAMESPACE >/dev/null 2>&1; then
+        KEYCLOAK_CRD="keycloaks"
+        log "Using resource name: keycloaks (detected via API)"
+    elif oc get keycloak -n $NAMESPACE >/dev/null 2>&1; then
+        KEYCLOAK_CRD="keycloak"
+        log "Using resource name: keycloak (detected via API)"
+    else
+        # Default to keycloak (singular) as that's what the manifest uses
+        KEYCLOAK_CRD="keycloak"
+        warning "Could not determine Keycloak resource name, defaulting to 'keycloak'"
+    fi
+fi
+
 # Check if Keycloak CR already exists
-if oc get keycloak $KEYCLOAK_CR_NAME -n $NAMESPACE >/dev/null 2>&1; then
+CR_EXISTS=false
+if oc get $KEYCLOAK_CRD $KEYCLOAK_CR_NAME -n $NAMESPACE >/dev/null 2>&1; then
+    CR_EXISTS=true
+else
+    # Try the other resource name in case detection was wrong
+    if [ "$KEYCLOAK_CRD" = "keycloak" ]; then
+        if oc get keycloaks $KEYCLOAK_CR_NAME -n $NAMESPACE >/dev/null 2>&1; then
+            KEYCLOAK_CRD="keycloaks"
+            CR_EXISTS=true
+            log "Found CR using resource name: keycloaks"
+        fi
+    elif [ "$KEYCLOAK_CRD" = "keycloaks" ]; then
+        if oc get keycloak $KEYCLOAK_CR_NAME -n $NAMESPACE >/dev/null 2>&1; then
+            KEYCLOAK_CRD="keycloak"
+            CR_EXISTS=true
+            log "Found CR using resource name: keycloak"
+        fi
+    fi
+    
+    # Check if there are any Keycloak CRs with different names
+    if [ "$CR_EXISTS" = false ]; then
+        EXISTING_CRS=$(oc get $KEYCLOAK_CRD -n $NAMESPACE -o name 2>/dev/null || echo "")
+        if [ -z "$EXISTING_CRS" ] && [ "$KEYCLOAK_CRD" = "keycloak" ]; then
+            EXISTING_CRS=$(oc get keycloaks -n $NAMESPACE -o name 2>/dev/null || echo "")
+            if [ -n "$EXISTING_CRS" ]; then
+                KEYCLOAK_CRD="keycloaks"
+                log "Found existing Keycloak CRs, using resource name: keycloaks"
+            fi
+        fi
+        if [ -n "$EXISTING_CRS" ]; then
+            warning "Found existing Keycloak CR(s) but not '$KEYCLOAK_CR_NAME':"
+            echo "$EXISTING_CRS" | sed 's/^/  /'
+            log "Will create new CR: $KEYCLOAK_CR_NAME"
+        fi
+    fi
+fi
+
+if [ "$CR_EXISTS" = true ]; then
     log "Keycloak CR '$KEYCLOAK_CR_NAME' already exists"
     
     # Check if it's ready
-    KEYCLOAK_READY=$(oc get keycloak $KEYCLOAK_CR_NAME -n $NAMESPACE -o jsonpath='{.status.ready}' 2>/dev/null || echo "false")
-    KEYCLOAK_PHASE=$(oc get keycloak $KEYCLOAK_CR_NAME -n $NAMESPACE -o jsonpath='{.status.phase}' 2>/dev/null || echo "")
+    KEYCLOAK_READY=$(oc get $KEYCLOAK_CRD $KEYCLOAK_CR_NAME -n $NAMESPACE -o jsonpath='{.status.ready}' 2>/dev/null || echo "false")
+    KEYCLOAK_PHASE=$(oc get $KEYCLOAK_CRD $KEYCLOAK_CR_NAME -n $NAMESPACE -o jsonpath='{.status.phase}' 2>/dev/null || echo "")
     
     if [ "$KEYCLOAK_READY" = "true" ]; then
         log "✓ Keycloak instance is already ready"
-        KEYCLOAK_EXTERNAL_URL=$(oc get keycloak $KEYCLOAK_CR_NAME -n $NAMESPACE -o jsonpath='{.status.externalURL}' 2>/dev/null || echo "")
+        KEYCLOAK_EXTERNAL_URL=$(oc get $KEYCLOAK_CRD $KEYCLOAK_CR_NAME -n $NAMESPACE -o jsonpath='{.status.externalURL}' 2>/dev/null || echo "")
         if [ -n "$KEYCLOAK_EXTERNAL_URL" ]; then
             log "  External URL: $KEYCLOAK_EXTERNAL_URL"
         fi
@@ -425,14 +486,58 @@ LAST_PHASE=""
 LAST_MESSAGE=""
 
 while [ $WAIT_COUNT -lt $MAX_WAIT ]; do
-    KEYCLOAK_READY_STATUS=$(oc get keycloak $KEYCLOAK_CR_NAME -n $NAMESPACE -o jsonpath='{.status.ready}' 2>/dev/null || echo "false")
-    KEYCLOAK_PHASE=$(oc get keycloak $KEYCLOAK_CR_NAME -n $NAMESPACE -o jsonpath='{.status.phase}' 2>/dev/null || echo "")
-    KEYCLOAK_MESSAGE=$(oc get keycloak $KEYCLOAK_CR_NAME -n $NAMESPACE -o jsonpath='{.status.message}' 2>/dev/null || echo "")
+    # Check if CR exists first
+    if ! oc get $KEYCLOAK_CRD $KEYCLOAK_CR_NAME -n $NAMESPACE >/dev/null 2>&1; then
+        if [ $((WAIT_COUNT % 30)) -eq 0 ] && [ $WAIT_COUNT -gt 0 ]; then
+            warning "Keycloak CR '$KEYCLOAK_CR_NAME' not found. It may have been deleted or not created properly."
+            log "Attempting to recreate..."
+            # Try to recreate the CR
+            if ! cat <<EOF | oc apply -f - 2>&1
+apiVersion: keycloak.org/v1alpha1
+kind: Keycloak
+metadata:
+  name: $KEYCLOAK_CR_NAME
+  namespace: $NAMESPACE
+  labels:
+    app: sso
+spec:
+  externalAccess:
+    enabled: true
+  instances: 1
+EOF
+            then
+                warning "Failed to recreate CR. Will continue checking..."
+            else
+                log "CR recreated, waiting for operator to process..."
+                sleep 5
+            fi
+        fi
+        KEYCLOAK_READY_STATUS="false"
+        KEYCLOAK_PHASE=""
+        KEYCLOAK_MESSAGE="CR not found"
+    else
+        KEYCLOAK_READY_STATUS=$(oc get $KEYCLOAK_CRD $KEYCLOAK_CR_NAME -n $NAMESPACE -o jsonpath='{.status.ready}' 2>/dev/null || echo "false")
+        KEYCLOAK_PHASE=$(oc get $KEYCLOAK_CRD $KEYCLOAK_CR_NAME -n $NAMESPACE -o jsonpath='{.status.phase}' 2>/dev/null || echo "")
+        KEYCLOAK_MESSAGE=$(oc get $KEYCLOAK_CRD $KEYCLOAK_CR_NAME -n $NAMESPACE -o jsonpath='{.status.message}' 2>/dev/null || echo "")
+    fi
     
     if [ "$KEYCLOAK_READY_STATUS" = "true" ]; then
         KEYCLOAK_READY=true
         log "✓ Keycloak instance is ready"
         break
+    fi
+    
+    # If CR doesn't exist, check if resources are running anyway (CR may have been deleted but resources remain)
+    if [ "$KEYCLOAK_MESSAGE" = "CR not found" ]; then
+        KEYCLOAK_STS_READY=$(oc get statefulset keycloak -n $NAMESPACE -o jsonpath='{.status.readyReplicas}/{.status.replicas}' 2>/dev/null || echo "")
+        KEYCLOAK_POD_RUNNING=$(oc get pod -n $NAMESPACE -l app=keycloak --field-selector=status.phase=Running -o jsonpath='{.items[0].status.phase}' 2>/dev/null || echo "")
+        
+        if [ "$KEYCLOAK_STS_READY" = "1/1" ] && [ "$KEYCLOAK_POD_RUNNING" = "Running" ]; then
+            log "✓ Keycloak resources are running (StatefulSet: $KEYCLOAK_STS_READY, Pod: $KEYCLOAK_POD_RUNNING)"
+            log "  Note: Keycloak CR not found, but resources are healthy. Installation appears successful."
+            KEYCLOAK_READY=true
+            break
+        fi
     fi
     
     # Show progress every 30 seconds or if phase/message changed
@@ -488,26 +593,71 @@ while [ $WAIT_COUNT -lt $MAX_WAIT ]; do
 done
 
 if [ "$KEYCLOAK_READY" = false ]; then
-    warning "Keycloak instance did not become ready within ${MAX_WAIT} seconds"
-    log ""
-    log "Current Keycloak CR status:"
-    oc get keycloak $KEYCLOAK_CR_NAME -n $NAMESPACE -o yaml | grep -A 10 "status:" || oc get keycloak $KEYCLOAK_CR_NAME -n $NAMESPACE
-    log ""
+    # Final check: even if CR doesn't exist, check if resources are running
+    KEYCLOAK_STS_READY=$(oc get statefulset keycloak -n $NAMESPACE -o jsonpath='{.status.readyReplicas}/{.status.replicas}' 2>/dev/null || echo "")
+    KEYCLOAK_POD_RUNNING=$(oc get pod -n $NAMESPACE -l app=keycloak --field-selector=status.phase=Running -o jsonpath='{.items[0].status.phase}' 2>/dev/null || echo "")
     
-    # Check for reconciliation conflicts
-    KEYCLOAK_MESSAGE=$(oc get keycloak $KEYCLOAK_CR_NAME -n $NAMESPACE -o jsonpath='{.status.message}' 2>/dev/null || echo "")
-    if echo "$KEYCLOAK_MESSAGE" | grep -qi "cannot be fulfilled\|modified\|conflict"; then
-        log "Detected reconciliation conflicts. This is usually transient."
-        log "The operator will continue retrying. You can check progress with:"
-        log "  oc get keycloak $KEYCLOAK_CR_NAME -n $NAMESPACE -o yaml | grep -A 5 status"
-        log "  oc logs -n $NAMESPACE -l name=rhsso-operator --tail=50"
+    if [ "$KEYCLOAK_STS_READY" = "1/1" ] && [ "$KEYCLOAK_POD_RUNNING" = "Running" ]; then
+        log "✓ Keycloak resources are running despite CR check timeout"
+        log "  StatefulSet: $KEYCLOAK_STS_READY"
+        log "  Pod status: $KEYCLOAK_POD_RUNNING"
+        log "  Installation appears successful even though CR was not found."
+        KEYCLOAK_READY=true
     else
-        warning "Keycloak may still be installing or there may be an issue."
-        log "Check operator logs: oc logs -n $NAMESPACE -l name=rhsso-operator --tail=100"
+        warning "Keycloak instance did not become ready within ${MAX_WAIT} seconds"
+        log ""
+        
+        # Check if CR exists before trying to get status
+        if oc get $KEYCLOAK_CRD $KEYCLOAK_CR_NAME -n $NAMESPACE >/dev/null 2>&1; then
+            log "Current Keycloak CR status:"
+            oc get $KEYCLOAK_CRD $KEYCLOAK_CR_NAME -n $NAMESPACE -o yaml | grep -A 10 "status:" || oc get $KEYCLOAK_CRD $KEYCLOAK_CR_NAME -n $NAMESPACE
+            log ""
+            
+            # Check for reconciliation conflicts
+            KEYCLOAK_MESSAGE=$(oc get $KEYCLOAK_CRD $KEYCLOAK_CR_NAME -n $NAMESPACE -o jsonpath='{.status.message}' 2>/dev/null || echo "")
+        else
+        warning "Keycloak CR '$KEYCLOAK_CR_NAME' does not exist!"
+        log ""
+        log "Checking for available Keycloak CRs:"
+        oc get $KEYCLOAK_CRD -n $NAMESPACE 2>&1 || log "  No Keycloak CRs found"
+        log ""
+            log "Checking CRD availability:"
+            oc get crd | grep -i keycloak || log "  No Keycloak CRD found"
+            log ""
+            KEYCLOAK_MESSAGE="CR not found"
+        fi
+        
+        if echo "$KEYCLOAK_MESSAGE" | grep -qi "cannot be fulfilled\|modified\|conflict"; then
+            log "Detected reconciliation conflicts. This is usually transient."
+            log "The operator will continue retrying. You can check progress with:"
+            log "  oc get $KEYCLOAK_CRD $KEYCLOAK_CR_NAME -n $NAMESPACE -o yaml | grep -A 5 status"
+            log "  oc logs -n $NAMESPACE -l name=rhsso-operator --tail=50"
+        else
+            if [ "$KEYCLOAK_MESSAGE" = "CR not found" ]; then
+                warning "Keycloak CR was not found. The CR may need to be created manually."
+                log "To create the CR, run:"
+                log "  cat <<EOF | oc apply -f -"
+                log "apiVersion: keycloak.org/v1alpha1"
+                log "kind: Keycloak"
+                log "metadata:"
+                log "  name: $KEYCLOAK_CR_NAME"
+                log "  namespace: $NAMESPACE"
+                log "  labels:"
+                log "    app: sso"
+                log "spec:"
+                log "  externalAccess:"
+                log "    enabled: true"
+                log "  instances: 1"
+                log "EOF"
+            else
+                warning "Keycloak may still be installing or there may be an issue."
+                log "Check operator logs: oc logs -n $NAMESPACE -l name=rhsso-operator --tail=100"
+            fi
+        fi
+        log ""
+        log "To check status: oc get $KEYCLOAK_CRD $KEYCLOAK_CR_NAME -n $NAMESPACE"
+        log "To check pods: oc get pods -n $NAMESPACE"
     fi
-    log ""
-    log "To check status: oc get keycloak $KEYCLOAK_CR_NAME -n $NAMESPACE"
-    log "To check pods: oc get pods -n $NAMESPACE"
 else
     log "✓ Keycloak instance is ready"
 fi
@@ -516,9 +666,38 @@ fi
 log ""
 log "Retrieving Keycloak access information..."
 
-KEYCLOAK_EXTERNAL_URL=$(oc get keycloak $KEYCLOAK_CR_NAME -n $NAMESPACE -o jsonpath='{.status.externalURL}' 2>/dev/null || echo "")
-KEYCLOAK_INTERNAL_URL=$(oc get keycloak $KEYCLOAK_CR_NAME -n $NAMESPACE -o jsonpath='{.status.internalURL}' 2>/dev/null || echo "")
-KEYCLOAK_CREDENTIAL_SECRET=$(oc get keycloak $KEYCLOAK_CR_NAME -n $NAMESPACE -o jsonpath='{.status.credentialSecret}' 2>/dev/null || echo "")
+# Try to get URLs from CR first
+KEYCLOAK_EXTERNAL_URL=$(oc get $KEYCLOAK_CRD $KEYCLOAK_CR_NAME -n $NAMESPACE -o jsonpath='{.status.externalURL}' 2>/dev/null || echo "")
+KEYCLOAK_INTERNAL_URL=$(oc get $KEYCLOAK_CRD $KEYCLOAK_CR_NAME -n $NAMESPACE -o jsonpath='{.status.internalURL}' 2>/dev/null || echo "")
+KEYCLOAK_CREDENTIAL_SECRET=$(oc get $KEYCLOAK_CRD $KEYCLOAK_CR_NAME -n $NAMESPACE -o jsonpath='{.status.credentialSecret}' 2>/dev/null || echo "")
+
+# If CR doesn't exist, try to get URL from route
+if [ -z "$KEYCLOAK_EXTERNAL_URL" ]; then
+    KEYCLOAK_EXTERNAL_URL=$(oc get route keycloak -n $NAMESPACE -o jsonpath='https://{.spec.host}' 2>/dev/null || echo "")
+fi
+
+# If still no URL, try to get from service
+if [ -z "$KEYCLOAK_INTERNAL_URL" ]; then
+    KEYCLOAK_SVC=$(oc get svc keycloak -n $NAMESPACE -o jsonpath='{.metadata.name}' 2>/dev/null || echo "")
+    if [ -n "$KEYCLOAK_SVC" ]; then
+        KEYCLOAK_INTERNAL_URL="https://${KEYCLOAK_SVC}.${NAMESPACE}.svc.cluster.local:8443"
+    fi
+fi
+
+# Try to find credential secret if not from CR
+if [ -z "$KEYCLOAK_CREDENTIAL_SECRET" ]; then
+    # Look for credential secrets
+    KEYCLOAK_CREDENTIAL_SECRET=$(oc get secret -n $NAMESPACE -l app=keycloak -o jsonpath='{.items[0].metadata.name}' 2>/dev/null || echo "")
+    if [ -z "$KEYCLOAK_CREDENTIAL_SECRET" ]; then
+        # Try common secret names
+        for secret_name in "credential-rhsso-instance" "keycloak-credential" "rhsso-instance-credential"; do
+            if oc get secret $secret_name -n $NAMESPACE >/dev/null 2>&1; then
+                KEYCLOAK_CREDENTIAL_SECRET=$secret_name
+                break
+            fi
+        done
+    fi
+fi
 
 KEYCLOAK_USERNAME=""
 KEYCLOAK_PASSWORD=""
@@ -533,8 +712,13 @@ log "========================================================="
 log "Keycloak Installation Summary"
 log "========================================================="
 log "Namespace: $NAMESPACE"
-log "Keycloak CR: $KEYCLOAK_CR_NAME"
-log "Status: Ready"
+if oc get $KEYCLOAK_CRD $KEYCLOAK_CR_NAME -n $NAMESPACE >/dev/null 2>&1; then
+    log "Keycloak CR: $KEYCLOAK_CR_NAME"
+    log "Status: Ready"
+else
+    log "Keycloak CR: $KEYCLOAK_CR_NAME (not found, but resources are running)"
+    log "Status: Ready (resources verified)"
+fi
 log ""
 if [ -n "$KEYCLOAK_EXTERNAL_URL" ]; then
     log "External URL: $KEYCLOAK_EXTERNAL_URL"

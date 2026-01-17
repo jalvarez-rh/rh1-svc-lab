@@ -15,11 +15,45 @@ if ! oc get namespace rhsso >/dev/null 2>&1; then
     exit 1
 fi
 
-# Check if Keycloak CR exists
-if ! oc get keycloak keycloak -n rhsso >/dev/null 2>&1; then
-    echo "Error: Keycloak custom resource not found in rhsso namespace"
-    echo "Please install Red Hat SSO (Keycloak) first by running: ./07-install-keycloak.sh"
-    exit 1
+# Determine the correct CRD name (try both singular and plural)
+KEYCLOAK_CRD="keycloaks"
+if oc get crd keycloaks.k8s.keycloak.org >/dev/null 2>&1 || oc get crd keycloaks.keycloak.org >/dev/null 2>&1; then
+    KEYCLOAK_CRD="keycloaks"
+elif oc get crd keycloak.k8s.keycloak.org >/dev/null 2>&1 || oc get crd keycloak.keycloak.org >/dev/null 2>&1; then
+    KEYCLOAK_CRD="keycloak"
+else
+    # Try to determine by attempting to list resources
+    if oc get keycloaks -n rhsso >/dev/null 2>&1; then
+        KEYCLOAK_CRD="keycloaks"
+    elif oc get keycloak -n rhsso >/dev/null 2>&1; then
+        KEYCLOAK_CRD="keycloak"
+    else
+        KEYCLOAK_CRD="keycloak"
+    fi
+fi
+
+KEYCLOAK_CR_NAME="rhsso-instance"
+
+# Check if Keycloak CR exists, or if resources are running
+KEYCLOAK_CR_EXISTS=false
+if oc get $KEYCLOAK_CRD $KEYCLOAK_CR_NAME -n rhsso >/dev/null 2>&1; then
+    KEYCLOAK_CR_EXISTS=true
+elif oc get $KEYCLOAK_CRD keycloak -n rhsso >/dev/null 2>&1; then
+    KEYCLOAK_CR_NAME="keycloak"
+    KEYCLOAK_CR_EXISTS=true
+else
+    # Check if resources are running even without CR
+    KEYCLOAK_STS_READY=$(oc get statefulset keycloak -n rhsso -o jsonpath='{.status.readyReplicas}/{.status.replicas}' 2>/dev/null || echo "")
+    KEYCLOAK_POD_RUNNING=$(oc get pod -n rhsso -l app=keycloak --field-selector=status.phase=Running -o jsonpath='{.items[0].status.phase}' 2>/dev/null || echo "")
+    
+    if [ "$KEYCLOAK_STS_READY" = "1/1" ] && [ "$KEYCLOAK_POD_RUNNING" = "Running" ]; then
+        echo "✓ Keycloak resources are running (CR not found, but installation appears successful)"
+        KEYCLOAK_CR_EXISTS=false
+    else
+        echo "Error: Keycloak custom resource not found in rhsso namespace and resources are not running"
+        echo "Please install Red Hat SSO (Keycloak) first by running: ./08-install-keycloak.sh"
+        exit 1
+    fi
 fi
 
 KEYCLOAK_ROUTE=$(oc get route keycloak -n rhsso -o jsonpath='{.spec.host}' 2>/dev/null || echo "")
@@ -41,22 +75,37 @@ REALM="openshift"
 
 # Function to get Keycloak admin credentials
 get_keycloak_admin_creds() {
-    # Try to get admin credentials from secret
-    ADMIN_USER=$(oc get secret credential-rhsso -n rhsso -o jsonpath='{.data.ADMIN_USERNAME}' 2>/dev/null | base64 -d 2>/dev/null || echo "")
-    ADMIN_PASS=$(oc get secret credential-rhsso -n rhsso -o jsonpath='{.data.ADMIN_PASSWORD}' 2>/dev/null | base64 -d 2>/dev/null || echo "")
+    local cred_secret=""
     
-    # If not found, try alternative secret names
-    if [ -z "$ADMIN_USER" ] || [ -z "$ADMIN_PASS" ]; then
-        ADMIN_USER=$(oc get secret keycloak-admin-credential -n rhsso -o jsonpath='{.data.username}' 2>/dev/null | base64 -d 2>/dev/null || echo "")
-        ADMIN_PASS=$(oc get secret keycloak-admin-credential -n rhsso -o jsonpath='{.data.password}' 2>/dev/null | base64 -d 2>/dev/null || echo "")
+    # Try to get credential secret name from CR status
+    if [ "$KEYCLOAK_CR_EXISTS" = true ]; then
+        cred_secret=$(oc get $KEYCLOAK_CRD $KEYCLOAK_CR_NAME -n rhsso -o jsonpath='{.status.credentialSecret}' 2>/dev/null || echo "")
     fi
     
-    # If still not found, try from Keycloak CR
-    if [ -z "$ADMIN_USER" ] || [ -z "$ADMIN_PASS" ]; then
-        ADMIN_USER=$(oc get keycloak keycloak -n rhsso -o jsonpath='{.spec.externalAccess.user}' 2>/dev/null || echo "admin")
-        ADMIN_PASS=$(oc get secret credential-rhsso -n rhsso -o jsonpath='{.data.ADMIN_PASSWORD}' 2>/dev/null | base64 -d 2>/dev/null || echo "")
+    # If not from CR, try common secret names
+    if [ -z "$cred_secret" ]; then
+        for secret_name in "credential-rhsso-instance" "keycloak-credential" "rhsso-instance-credential" "credential-rhsso" "keycloak-admin-credential"; do
+            if oc get secret $secret_name -n rhsso >/dev/null 2>&1; then
+                cred_secret=$secret_name
+                break
+            fi
+        done
     fi
     
+    # Try to get credentials from the secret
+    if [ -n "$cred_secret" ]; then
+        # Try username/password fields first
+        ADMIN_USER=$(oc get secret $cred_secret -n rhsso -o jsonpath='{.data.username}' 2>/dev/null | base64 -d 2>/dev/null || echo "")
+        ADMIN_PASS=$(oc get secret $cred_secret -n rhsso -o jsonpath='{.data.password}' 2>/dev/null | base64 -d 2>/dev/null || echo "")
+        
+        # If not found, try ADMIN_USERNAME/ADMIN_PASSWORD
+        if [ -z "$ADMIN_USER" ] || [ -z "$ADMIN_PASS" ]; then
+            ADMIN_USER=$(oc get secret $cred_secret -n rhsso -o jsonpath='{.data.ADMIN_USERNAME}' 2>/dev/null | base64 -d 2>/dev/null || echo "")
+            ADMIN_PASS=$(oc get secret $cred_secret -n rhsso -o jsonpath='{.data.ADMIN_PASSWORD}' 2>/dev/null | base64 -d 2>/dev/null || echo "")
+        fi
+    fi
+    
+    # Return credentials (may be empty if not found)
     echo "$ADMIN_USER|$ADMIN_PASS"
 }
 
@@ -148,11 +197,15 @@ ADMIN_PASS=$(echo "$CREDS" | cut -d'|' -f2)
 
 if [ -z "$ADMIN_USER" ] || [ -z "$ADMIN_PASS" ]; then
     echo "Warning: Could not retrieve Keycloak admin credentials automatically"
-    echo "You may need to create the OAuth client manually in the Keycloak admin console"
+    echo "Attempting to use default credentials (admin/admin) - this may not work if Keycloak was configured differently"
+    echo "If authentication fails, you may need to create the OAuth client manually in the Keycloak admin console"
     echo "Client ID: ${OIDC_CLIENT_ID}"
     echo "Realm: ${REALM}"
     echo "Redirect URIs: http://localhost/auth/callback, urn:ietf:wg:oauth:2.0:oob"
     echo "Public Client: Yes"
+    # Use defaults as fallback
+    ADMIN_USER=${ADMIN_USER:-admin}
+    ADMIN_PASS=${ADMIN_PASS:-admin}
 else
     echo "✓ Retrieved Keycloak admin credentials"
     
