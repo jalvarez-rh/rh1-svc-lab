@@ -68,173 +68,199 @@ OIDC_ISSUER_URL="${KEYCLOAK_URL}/auth/realms/openshift"
 echo "✓ Red Hat SSO (Keycloak) URL: $KEYCLOAK_URL"
 echo "✓ OIDC Issuer URL: $OIDC_ISSUER_URL"
 
-# Step 2: Create OAuth Client in Red Hat SSO (Keycloak) for Trusted Artifact Signer
-echo "Creating OAuth Client in Red Hat SSO (Keycloak) for Trusted Artifact Signer..."
-OIDC_CLIENT_ID="trusted-artifact-signer"
+# Step 2: Ensure OpenShift realm exists (using KeycloakRealm CR)
+echo "Ensuring OpenShift realm exists..."
 REALM="openshift"
+REALM_CR_NAME="openshift"
 
-# Function to get Keycloak admin credentials
-get_keycloak_admin_creds() {
-    local cred_secret=""
+# Check if KeycloakRealm CR exists
+if oc get keycloakrealm $REALM_CR_NAME -n rhsso >/dev/null 2>&1; then
+    echo "✓ KeycloakRealm CR '${REALM_CR_NAME}' already exists"
     
-    # Try to get credential secret name from CR status
-    if [ "$KEYCLOAK_CR_EXISTS" = true ]; then
-        cred_secret=$(oc get $KEYCLOAK_CRD $KEYCLOAK_CR_NAME -n rhsso -o jsonpath='{.status.credentialSecret}' 2>/dev/null || echo "")
-    fi
+    # Wait for realm to be ready
+    echo "Waiting for realm to be ready..."
+    MAX_WAIT_REALM=120
+    WAIT_COUNT=0
+    REALM_READY=false
     
-    # If not from CR, try common secret names
-    if [ -z "$cred_secret" ]; then
-        for secret_name in "credential-rhsso-instance" "keycloak-credential" "rhsso-instance-credential" "credential-rhsso" "keycloak-admin-credential"; do
-            if oc get secret $secret_name -n rhsso >/dev/null 2>&1; then
-                cred_secret=$secret_name
-                break
-            fi
-        done
-    fi
-    
-    # Try to get credentials from the secret
-    if [ -n "$cred_secret" ]; then
-        # Try username/password fields first
-        ADMIN_USER=$(oc get secret $cred_secret -n rhsso -o jsonpath='{.data.username}' 2>/dev/null | base64 -d 2>/dev/null || echo "")
-        ADMIN_PASS=$(oc get secret $cred_secret -n rhsso -o jsonpath='{.data.password}' 2>/dev/null | base64 -d 2>/dev/null || echo "")
-        
-        # If not found, try ADMIN_USERNAME/ADMIN_PASSWORD
-        if [ -z "$ADMIN_USER" ] || [ -z "$ADMIN_PASS" ]; then
-            ADMIN_USER=$(oc get secret $cred_secret -n rhsso -o jsonpath='{.data.ADMIN_USERNAME}' 2>/dev/null | base64 -d 2>/dev/null || echo "")
-            ADMIN_PASS=$(oc get secret $cred_secret -n rhsso -o jsonpath='{.data.ADMIN_PASSWORD}' 2>/dev/null | base64 -d 2>/dev/null || echo "")
+    while [ $WAIT_COUNT -lt $MAX_WAIT_REALM ]; do
+        REALM_STATUS=$(oc get keycloakrealm $REALM_CR_NAME -n rhsso -o jsonpath='{.status.ready}' 2>/dev/null || echo "false")
+        if [ "$REALM_STATUS" = "true" ]; then
+            REALM_READY=true
+            echo "✓ Realm is ready"
+            break
         fi
-    fi
-    
-    # Return credentials (may be empty if not found)
-    echo "$ADMIN_USER|$ADMIN_PASS"
-}
-
-# Get admin token from Keycloak
-get_admin_token() {
-    local admin_user=$1
-    local admin_pass=$2
-    local keycloak_url=$3
-    
-    TOKEN_RESPONSE=$(curl -s -X POST "${keycloak_url}/auth/realms/master/protocol/openid-connect/token" \
-        -H "Content-Type: application/x-www-form-urlencoded" \
-        -d "username=${admin_user}" \
-        -d "password=${admin_pass}" \
-        -d "grant_type=password" \
-        -d "client_id=admin-cli" 2>/dev/null)
-    
-    echo "$TOKEN_RESPONSE" | grep -o '"access_token":"[^"]*' | cut -d'"' -f4
-}
-
-# Check if client already exists
-check_client_exists() {
-    local admin_token=$1
-    local keycloak_url=$2
-    local realm=$3
-    local client_id=$4
-    
-    HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" \
-        -H "Authorization: Bearer ${admin_token}" \
-        "${keycloak_url}/auth/admin/realms/${realm}/clients?clientId=${client_id}" 2>/dev/null)
-    
-    if [ "$HTTP_CODE" = "200" ]; then
-        CLIENT_LIST=$(curl -s \
-            -H "Authorization: Bearer ${admin_token}" \
-            "${keycloak_url}/auth/admin/realms/${realm}/clients?clientId=${client_id}" 2>/dev/null)
-        
-        if echo "$CLIENT_LIST" | grep -q "\"clientId\":\"${client_id}\""; then
-            return 0
+        sleep 2
+        WAIT_COUNT=$((WAIT_COUNT + 2))
+        if [ $((WAIT_COUNT % 10)) -eq 0 ] && [ $WAIT_COUNT -gt 0 ]; then
+            echo "  Still waiting for realm to be ready... (${WAIT_COUNT}s/${MAX_WAIT_REALM}s)"
         fi
+    done
+    
+    if [ "$REALM_READY" = false ]; then
+        echo "Warning: Realm did not become ready within ${MAX_WAIT_REALM} seconds, but continuing..."
     fi
-    return 1
-}
-
-# Create client in Keycloak
-create_keycloak_client() {
-    local admin_token=$1
-    local keycloak_url=$2
-    local realm=$3
-    local client_id=$4
-    
-    CLIENT_CONFIG=$(cat <<EOF
-{
-  "clientId": "${client_id}",
-  "enabled": true,
-  "protocol": "openid-connect",
-  "publicClient": true,
-  "standardFlowEnabled": true,
-  "directAccessGrantsEnabled": true,
-  "redirectUris": [
-    "http://localhost/auth/callback",
-    "urn:ietf:wg:oauth:2.0:oob"
-  ],
-  "webOrigins": ["+"],
-  "attributes": {
-    "access.token.lifespan": "300"
-  }
-}
-EOF
-)
-    
-    HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" \
-        -X POST \
-        -H "Authorization: Bearer ${admin_token}" \
-        -H "Content-Type: application/json" \
-        -d "${CLIENT_CONFIG}" \
-        "${keycloak_url}/auth/admin/realms/${realm}/clients" 2>/dev/null)
-    
-    if [ "$HTTP_CODE" = "201" ] || [ "$HTTP_CODE" = "409" ]; then
-        return 0
-    else
-        return 1
-    fi
-}
-
-# Get admin credentials
-echo "Retrieving Keycloak admin credentials..."
-CREDS=$(get_keycloak_admin_creds)
-ADMIN_USER=$(echo "$CREDS" | cut -d'|' -f1)
-ADMIN_PASS=$(echo "$CREDS" | cut -d'|' -f2)
-
-if [ -z "$ADMIN_USER" ] || [ -z "$ADMIN_PASS" ]; then
-    echo "Warning: Could not retrieve Keycloak admin credentials automatically"
-    echo "Attempting to use default credentials (admin/admin) - this may not work if Keycloak was configured differently"
-    echo "If authentication fails, you may need to create the OAuth client manually in the Keycloak admin console"
-    echo "Client ID: ${OIDC_CLIENT_ID}"
-    echo "Realm: ${REALM}"
-    echo "Redirect URIs: http://localhost/auth/callback, urn:ietf:wg:oauth:2.0:oob"
-    echo "Public Client: Yes"
-    # Use defaults as fallback
-    ADMIN_USER=${ADMIN_USER:-admin}
-    ADMIN_PASS=${ADMIN_PASS:-admin}
 else
-    echo "✓ Retrieved Keycloak admin credentials"
+    echo "Creating KeycloakRealm CR '${REALM_CR_NAME}'..."
     
-    # Get admin token
-    echo "Authenticating to Keycloak..."
-    ADMIN_TOKEN=$(get_admin_token "$ADMIN_USER" "$ADMIN_PASS" "$KEYCLOAK_URL")
+    if ! cat <<EOF | oc apply -f -
+apiVersion: keycloak.org/v1alpha1
+kind: KeycloakRealm
+metadata:
+  name: ${REALM_CR_NAME}
+  namespace: rhsso
+  labels:
+    app: openshift
+spec:
+  instanceSelector:
+    matchLabels:
+      app: sso
+  realm:
+    displayName: Openshift Authentication Realm
+    enabled: true
+    id: ${REALM}
+    realm: ${REALM}
+EOF
+    then
+        echo "Error: Failed to create KeycloakRealm CR"
+        exit 1
+    fi
     
-    if [ -z "$ADMIN_TOKEN" ]; then
-        echo "Warning: Could not authenticate to Keycloak"
-        echo "You may need to create the OAuth client manually in the Keycloak admin console"
-    else
-        echo "✓ Authenticated to Keycloak"
-        
-        # Check if client already exists
-        if check_client_exists "$ADMIN_TOKEN" "$KEYCLOAK_URL" "$REALM" "$OIDC_CLIENT_ID"; then
-            echo "OAuth client '${OIDC_CLIENT_ID}' already exists in Keycloak realm '${REALM}', skipping creation"
-        else
-            # Create the client
-            if create_keycloak_client "$ADMIN_TOKEN" "$KEYCLOAK_URL" "$REALM" "$OIDC_CLIENT_ID"; then
-                echo "✓ OAuth client '${OIDC_CLIENT_ID}' created in Keycloak realm '${REALM}'"
-            else
-                echo "Warning: Failed to create OAuth client in Keycloak"
-                echo "You may need to create it manually in the Keycloak admin console"
-            fi
+    echo "✓ KeycloakRealm CR created successfully"
+    
+    # Wait for realm to be ready
+    echo "Waiting for realm to be ready..."
+    MAX_WAIT_REALM=120
+    WAIT_COUNT=0
+    REALM_READY=false
+    
+    while [ $WAIT_COUNT -lt $MAX_WAIT_REALM ]; do
+        REALM_STATUS=$(oc get keycloakrealm $REALM_CR_NAME -n rhsso -o jsonpath='{.status.ready}' 2>/dev/null || echo "false")
+        if [ "$REALM_STATUS" = "true" ]; then
+            REALM_READY=true
+            echo "✓ Realm is ready"
+            break
         fi
+        sleep 2
+        WAIT_COUNT=$((WAIT_COUNT + 2))
+        if [ $((WAIT_COUNT % 10)) -eq 0 ] && [ $WAIT_COUNT -gt 0 ]; then
+            echo "  Still waiting for realm to be ready... (${WAIT_COUNT}s/${MAX_WAIT_REALM}s)"
+        fi
+    done
+    
+    if [ "$REALM_READY" = false ]; then
+        echo "Warning: Realm did not become ready within ${MAX_WAIT_REALM} seconds, but continuing..."
     fi
 fi
 
-# Step 3: Install RHTAS Operator
+# Step 3: Create OAuth Client in Red Hat SSO (Keycloak) for Trusted Artifact Signer
+echo ""
+echo "Creating OAuth Client in Red Hat SSO (Keycloak) for Trusted Artifact Signer..."
+OIDC_CLIENT_ID="trusted-artifact-signer"
+CLIENT_CR_NAME="trusted-artifact-signer"
+
+# Check if KeycloakClient CR already exists
+if oc get keycloakclient $CLIENT_CR_NAME -n rhsso >/dev/null 2>&1; then
+    echo "✓ KeycloakClient CR '${CLIENT_CR_NAME}' already exists"
+    
+    # Wait for client to be ready
+    echo "Waiting for client to be ready..."
+    MAX_WAIT_CLIENT=120
+    WAIT_COUNT=0
+    CLIENT_READY=false
+    
+    while [ $WAIT_COUNT -lt $MAX_WAIT_CLIENT ]; do
+        CLIENT_STATUS=$(oc get keycloakclient $CLIENT_CR_NAME -n rhsso -o jsonpath='{.status.ready}' 2>/dev/null || echo "false")
+        if [ "$CLIENT_STATUS" = "true" ]; then
+            CLIENT_READY=true
+            echo "✓ Client is ready"
+            break
+        fi
+        sleep 2
+        WAIT_COUNT=$((WAIT_COUNT + 2))
+        if [ $((WAIT_COUNT % 10)) -eq 0 ] && [ $WAIT_COUNT -gt 0 ]; then
+            echo "  Still waiting for client to be ready... (${WAIT_COUNT}s/${MAX_WAIT_CLIENT}s)"
+        fi
+    done
+    
+    if [ "$CLIENT_READY" = false ]; then
+        echo "Warning: Client did not become ready within ${MAX_WAIT_CLIENT} seconds, but continuing..."
+    fi
+else
+    echo "Creating KeycloakClient CR '${CLIENT_CR_NAME}'..."
+    
+    if ! cat <<EOF | oc apply -f -
+apiVersion: keycloak.org/v1alpha1
+kind: KeycloakClient
+metadata:
+  name: ${CLIENT_CR_NAME}
+  namespace: rhsso
+  labels:
+    app: keycloak
+spec:
+  realmSelector:
+    matchLabels:
+      app: openshift
+  client:
+    clientId: ${OIDC_CLIENT_ID}
+    enabled: true
+    protocol: openid-connect
+    publicClient: true
+    standardFlowEnabled: true
+    directAccessGrantsEnabled: true
+    redirectUris:
+      - "http://localhost/auth/callback"
+      - "urn:ietf:wg:oauth:2.0:oob"
+    webOrigins:
+      - "+"
+    attributes:
+      access.token.lifespan: "300"
+EOF
+    then
+        echo "Error: Failed to create KeycloakClient CR"
+        exit 1
+    fi
+    
+    echo "✓ KeycloakClient CR created successfully"
+    
+    # Wait for client to be ready
+    echo "Waiting for client to be ready..."
+    MAX_WAIT_CLIENT=120
+    WAIT_COUNT=0
+    CLIENT_READY=false
+    
+    while [ $WAIT_COUNT -lt $MAX_WAIT_CLIENT ]; do
+        CLIENT_STATUS=$(oc get keycloakclient $CLIENT_CR_NAME -n rhsso -o jsonpath='{.status.ready}' 2>/dev/null || echo "false")
+        if [ "$CLIENT_STATUS" = "true" ]; then
+            CLIENT_READY=true
+            echo "✓ Client is ready"
+            break
+        fi
+        sleep 2
+        WAIT_COUNT=$((WAIT_COUNT + 2))
+        if [ $((WAIT_COUNT % 10)) -eq 0 ] && [ $WAIT_COUNT -gt 0 ]; then
+            echo "  Still waiting for client to be ready... (${WAIT_COUNT}s/${MAX_WAIT_CLIENT}s)"
+        fi
+    done
+    
+    if [ "$CLIENT_READY" = false ]; then
+        echo "Warning: Client did not become ready within ${MAX_WAIT_CLIENT} seconds, but continuing..."
+    fi
+fi
+
+# Check if client secret was created
+CLIENT_SECRET_NAME="keycloak-client-secret-${CLIENT_CR_NAME}"
+if oc get secret $CLIENT_SECRET_NAME -n rhsso >/dev/null 2>&1; then
+    echo "✓ Client secret '${CLIENT_SECRET_NAME}' exists"
+    CLIENT_ID_FROM_SECRET=$(oc get secret $CLIENT_SECRET_NAME -n rhsso -o jsonpath='{.data.CLIENT_ID}' 2>/dev/null | base64 -d 2>/dev/null || echo "")
+    if [ -n "$CLIENT_ID_FROM_SECRET" ]; then
+        echo "  Client ID from secret: ${CLIENT_ID_FROM_SECRET}"
+    fi
+else
+    echo "Note: Client secret '${CLIENT_SECRET_NAME}' not yet created (may be created after Trusted Artifact Signer installation)"
+fi
+
+# Step 4: Install RHTAS Operator
 echo "Installing RHTAS Operator..."
 
 # Check if subscription already exists
