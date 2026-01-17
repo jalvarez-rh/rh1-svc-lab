@@ -291,67 +291,84 @@ if [ -z "${REKOR_NAME:-}" ]; then
 fi
 
 while [ $WAIT_COUNT -lt $MAX_WAIT ]; do
-    # Check TUF status
-    if [ -z "$TUF_NAME" ]; then
-        if [ -n "$SECURESIGN_NAME" ]; then
-            # Created as child of Securesign
-            TUF_NAME=$(oc get tufs -n $RHTAS_NAMESPACE -l app.kubernetes.io/instance=${SECURESIGN_NAME} -o jsonpath='{.items[0].metadata.name}' 2>/dev/null || echo "")
-        fi
-        if [ -z "$TUF_NAME" ]; then
-            # Try without label selector or use default name
-            TUF_NAME=$(oc get tufs -n $RHTAS_NAMESPACE -o jsonpath='{.items[0].metadata.name}' 2>/dev/null || echo "tuf")
-        fi
-    fi
-    
-    if [ -n "$TUF_NAME" ] && oc get tufs $TUF_NAME -n $RHTAS_NAMESPACE >/dev/null 2>&1; then
-        TUF_CONDITION=$(oc get tufs $TUF_NAME -n $RHTAS_NAMESPACE -o jsonpath='{.status.conditions[?(@.type=="Ready")].status}' 2>/dev/null || echo "")
+    if [ -n "$SECURESIGN_NAME" ]; then
+        # Check Securesign CR status (components are managed by Securesign)
+        # Check TUF
+        TUF_CONDITION=$(oc get securesigns $SECURESIGN_NAME -n $RHTAS_NAMESPACE -o jsonpath='{.status.conditions[?(@.type=="TufAvailable")].status}' 2>/dev/null || echo "")
         if [ "$TUF_CONDITION" = "True" ]; then
             if [ "$TUF_READY" = false ]; then
-                TUF_URL=$(oc get tufs $TUF_NAME -n $RHTAS_NAMESPACE -o jsonpath='{.status.url}' 2>/dev/null || echo "")
+                TUF_URL=$(oc get securesigns $SECURESIGN_NAME -n $RHTAS_NAMESPACE -o jsonpath='{.status.tuf.url}' 2>/dev/null || echo "")
                 log "✓ TUF is ready at: ${TUF_URL}"
                 TUF_READY=true
             fi
         fi
-    fi
-    
-    # Check Fulcio status
-    if [ -z "$FULCIO_NAME" ]; then
-        if [ -n "$SECURESIGN_NAME" ]; then
-            FULCIO_NAME=$(oc get fulcios -n $RHTAS_NAMESPACE -l app.kubernetes.io/instance=${SECURESIGN_NAME} -o jsonpath='{.items[0].metadata.name}' 2>/dev/null || echo "")
-        fi
-        if [ -z "$FULCIO_NAME" ]; then
-            FULCIO_NAME=$(oc get fulcios -n $RHTAS_NAMESPACE -o jsonpath='{.items[0].metadata.name}' 2>/dev/null || echo "fulcio-server")
-        fi
-    fi
-    
-    if [ -n "$FULCIO_NAME" ] && oc get fulcios $FULCIO_NAME -n $RHTAS_NAMESPACE >/dev/null 2>&1; then
-        FULCIO_STATUS=$(oc get fulcios $FULCIO_NAME -n $RHTAS_NAMESPACE -o jsonpath='{.status.phase}' 2>/dev/null || echo "")
-        FULCIO_URL=$(oc get fulcios $FULCIO_NAME -n $RHTAS_NAMESPACE -o jsonpath='{.status.url}' 2>/dev/null || echo "")
-        if [ "$FULCIO_STATUS" = "PhaseReady" ] && [ -n "$FULCIO_URL" ]; then
+        
+        # Check Fulcio
+        FULCIO_CONDITION=$(oc get securesigns $SECURESIGN_NAME -n $RHTAS_NAMESPACE -o jsonpath='{.status.conditions[?(@.type=="FulcioAvailable")].status}' 2>/dev/null || echo "")
+        if [ "$FULCIO_CONDITION" = "True" ]; then
             if [ "$FULCIO_READY" = false ]; then
+                FULCIO_URL=$(oc get securesigns $SECURESIGN_NAME -n $RHTAS_NAMESPACE -o jsonpath='{.status.fulcio.url}' 2>/dev/null || echo "")
                 log "✓ Fulcio is ready at: ${FULCIO_URL}"
                 FULCIO_READY=true
             fi
         fi
-    fi
-    
-    # Check Rekor status
-    if [ -z "$REKOR_NAME" ]; then
-        if [ -n "$SECURESIGN_NAME" ]; then
-            REKOR_NAME=$(oc get rekors -n $RHTAS_NAMESPACE -l app.kubernetes.io/instance=${SECURESIGN_NAME} -o jsonpath='{.items[0].metadata.name}' 2>/dev/null || echo "")
+        
+        # Check Rekor
+        REKOR_CONDITION=$(oc get securesigns $SECURESIGN_NAME -n $RHTAS_NAMESPACE -o jsonpath='{.status.conditions[?(@.type=="RekorAvailable")].status}' 2>/dev/null || echo "")
+        if [ "$REKOR_CONDITION" = "True" ]; then
+            if [ "$REKOR_READY" = false ]; then
+                REKOR_URL=$(oc get securesigns $SECURESIGN_NAME -n $RHTAS_NAMESPACE -o jsonpath='{.status.rekor.url}' 2>/dev/null || echo "")
+                log "✓ Rekor is ready at: ${REKOR_URL}"
+                REKOR_READY=true
+            fi
         fi
+    else
+        # Check individual component CRs (fallback path)
+        # Check TUF status
+        if [ -z "$TUF_NAME" ]; then
+            TUF_NAME=$(oc get tufs -n $RHTAS_NAMESPACE -o jsonpath='{.items[0].metadata.name}' 2>/dev/null || echo "tuf")
+        fi
+        
+        if [ -n "$TUF_NAME" ] && oc get tufs $TUF_NAME -n $RHTAS_NAMESPACE >/dev/null 2>&1; then
+            TUF_CONDITION=$(oc get tufs $TUF_NAME -n $RHTAS_NAMESPACE -o jsonpath='{.status.conditions[?(@.type=="Ready")].status}' 2>/dev/null || echo "")
+            if [ "$TUF_CONDITION" = "True" ]; then
+                if [ "$TUF_READY" = false ]; then
+                    TUF_URL=$(oc get tufs $TUF_NAME -n $RHTAS_NAMESPACE -o jsonpath='{.status.url}' 2>/dev/null || echo "")
+                    log "✓ TUF is ready at: ${TUF_URL}"
+                    TUF_READY=true
+                fi
+            fi
+        fi
+        
+        # Check Fulcio status
+        if [ -z "$FULCIO_NAME" ]; then
+            FULCIO_NAME=$(oc get fulcios -n $RHTAS_NAMESPACE -o jsonpath='{.items[0].metadata.name}' 2>/dev/null || echo "fulcio-server")
+        fi
+        
+        if [ -n "$FULCIO_NAME" ] && oc get fulcios $FULCIO_NAME -n $RHTAS_NAMESPACE >/dev/null 2>&1; then
+            FULCIO_CONDITION=$(oc get fulcios $FULCIO_NAME -n $RHTAS_NAMESPACE -o jsonpath='{.status.conditions[?(@.type=="Ready")].status}' 2>/dev/null || echo "")
+            if [ "$FULCIO_CONDITION" = "True" ]; then
+                if [ "$FULCIO_READY" = false ]; then
+                    FULCIO_URL=$(oc get fulcios $FULCIO_NAME -n $RHTAS_NAMESPACE -o jsonpath='{.status.url}' 2>/dev/null || echo "")
+                    log "✓ Fulcio is ready at: ${FULCIO_URL}"
+                    FULCIO_READY=true
+                fi
+            fi
+        fi
+        
+        # Check Rekor status
         if [ -z "$REKOR_NAME" ]; then
             REKOR_NAME=$(oc get rekors -n $RHTAS_NAMESPACE -o jsonpath='{.items[0].metadata.name}' 2>/dev/null || echo "rekor-server")
         fi
-    fi
-    
-    if [ -n "$REKOR_NAME" ] && oc get rekors $REKOR_NAME -n $RHTAS_NAMESPACE >/dev/null 2>&1; then
-        REKOR_STATUS=$(oc get rekors $REKOR_NAME -n $RHTAS_NAMESPACE -o jsonpath='{.status.phase}' 2>/dev/null || echo "")
-        REKOR_URL=$(oc get rekors $REKOR_NAME -n $RHTAS_NAMESPACE -o jsonpath='{.status.url}' 2>/dev/null || echo "")
-        if [ "$REKOR_STATUS" = "PhaseReady" ] && [ -n "$REKOR_URL" ]; then
-            if [ "$REKOR_READY" = false ]; then
-                log "✓ Rekor is ready at: ${REKOR_URL}"
-                REKOR_READY=true
+        
+        if [ -n "$REKOR_NAME" ] && oc get rekors $REKOR_NAME -n $RHTAS_NAMESPACE >/dev/null 2>&1; then
+            REKOR_CONDITION=$(oc get rekors $REKOR_NAME -n $RHTAS_NAMESPACE -o jsonpath='{.status.conditions[?(@.type=="Ready")].status}' 2>/dev/null || echo "")
+            if [ "$REKOR_CONDITION" = "True" ]; then
+                if [ "$REKOR_READY" = false ]; then
+                    REKOR_URL=$(oc get rekors $REKOR_NAME -n $RHTAS_NAMESPACE -o jsonpath='{.status.url}' 2>/dev/null || echo "")
+                    log "✓ Rekor is ready at: ${REKOR_URL}"
+                    REKOR_READY=true
+                fi
             fi
         fi
     fi
@@ -371,15 +388,27 @@ while [ $WAIT_COUNT -lt $MAX_WAIT ]; do
     fi
 done
 
-# Get final URLs
-if [ "$TUF_READY" = false ] && [ -n "$TUF_NAME" ]; then
-    TUF_URL=$(oc get tufs $TUF_NAME -n $RHTAS_NAMESPACE -o jsonpath='{.status.url}' 2>/dev/null || echo "")
+# Get final URLs if not already set
+if [ "$TUF_READY" = false ]; then
+    if [ -n "$SECURESIGN_NAME" ]; then
+        TUF_URL=$(oc get securesigns $SECURESIGN_NAME -n $RHTAS_NAMESPACE -o jsonpath='{.status.tuf.url}' 2>/dev/null || echo "")
+    elif [ -n "$TUF_NAME" ]; then
+        TUF_URL=$(oc get tufs $TUF_NAME -n $RHTAS_NAMESPACE -o jsonpath='{.status.url}' 2>/dev/null || echo "")
+    fi
 fi
-if [ "$FULCIO_READY" = false ] && [ -n "$FULCIO_NAME" ]; then
-    FULCIO_URL=$(oc get fulcios $FULCIO_NAME -n $RHTAS_NAMESPACE -o jsonpath='{.status.url}' 2>/dev/null || echo "")
+if [ "$FULCIO_READY" = false ]; then
+    if [ -n "$SECURESIGN_NAME" ]; then
+        FULCIO_URL=$(oc get securesigns $SECURESIGN_NAME -n $RHTAS_NAMESPACE -o jsonpath='{.status.fulcio.url}' 2>/dev/null || echo "")
+    elif [ -n "$FULCIO_NAME" ]; then
+        FULCIO_URL=$(oc get fulcios $FULCIO_NAME -n $RHTAS_NAMESPACE -o jsonpath='{.status.url}' 2>/dev/null || echo "")
+    fi
 fi
-if [ "$REKOR_READY" = false ] && [ -n "$REKOR_NAME" ]; then
-    REKOR_URL=$(oc get rekors $REKOR_NAME -n $RHTAS_NAMESPACE -o jsonpath='{.status.url}' 2>/dev/null || echo "")
+if [ "$REKOR_READY" = false ]; then
+    if [ -n "$SECURESIGN_NAME" ]; then
+        REKOR_URL=$(oc get securesigns $SECURESIGN_NAME -n $RHTAS_NAMESPACE -o jsonpath='{.status.rekor.url}' 2>/dev/null || echo "")
+    elif [ -n "$REKOR_NAME" ]; then
+        REKOR_URL=$(oc get rekors $REKOR_NAME -n $RHTAS_NAMESPACE -o jsonpath='{.status.url}' 2>/dev/null || echo "")
+    fi
 fi
 
 # Step 5: Summary
