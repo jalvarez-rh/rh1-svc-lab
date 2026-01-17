@@ -408,18 +408,26 @@ EOF
         error "Failed to create Keycloak CR"
     fi
     log "✓ Keycloak CR created successfully"
+    
+    # Give the operator a moment to start processing the CR
+    log "Waiting a few seconds for operator to start processing..."
+    sleep 5
 fi
 
 # Wait for Keycloak instance to be ready
 log ""
 log "Waiting for Keycloak instance to be ready..."
-MAX_WAIT=600
+log "Note: Transient reconciliation conflicts are normal during startup and will be retried automatically."
+MAX_WAIT=900
 WAIT_COUNT=0
 KEYCLOAK_READY=false
+LAST_PHASE=""
+LAST_MESSAGE=""
 
 while [ $WAIT_COUNT -lt $MAX_WAIT ]; do
     KEYCLOAK_READY_STATUS=$(oc get keycloak $KEYCLOAK_CR_NAME -n $NAMESPACE -o jsonpath='{.status.ready}' 2>/dev/null || echo "false")
     KEYCLOAK_PHASE=$(oc get keycloak $KEYCLOAK_CR_NAME -n $NAMESPACE -o jsonpath='{.status.phase}' 2>/dev/null || echo "")
+    KEYCLOAK_MESSAGE=$(oc get keycloak $KEYCLOAK_CR_NAME -n $NAMESPACE -o jsonpath='{.status.message}' 2>/dev/null || echo "")
     
     if [ "$KEYCLOAK_READY_STATUS" = "true" ]; then
         KEYCLOAK_READY=true
@@ -427,18 +435,52 @@ while [ $WAIT_COUNT -lt $MAX_WAIT ]; do
         break
     fi
     
-    # Show progress every 30 seconds
+    # Show progress every 30 seconds or if phase/message changed
     if [ $((WAIT_COUNT % 30)) -eq 0 ] && [ $WAIT_COUNT -gt 0 ]; then
         log "  Progress check (${WAIT_COUNT}s/${MAX_WAIT}s):"
         log "  Phase: ${KEYCLOAK_PHASE:-unknown}"
         log "  Ready: ${KEYCLOAK_READY_STATUS:-false}"
+        
+        # Show status message if present
+        if [ -n "$KEYCLOAK_MESSAGE" ] && [ "$KEYCLOAK_MESSAGE" != "$LAST_MESSAGE" ]; then
+            if echo "$KEYCLOAK_MESSAGE" | grep -qi "cannot be fulfilled\|modified\|conflict"; then
+                warning "  Status message: $KEYCLOAK_MESSAGE"
+                log "  (This is a transient reconciliation conflict - the operator will retry automatically)"
+            else
+                log "  Status message: $KEYCLOAK_MESSAGE"
+            fi
+            LAST_MESSAGE="$KEYCLOAK_MESSAGE"
+        fi
         
         # Show pod status
         KEYCLOAK_PODS=$(oc get pods -n $NAMESPACE -l app=keycloak -o jsonpath='{.items[*].status.phase}' 2>/dev/null || echo "")
         if [ -n "$KEYCLOAK_PODS" ]; then
             log "  Keycloak pods: $KEYCLOAK_PODS"
         fi
+        
+        # Show StatefulSet status
+        KEYCLOAK_STS=$(oc get statefulset keycloak -n $NAMESPACE -o jsonpath='{.status.readyReplicas}/{.status.replicas}' 2>/dev/null || echo "")
+        if [ -n "$KEYCLOAK_STS" ] && [ "$KEYCLOAK_STS" != "/" ]; then
+            log "  StatefulSet ready: $KEYCLOAK_STS"
+        fi
+        
+        # Show phase change
+        if [ "$KEYCLOAK_PHASE" != "$LAST_PHASE" ] && [ -n "$LAST_PHASE" ]; then
+            log "  Phase changed: $LAST_PHASE -> $KEYCLOAK_PHASE"
+        fi
+        LAST_PHASE="$KEYCLOAK_PHASE"
+        
         log ""
+    fi
+    
+    # Check for persistent errors (not transient conflicts)
+    if [ -n "$KEYCLOAK_MESSAGE" ] && ! echo "$KEYCLOAK_MESSAGE" | grep -qi "cannot be fulfilled\|modified\|conflict\|reconciling"; then
+        if echo "$KEYCLOAK_MESSAGE" | grep -qi "error\|failed\|denied"; then
+            if [ $((WAIT_COUNT % 60)) -eq 0 ] && [ $WAIT_COUNT -gt 60 ]; then
+                warning "Persistent error detected: $KEYCLOAK_MESSAGE"
+                warning "Check operator logs: oc logs -n $NAMESPACE -l name=rhsso-operator --tail=50"
+            fi
+        fi
     fi
     
     sleep 5
@@ -447,9 +489,25 @@ done
 
 if [ "$KEYCLOAK_READY" = false ]; then
     warning "Keycloak instance did not become ready within ${MAX_WAIT} seconds"
-    log "Current status:"
-    oc get keycloak $KEYCLOAK_CR_NAME -n $NAMESPACE
-    warning "Keycloak may still be installing. Check status with: oc get keycloak $KEYCLOAK_CR_NAME -n $NAMESPACE"
+    log ""
+    log "Current Keycloak CR status:"
+    oc get keycloak $KEYCLOAK_CR_NAME -n $NAMESPACE -o yaml | grep -A 10 "status:" || oc get keycloak $KEYCLOAK_CR_NAME -n $NAMESPACE
+    log ""
+    
+    # Check for reconciliation conflicts
+    KEYCLOAK_MESSAGE=$(oc get keycloak $KEYCLOAK_CR_NAME -n $NAMESPACE -o jsonpath='{.status.message}' 2>/dev/null || echo "")
+    if echo "$KEYCLOAK_MESSAGE" | grep -qi "cannot be fulfilled\|modified\|conflict"; then
+        log "Detected reconciliation conflicts. This is usually transient."
+        log "The operator will continue retrying. You can check progress with:"
+        log "  oc get keycloak $KEYCLOAK_CR_NAME -n $NAMESPACE -o yaml | grep -A 5 status"
+        log "  oc logs -n $NAMESPACE -l name=rhsso-operator --tail=50"
+    else
+        warning "Keycloak may still be installing or there may be an issue."
+        log "Check operator logs: oc logs -n $NAMESPACE -l name=rhsso-operator --tail=100"
+    fi
+    log ""
+    log "To check status: oc get keycloak $KEYCLOAK_CR_NAME -n $NAMESPACE"
+    log "To check pods: oc get pods -n $NAMESPACE"
 else
     log "✓ Keycloak instance is ready"
 fi
