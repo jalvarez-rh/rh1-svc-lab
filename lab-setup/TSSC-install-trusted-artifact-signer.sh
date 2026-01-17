@@ -153,7 +153,101 @@ EOF
     fi
 fi
 
-# Step 3: Create OAuth Client in Red Hat SSO (Keycloak) for Trusted Artifact Signer
+# Step 3: Create Keycloak User for authentication
+echo ""
+echo "Creating Keycloak User for authentication..."
+KEYCLOAK_USER_NAME="admin"
+KEYCLOAK_USER_USERNAME="admin"
+KEYCLOAK_USER_EMAIL="admin@demo.redhat.com"
+KEYCLOAK_USER_PASSWORD="116608"  # Default password, can be changed
+
+# Check if KeycloakUser CR already exists
+if oc get keycloakuser $KEYCLOAK_USER_NAME -n rhsso >/dev/null 2>&1; then
+    echo "✓ KeycloakUser CR '${KEYCLOAK_USER_NAME}' already exists"
+    
+    # Wait for user to be ready
+    echo "Waiting for user to be ready..."
+    MAX_WAIT_USER=120
+    WAIT_COUNT=0
+    USER_READY=false
+    
+    while [ $WAIT_COUNT -lt $MAX_WAIT_USER ]; do
+        USER_PHASE=$(oc get keycloakuser $KEYCLOAK_USER_NAME -n rhsso -o jsonpath='{.status.phase}' 2>/dev/null || echo "")
+        if [ "$USER_PHASE" = "reconciled" ]; then
+            USER_READY=true
+            echo "✓ User is ready"
+            break
+        fi
+        sleep 2
+        WAIT_COUNT=$((WAIT_COUNT + 2))
+        if [ $((WAIT_COUNT % 10)) -eq 0 ] && [ $WAIT_COUNT -gt 0 ]; then
+            echo "  Still waiting for user to be ready... (${WAIT_COUNT}s/${MAX_WAIT_USER}s) - Phase: ${USER_PHASE:-unknown}"
+        fi
+    done
+    
+    if [ "$USER_READY" = false ]; then
+        echo "Warning: User did not become ready within ${MAX_WAIT_USER} seconds, but continuing..."
+    fi
+else
+    echo "Creating KeycloakUser CR '${KEYCLOAK_USER_NAME}'..."
+    
+    # Encode password to base64
+    KEYCLOAK_USER_PASSWORD_B64=$(echo -n "$KEYCLOAK_USER_PASSWORD" | base64)
+    
+    if ! cat <<EOF | oc apply -f -
+apiVersion: keycloak.org/v1alpha1
+kind: KeycloakUser
+metadata:
+  name: ${KEYCLOAK_USER_NAME}
+  namespace: rhsso
+  labels:
+    app: openshift
+spec:
+  realmSelector:
+    matchLabels:
+      app: openshift
+  user:
+    username: ${KEYCLOAK_USER_USERNAME}
+    email: ${KEYCLOAK_USER_EMAIL}
+    emailVerified: true
+    enabled: true
+    credentials:
+      - type: password
+        value: ${KEYCLOAK_USER_PASSWORD_B64}
+EOF
+    then
+        echo "Error: Failed to create KeycloakUser CR"
+        exit 1
+    fi
+    
+    echo "✓ KeycloakUser CR created successfully"
+    
+    # Wait for user to be ready
+    echo "Waiting for user to be ready..."
+    MAX_WAIT_USER=120
+    WAIT_COUNT=0
+    USER_READY=false
+    
+    while [ $WAIT_COUNT -lt $MAX_WAIT_USER ]; do
+        USER_PHASE=$(oc get keycloakuser $KEYCLOAK_USER_NAME -n rhsso -o jsonpath='{.status.phase}' 2>/dev/null || echo "")
+        if [ "$USER_PHASE" = "reconciled" ]; then
+            USER_READY=true
+            echo "✓ User is ready"
+            break
+        fi
+        sleep 2
+        WAIT_COUNT=$((WAIT_COUNT + 2))
+        if [ $((WAIT_COUNT % 10)) -eq 0 ] && [ $WAIT_COUNT -gt 0 ]; then
+            echo "  Still waiting for user to be ready... (${WAIT_COUNT}s/${MAX_WAIT_USER}s) - Phase: ${USER_PHASE:-unknown}"
+        fi
+    done
+    
+    if [ "$USER_READY" = false ]; then
+        echo "Warning: User did not become ready within ${MAX_WAIT_USER} seconds, but continuing..."
+    fi
+fi
+
+# Step 4: Create OAuth Client in Red Hat SSO (Keycloak) for Trusted Artifact Signer
 echo ""
 echo "Creating OAuth Client in Red Hat SSO (Keycloak) for Trusted Artifact Signer..."
 OIDC_CLIENT_ID="trusted-artifact-signer"
@@ -260,7 +354,7 @@ else
     echo "Note: Client secret '${CLIENT_SECRET_NAME}' not yet created (may be created after Trusted Artifact Signer installation)"
 fi
 
-# Step 4: Install RHTAS Operator
+# Step 5: Install RHTAS Operator
 echo "Installing RHTAS Operator..."
 
 # Check if subscription already exists
