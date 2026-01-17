@@ -112,22 +112,59 @@ metadata:
   namespace: ${RHTAS_NAMESPACE}
 spec:
   fulcio:
-    externalAccess:
-      enabled: true
-    oidc:
-      issuer: ${OIDC_ISSUER_URL}
-      clientID: ${OIDC_CLIENT_ID}
     certificate:
-      organizationName: "Red Hat"
-      organizationEmail: "admin@demo.redhat.com"
+      commonName: fulcio.hostname
+      organizationEmail: admin@demo.redhat.com
+      organizationName: Red Hat
     config:
-      MetaIssuers:
+      OIDCIssuers:
         - ClientID: ${OIDC_CLIENT_ID}
           Issuer: ${OIDC_ISSUER_URL}
-          Type: "email"
+          IssuerURL: ${OIDC_ISSUER_URL}
+          Type: email
+    ctlog:
+      port: 80
+      prefix: trusted-artifact-signer
+    externalAccess:
+      enabled: true
+    monitoring:
+      enabled: false
   rekor:
     externalAccess:
       enabled: true
+    monitoring:
+      enabled: false
+    pvc:
+      accessModes:
+        - ReadWriteOnce
+      retain: true
+      size: 5Gi
+    rekorSearchUI:
+      enabled: true
+    sharding: []
+    signer:
+      kms: secret
+    trillian:
+      port: 8091
+    backFillRedis:
+      enabled: true
+      schedule: 0 0 * * *
+  trillian:
+    database:
+      create: true
+      pvc:
+        accessModes:
+          - ReadWriteOnce
+        retain: true
+        size: 5Gi
+      tls: {}
+    monitoring:
+      enabled: false
+  ctlog:
+    monitoring:
+      enabled: false
+    trillian:
+      port: 8091
   tuf:
     externalAccess:
       enabled: true
@@ -135,11 +172,14 @@ spec:
       - name: rekor.pub
       - name: ctfe.pub
       - name: fulcio_v1.crt.pem
+    port: 80
     pvc:
       accessModes:
         - ReadWriteOnce
       retain: true
       size: 100Mi
+    rootKeySecretRef:
+      name: tuf-root-keys
 EOF
         then
             error "Failed to create Securesign CR. Check if the API version is correct: ${RHTAS_API_VERSION}"
