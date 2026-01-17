@@ -117,6 +117,14 @@ spec:
     oidc:
       issuer: ${OIDC_ISSUER_URL}
       clientID: ${OIDC_CLIENT_ID}
+    certificate:
+      organizationName: "Red Hat"
+      organizationEmail: "admin@demo.redhat.com"
+    config:
+      MetaIssuers:
+        - ClientID: ${OIDC_CLIENT_ID}
+          Issuer: ${OIDC_ISSUER_URL}
+          Type: "email"
   rekor:
     externalAccess:
       enabled: true
