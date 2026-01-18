@@ -200,8 +200,56 @@ if [ "$SKIP_KEYCLOAK" = false ]; then
     KEYCLOAK_ADMIN_USER=""
     KEYCLOAK_ADMIN_PASSWORD=""
     if [ -n "$KEYCLOAK_CREDENTIAL_SECRET" ]; then
-        KEYCLOAK_ADMIN_USER=$(oc get secret $KEYCLOAK_CREDENTIAL_SECRET -n $KEYCLOAK_NAMESPACE -o jsonpath='{.data.username}' 2>/dev/null | base64 -d 2>/dev/null || echo "")
-        KEYCLOAK_ADMIN_PASSWORD=$(oc get secret $KEYCLOAK_CREDENTIAL_SECRET -n $KEYCLOAK_NAMESPACE -o jsonpath='{.data.password}' 2>/dev/null | base64 -d 2>/dev/null || echo "")
+        # Try multiple possible key names for username (check ADMIN_USERNAME first as it's most common for RHSSO)
+        KEYCLOAK_ADMIN_USER=$(oc get secret $KEYCLOAK_CREDENTIAL_SECRET -n $KEYCLOAK_NAMESPACE -o jsonpath='{.data.ADMIN_USERNAME}' 2>/dev/null | base64 -d 2>/dev/null || echo "")
+        if [ -z "$KEYCLOAK_ADMIN_USER" ]; then
+            KEYCLOAK_ADMIN_USER=$(oc get secret $KEYCLOAK_CREDENTIAL_SECRET -n $KEYCLOAK_NAMESPACE -o jsonpath='{.data.username}' 2>/dev/null | base64 -d 2>/dev/null || echo "")
+        fi
+        if [ -z "$KEYCLOAK_ADMIN_USER" ]; then
+            KEYCLOAK_ADMIN_USER=$(oc get secret $KEYCLOAK_CREDENTIAL_SECRET -n $KEYCLOAK_NAMESPACE -o jsonpath='{.data.adminUsername}' 2>/dev/null | base64 -d 2>/dev/null || echo "")
+        fi
+        
+        # Try multiple possible key names for password (check ADMIN_PASSWORD first as it's most common for RHSSO)
+        KEYCLOAK_ADMIN_PASSWORD=$(oc get secret $KEYCLOAK_CREDENTIAL_SECRET -n $KEYCLOAK_NAMESPACE -o jsonpath='{.data.ADMIN_PASSWORD}' 2>/dev/null | base64 -d 2>/dev/null || echo "")
+        if [ -z "$KEYCLOAK_ADMIN_PASSWORD" ]; then
+            KEYCLOAK_ADMIN_PASSWORD=$(oc get secret $KEYCLOAK_CREDENTIAL_SECRET -n $KEYCLOAK_NAMESPACE -o jsonpath='{.data.password}' 2>/dev/null | base64 -d 2>/dev/null || echo "")
+        fi
+        if [ -z "$KEYCLOAK_ADMIN_PASSWORD" ]; then
+            KEYCLOAK_ADMIN_PASSWORD=$(oc get secret $KEYCLOAK_CREDENTIAL_SECRET -n $KEYCLOAK_NAMESPACE -o jsonpath='{.data.adminPassword}' 2>/dev/null | base64 -d 2>/dev/null || echo "")
+        fi
+        
+        # If still not found, try to get all keys and use jq if available
+        if [ -z "$KEYCLOAK_ADMIN_USER" ] || [ -z "$KEYCLOAK_ADMIN_PASSWORD" ]; then
+            if command -v jq >/dev/null 2>&1; then
+                SECRET_DATA=$(oc get secret $KEYCLOAK_CREDENTIAL_SECRET -n $KEYCLOAK_NAMESPACE -o json 2>/dev/null || echo "")
+                if [ -n "$SECRET_DATA" ]; then
+                    # Get all keys in the secret
+                    SECRET_KEYS=$(echo "$SECRET_DATA" | jq -r '.data | keys[]' 2>/dev/null || echo "")
+                    # Try to find username-like key
+                    if [ -z "$KEYCLOAK_ADMIN_USER" ]; then
+                        for key in $SECRET_KEYS; do
+                            if echo "$key" | grep -qi "user\|admin"; then
+                                KEYCLOAK_ADMIN_USER=$(echo "$SECRET_DATA" | jq -r ".data.$key" 2>/dev/null | base64 -d 2>/dev/null || echo "")
+                                if [ -n "$KEYCLOAK_ADMIN_USER" ]; then
+                                    break
+                                fi
+                            fi
+                        done
+                    fi
+                    # Try to find password-like key
+                    if [ -z "$KEYCLOAK_ADMIN_PASSWORD" ]; then
+                        for key in $SECRET_KEYS; do
+                            if echo "$key" | grep -qi "pass\|pwd"; then
+                                KEYCLOAK_ADMIN_PASSWORD=$(echo "$SECRET_DATA" | jq -r ".data.$key" 2>/dev/null | base64 -d 2>/dev/null || echo "")
+                                if [ -n "$KEYCLOAK_ADMIN_PASSWORD" ]; then
+                                    break
+                                fi
+                            fi
+                        done
+                    fi
+                fi
+            fi
+        fi
     fi
     
     log ""
@@ -218,8 +266,13 @@ if [ "$SKIP_KEYCLOAK" = false ]; then
         log "Admin Password: $KEYCLOAK_ADMIN_PASSWORD"
     elif [ -n "$KEYCLOAK_CREDENTIAL_SECRET" ]; then
         log "Credentials stored in secret: $KEYCLOAK_CREDENTIAL_SECRET"
-        log "  Retrieve username: oc get secret $KEYCLOAK_CREDENTIAL_SECRET -n $KEYCLOAK_NAMESPACE -o jsonpath='{.data.username}' | base64 -d"
-        log "  Retrieve password: oc get secret $KEYCLOAK_CREDENTIAL_SECRET -n $KEYCLOAK_NAMESPACE -o jsonpath='{.data.password}' | base64 -d"
+        log "  First, check what keys are available in the secret:"
+        log "    oc get secret $KEYCLOAK_CREDENTIAL_SECRET -n $KEYCLOAK_NAMESPACE -o json | jq '.data | keys'"
+        log "  Then try retrieving with the actual key names found above:"
+        log "    oc get secret $KEYCLOAK_CREDENTIAL_SECRET -n $KEYCLOAK_NAMESPACE -o jsonpath='{.data.<KEY_NAME>}' | base64 -d"
+        log "  Common key names to try:"
+        log "    username, ADMIN_USERNAME, adminUsername"
+        log "    password, ADMIN_PASSWORD, adminPassword"
     else
         warning "Keycloak credentials not found"
     fi
