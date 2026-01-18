@@ -18,7 +18,7 @@
 ** xref:module-02.adoc#security-and-environment-insights[Security and Environment Insights]
 ** xref:module-02.adoc#rhacs-compliance-operator-installation-and-compliance-checks[RHACS Compliance Operator Installation and Compliance Checks]
 ** xref:module-02.adoc#maintaining-control-in-sovereign-multi-region-environments[Maintaining Control in Sovereign & Multi-Region Environments]
-** xref:module-02.adoc#next-step-block-package-managers-at-runtime[Next Step: Block Package Managers at Runtime]
+** xref:module-02.adoc#use-policy-as-code-block-anomalous-runtime[use-policy-as-code-block-anomalous-runtime]
 ** xref:module-02.adoc#report-and-resolve-violations[Report and Resolve Violations]
 ** xref:module-02.adoc#implement-policy-as-code-in-acm-with-openshift-gitops[Implement Policy-as-Code in ACM with OpenShift GitOps]
 ** xref:module-02.adoc#conclusion[Conclusion]

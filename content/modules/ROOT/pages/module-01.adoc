@@ -211,24 +211,24 @@ image::03-app-gitops.png[link=self, window=blank, width=100%, App GitOps]
 . Under repository types, select the GIT repository
 . enter the URL:
 +
-[source]
+[source,sh,subs="attributes",role=execute]
 ----
 https://github.com/mfosterrox/demo-applications.git
 ----
 . Set Revision: main
 . Set Path:
 +
-[source]
+[source,sh,subs="attributes",role=execute]
 ----
 skupper-demo
 ----
 . Set Destination:
 +
-[source]
+[source,sh,subs="attributes",role=execute]
 ----
 patient-portal
 ----
-. Then click *NEXT TWICE*
+. Then click *NEXT*
 
 image::03-app-gitops-2.png[link=self, window=blank, width=100%, App ACM GitOps]
 

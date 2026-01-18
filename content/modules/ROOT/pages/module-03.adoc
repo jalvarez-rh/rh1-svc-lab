@@ -14,14 +14,23 @@ The goal of this lab is to learn about the features from the Trusted Software Su
 
 First, we need to set up the applications for this module.
 
-IMPORTANT: Run the following command to ensure the environment is up to date:
+TIP: Run the following command to ensure the environment is up to date and study up on the software supply chain concepts while it's running.
 
 [source,sh,subs="attributes",role=execute]
 ----
-~/rh1-svc-lab/lab-setup/
+./rh1-svc-lab/tssc-setup/setup.sh
 curl -fsSL https://raw.githubusercontent.com/redhat-tssc-tmm/security-roadshow/main/cosign_gitsign_installer.sh | bash
 ----
 
+**OUTPUT**
+[source,sh,subs="attributes",role=execute]
+----
+
+----
+
+[.console-output]
+[source,bash,subs="+macros,+attributes"]
+----
 
 [[trusted-artifact-signer]]
 

@@ -2,8 +2,6 @@
 
 = Assurance
 
-[[cluster-conformance]]
-
 Assurance is critical for sovereignty, ensuring that applications operate in a compliant manner and that clusters maintain compliance across diverse regions and geographies. It is essential to have confidence that compliance reports are accurate, testable, and auditable, thereby supporting and advancing key business objectives. Additionally, enabling teams to collaborate effectively through the use of appropriate tools and technologies helps drive organizational success.
 
 *Achieving this level of assurance requires a practical and structured approach.*
@@ -15,8 +13,6 @@ So let's get practical in our example of an EMEA environment and a US environmen
 == Security and Environment Insights
 
 **First let's review the basics of RHACS.**
-
-[[rhacs-insights]]
 
 === *RHACS Basics*
 RHACS provides developers and administrators with tools to meet the security needs of cloud-native development on Kubernetes. Its features address primary security concerns across various environments, including datacenters, private clouds, and public clouds running Kubernetes clusters. With RHACS, you can achieve comprehensive security, covering key areas such as:
@@ -54,8 +50,6 @@ Administrator login is available with:
 [[rhacs-compliance-operator-installation-and-compliance-checks]]
 
 == RHACS Compliance Operator Installation and Compliance Checks
-
-[[conformance-tests]]
 
 Before making changes to your cluster, it’s essential to understand your current compliance posture. Red Hat Advanced Cluster Security (RHACS) seamlessly integrates with the OpenShift Compliance Operator to provide out-of-the-box compliance checks—including industry standards such as E8 and DISA STIG. You can also define custom profiles that combine multiple standards into one, streamlining your audit processes and allowing you to easily tailor compliance requirements to your organization or region. This flexibility enables you to create global profiles and maintain consistent, auditable compliance across all OpenShift environments.
 
@@ -258,9 +252,9 @@ In sovereign cloud setups, strict control over what runs inside your infrastruct
 
 Red Hat Advanced Cluster Security (RHACS) includes built-in policies that detect and block risky behaviors such as unauthorized access attempts, persistent threats, lateral movement, and data exfiltration. These policies help you enforce the immutable container principle — containers should only run exactly what you approved, with no unexpected changes.
 
-[[next-step-block-package-managers-at-runtime]]
+[[use-policy-as-code-block-anomalous-runtime]]
 
-== Next Step: Block Package Managers at Runtime
+== Use Policy-as-Code to Block Anomalous Behavior at Runtime
 
 Package managers such as apt, apk, yum, and dnf are useful on virtual machines, but they have no place in production containers. Allowing them enables uncontrolled software installation, dramatically increases the attack surface, and breaks auditability and immutability — all of which are core requirements for sovereign cloud environments.
 
@@ -270,62 +264,97 @@ Now, our security and operations teams want simplifed workflows and flexibility 
 
 *Procedure*
 
-. On the left-hand side of the application, click the *Platform Configuration* tab and select *Policy Management*.
+[start=1]
+. First, verify the pods are running in the patient-portal namespace:
 
-image::04-acs-policy-00.png[link=self, window=blank, width=100%, Policy Management Dashboard]
+[source,sh,role=execute]
+----
+oc get pods -n patient-portal
+----
 
 [start=2]
+. Get the frontend pod name and exec into the container:
 
-. Filter through the policies to find *Alpine Linux Package Manager Execution* or use the search bar to select *Policy* then *Alpine Linux Package Manager Execution*.
-
-image::04-acs-policy-01.png[link=self, window=blank, width=100%, Policy Management Search]
+[source,sh,role=execute]
+----
+POD=$(oc get pod -n patient-portal -l app=frontend -o jsonpath="{.items[0].metadata.name}")
+oc exec -n patient-portal $POD -it -- /bin/sh
+----
 
 [start=3]
+. Check the operating system release information:
 
-. Once you have found the policy *Alpine Linux Package Manager Execution* click on the three dots then click *Clone policy*.
+[source,sh,role=execute]
+----
+cat /etc/os-release
+----
 
-image::04-acs-policy-02.png[link=self, window=blank, width=100%]
-
-NOTE: This is a system policy. If you change a system policy they get reset upon the next release. It is always best practice to clone such policies. 
+[NOTE]
+====
+If you see */home/fritz $* you've confirmed you have a shell and access to the frontend application.
+====
 
 [start=4]
+. Since this is an alpine image, we can see the package manager is apk. Try to run the package manager update command:
 
-. Give the policy a new name: *Alpine Linux Package Manager Execution - Enforce*
-
-image::04-acs-policy-03.png[link=self, window=blank, width=100%]
+[source,sh,role=execute]
+----
+apk update
+----
 
 [start=5]
+. OpenShift enforces strict security policies by default (via the restricted Security Context Constraint or SCC). Now, create a security policy to enforce runtime protection against package manager execution. Apply the following policy configuration:
 
-. Click *Next*
+[source,bash,subs="+macros,+attributes"]
+----
+oc apply -f - <<EOF
+apiVersion: config.stackrox.io/v1alpha1
+kind: SecurityPolicy
+metadata:
+  name: alpine-linux-package-manager-execution-patient-portal-enforcement
+  namespace: stackrox
+spec:
+  policyName: Alpine Linux Package Manager Execution - Patient-Portal Enforcement
+  description: Alert when the Alpine Linux package manager (apk) is executed at runtime
+  rationale: Use of package managers at runtime indicates that new software may be being introduced into containers while they are running.
+  remediation: Run `apk --purge del apk-tools` in the image build for production containers. Change applications to no longer use package managers at runtime, if applicable.
+  categories:
+    - Anomalous Activity
+    - Package Management
+  lifecycleStages:
+    - RUNTIME
+  eventSource: DEPLOYMENT_EVENT
+  severity: LOW_SEVERITY
+  enforcementActions:
+    - FAIL_KUBE_REQUEST_ENFORCEMENT
+    - KILL_POD_ENFORCEMENT
+  policySections:
+    - policyGroups:
+        - fieldName: Process Name
+          booleanOperator: OR
+          values:
+            - value: apk
+            - value: apk-tools
+            - value: apk update 
+            - value: apk add
+            - value: apk remove
+            - value: apk upgrade
+            - value: apk del
+            - value: apk cache
+            - value: apk clean
+            - value: apk info
+            - value: apk show
+            - value: apk version
+  mitreAttackVectors:
+    - tactic: TA0011
+      techniques:
+        - T1105
+  criteriaLocked: false
+  mitreVectorsLocked: false
+  isDefault: false
+EOF
+----
 
-image::04-acs-policy-04.png[link=self, window=blank, width=100%]
-
-[start=6]
-
-. The lifecycle stages don't need to be changed so click *Next*
-. The *rules* don't need to be changed either since you are already targeting the *apk* process. Click *Next*
-
-image::04-acs-policy-05.png[link=self, window=blank, width=100%]
-
-====
-The Policy behavior section allows you to exclude specific deployments from this policy. Some RHACS users have golden applications that they always want excluded from enforcement policies. This would be where you add those exceptions. 
-====
-
-[start=8]
-. Click *Next*
-. In the *Policy behavior -> Actions* tab select *inform and enforce* 
-. Enable runtime enforcement by clicking the *inform and enforce* button.
-. Configure enforcement behavior by selecting *Enforce at Runtime*.
-. Click *Next*
-
-image::04-acs-policy-06.png[link=self, window=blank, width=100%, Enforce Runtime Policy]
-
-[start=13]
-
-. Review the policy changes
-. Click *Save*
-
-IMPORTANT: Make sure to save the policy changes! If you do not save the policy, the process will not be blocked!
 
 === Testing the runtime policy
 
@@ -352,7 +381,13 @@ oc get events -n patient-portal -w
 
 [start=3]
 
-. Press *Ctrlb, o* to switch to the next pane. (Ctrlb THEN o)
+. Press *Ctrl+b, o* to switch to the next pane. (Ctrl+b THEN o)
+
+[IMPORTANT]
+====
+Ctrl+b is the prefix key for tmux. o is the command to switch to the next pane.
+====
+
 . Exec into our *patient-frontend* application by getting the pod details and adding them to the following command.
 
 [source,sh,role=execute]
@@ -368,8 +403,6 @@ oc exec -n patient-portal $POD -i --tty -- /bin/sh
 oc exec -n patient-portal $POD -i --tty -- /bin/sh
 /home/fritz $ 
 ----
-
-NOTE: If you see */home/fritz $* you've confirmed you have a shell and access to the frontend application.
 
 [start=5]
 . Run the alpine package manager in this shell:
@@ -418,102 +451,74 @@ Congrats! You have successfully stopped yourself from downloading malicious pack
 
 [[report-and-resolve-violations]]
 
-== Report and Resolve Violations
+== Violations and Reporting for Audit and Compliance
 
-In this section, you will resolve a few of the issues that you have created.
+In this section, you will resolve a few of the issues that you have created. 
+
+Event audits are crucial not just for security best practices, but also to meet regulatory requirements and uphold data sovereignty standards that can vary by region. Tailoring security policies and audit events to regional needs helps ensure compliance with local laws and regulations, giving your organization greater control and transparency over your workloads and security posture.
 
 *Procedure*
 
-. Navigate to the Violations page.
+. In RHACS, navigate to the Violations page.
 . Filter by the policy violation Policy - Name - r/apk OR by the most recent policy violations. You will see a policy violation that has been enforced.
-. Click the most recent violation and explore the list of the violation events.
 
-image::04-acs-violations.png[link=self, window=blank, width=100%, Violations Menu]
+image::acs-violations-01.png[link=self, window=blank, width=100%, Violations Menu]
 
-If configured, each violation record is pushed to a Security Information and Event Management (SIEM) integration and is available to be retrieved via the API. The forensic data shown in the UI is recorded, including the timestamp, process user IDs, process arguments, process ancestors, and enforcement action.
+. Click on your "Alpine Linux Package Manager Execution - Patient-Portal Enforcement" to view the details.
 
-IMPORTANT: You must resolve the issue before it can be marked as resolved.
+image::acs-violations-02.png[link=self, window=blank, width=100%, Violations Menu]
+
+[IMPORTANT]
+====
+If configured properly, each violation record should be pushed to a Security Information and Event Management (SIEM) application and is available to be retrieved via the API. The forensic data shown in the UI is recorded, including the timestamp, process user IDs, process arguments, process ancestors, and enforcement action.
+====
+
+IMPORTANT: You must resolve the issue before it will disappear from the Violations page.
 
 [start=4]
-. Remove the deployment that violates the policy.
+. Remove the deployment that violates the policy by click the three dots and selecting "Mark as resolved"
 
-[source,sh,subs="attributes",role=execute]
-----
-oc delete -f $TUTORIAL_HOME/skupper-demo/frontend.yml
-----
+== Workload Vulnerability Management and Image Signing
 
-[start=5]
-. After addressing the issue, mark the violation as resolved.
+In this section, you will look at the Workload Vulnerability Management and image signature verification features of RHACS.
 
-image::04-acs-resolve.png[link=self, window=blank, width=100%]
+Sovereignty over your organization's data and services is fundamentally linked to how you manage risk across the entire software supply chain. In today's global and hybrid cloud environments, ensuring that only trusted, verified software components are deployed is crucial for maintaining compliance, controlling data flows, and preventing exposure to supply chain vulnerabilities. Effective software supply chain management—encompassing image provenance, signature verification, vulnerability scanning, and compliance enforcement—not only mitigates risk but also upholds your organization's autonomy and ability to meet regulatory requirements unique to each operating region. 
 
-[[implement-policy-as-code-in-acm-with-openshift-gitops]]
 
-== Implement Policy-as-Code in ACM with OpenShift GitOps
+=== Understanding Your Responsibilities for Software Supply Chain Management
 
-Your last task is to externally manage ACS policies through OpenShift GitOps. To make this easier, the policies from before have already been exported to a GitHub repository.
+RHACS seperates vulnerability results into  "User workloads", "Platform", and "Nodes" so that your operations teams can understand if a CoreOS node is vulnerable, if OpenShift is vulnerable, or if a user workload is vulnerable and be able to react quickly in a timely manner.
 
-link:https://github.com/mfosterrox/skupper-security-demo/tree/main/PaC-custom-policies[PaC Custom Policies on GitHub]
+image::acs-vulnerability-management-01.png[link=self, window=blank, width=100%, Vulnerability Management]
 
-*Procedure*
+Red Hat always shows you how our software is performing as well. 
 
-. Navigate to OpenShift GitOps: Go to the OpenShift Console and search for "OpenShift GitOps"
-. Create a new GitOps Application: In the GitOps dashboard, click on "New Application" to create a new application.
-. Configure the Application:
-Name: Give the application a name, e.g., pac-custom-policies.
-. Select the Argo server, "openshift-gitops"
-. Hit "Next"
-. Enter the URL of the GitHub repository containing the custom policies (https://github.com/mfosterrox/skupper-security-demo.git).
-. Select "Main"
-. Select "PaC-custom-policies"
-. Enter the remote namespace of "stackrox"
-. Make sure the "Replace resources instead of applying changes from the source repository" is selected.
-. *Deploy application resources on clusters with all specified labels*
-* Cluster sets: *default*
-* Label: *local-cluster*
-* Operator: *equals any of*
-* Value: *true*
+. Click on the *Platform* tab to see the OpenShift platform related vulnerabilities.
+
+image::acs-vulnerability-management-02.png[link=self, window=100%, width=100%, Vulnerability Management]
+
+If you love vulnerability tracking you can read more about it here: https://access.redhat.com/security/updates/classification
+
+But we wanted to show you that all of Red Hat's software is signed, attested, and reaching compliance with SLSA Level 3 standards (see https://slsa.dev/spec/v1.0/levels#build-l3-hardened-builds[SLSA Level 3 compliance details]).
+
+[start=2]
+. Click on images button on the platform tab and notivce that Red Hat images are signed and attested.
+
+image::acs-vulnerability-management-03.png[link=self, window=100%, width=100%, Vulnerability Management]
+image::acs-vulnerability-management-04.png[link=self, window=100%, width=100%, Vulnerability Management]
+
+And while you can create SBOMs while you're here, we wanted to you to work on building your own software and signing it with your own keys. Before that, there is one project we wanted to highlight that can help you shrink the number of vulenrabilities in your environment.
+
+=== Project Hummingbird
+
+Project Hummingbird is a Red Hat initiative focused on delivering a lightweight, enterprise-ready version of Red Hat Enterprise Linux designed to be optimized for cloud and edge deployments. It enables organizations to maintain a consistent platform across diverse environments, ensuring robust performance, improved security, and simplified management. Hummingbird’s modern footprint is tailored for fast startup, minimal resource usage, and efficient scalability, making it ideal for running containerized workloads, especially in multi-cloud or distributed edge locations.
+
+For more information, visit the official Red Hat Project Hummingbird page: https://www.redhat.com/en/technologies/linux-platforms/enterprise-linux/hummingbird
 
 [[conclusion]]
-
 == Conclusion
 
-In this lab, you used Red Hat Advanced Cluster Security for Kubernetes (RHACS) to identify potential security violations in your cluster through a central dashboard. You created both deploy-time and runtime policies to help prevent malicious activities from occurring.
+Hey! Great job! 
 
-This lab aimed to demonstrate the significant value RHACS and OpenShift Platform Plus provide in enhancing cluster security. Feel free to continue exploring the RHACS lab environment to deepen your understanding.
+image::https://media.giphy.com/media/v1.Y2lkPWVjZjA1ZTQ3ODhkZThkZXVxb2twdHloazAzc2VhNWJpeWowenRpeTJoczY3MTAyZyZlcD12MV9naWZzX3NlYXJjaCZjdD1n/RIjVnmAtOD4l4c2Ert/giphy.gif[Fun celebration, width=400]
 
-=== Enhance Multi-cluster Audit Capabilities
-
-oc get clusterlogforwarders -n openshift-logging -ojson | jq -r '.items[].spec.pipelines[].inputRefs | contains(["audit"])'
-
-# Simple one-liner for demo (exposes Loki on http://localhost:3100)
-podman run -d -p 3100:3100 --name loki grafana/loki:latest
-
-# Run Grafana (connects to Loki)
-podman run -d -p 3000:3000 --name grafana -e "GF_SECURITY_ADMIN_PASSWORD=admin" grafana/grafana:latest
-
-oc create namespace openshift-logging
-oc -n openshift-logging create secret generic loki-demo-secret \
-  --from-literal=username=demo --from-literal=password=secret
-
-# clf-external-audit.yaml
-apiVersion: logging.openshift.io/v1   # or observability.openshift.io/v1 in newer Logging 6.x+
-kind: ClusterLogForwarder
-metadata:
-  name: instance
-  namespace: openshift-logging
-spec:
-  outputs:
-    - name: external-loki
-      type: loki
-      loki:
-        url: http://<your-host-ip-or-hostname>:3100  # e.g., http://192.168.1.100:3100 or http://host.docker.internal:3100
-        # For HTTPS: https://... and add tls: { insecureSkipVerify: true } for demo
-      # If auth needed: secret: { name: loki-demo-secret }
-  pipelines:
-    - name: audit-to-external
-      inputRefs:
-        - audit
-      outputRefs:
-        - external-loki
-        # Optional: - default  # also keep internal for quick view
