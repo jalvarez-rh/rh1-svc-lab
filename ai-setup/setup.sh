@@ -141,3 +141,33 @@ log "  oc get pods -n redhat-ods-operator"
 log "  oc get datasciencecluster -n redhat-ods-applications"
 log "  oc get pods -n redhat-ods-applications"
 log ""
+
+# Retrieve OpenShift AI access information
+if [ "$SKIP_CLUSTER" = false ]; then
+    log "Retrieving OpenShift AI access information..."
+    
+    DSC_NAMESPACE="redhat-ods-applications"
+    DSC_CR_NAME="default-dsc"
+    
+    # Try to get dashboard route - check for rhods-dashboard first, then fallback to odh-dashboard
+    DASHBOARD_ROUTE=$(oc get route rhods-dashboard -n "$DSC_NAMESPACE" -o jsonpath='{.spec.host}' 2>/dev/null || echo "")
+    if [ -z "$DASHBOARD_ROUTE" ]; then
+        DASHBOARD_ROUTE=$(oc get route -n "$DSC_NAMESPACE" -l app=odh-dashboard -o jsonpath='{.items[0].spec.host}' 2>/dev/null || echo "")
+    fi
+    
+    log ""
+    log "========================================================="
+    log "OpenShift AI Access Information"
+    log "========================================================="
+    if [ -n "$DASHBOARD_ROUTE" ]; then
+        log "Dashboard URL: https://$DASHBOARD_ROUTE"
+    else
+        warning "Dashboard URL not yet available. The dashboard route will be created once the DataScienceCluster is fully ready."
+        log "  You can check the route status with:"
+        log "    oc get route rhods-dashboard -n $DSC_NAMESPACE"
+    fi
+    log "Username: admin"
+    log "Password: OpenShift admin password"
+    log "========================================================="
+    log ""
+fi

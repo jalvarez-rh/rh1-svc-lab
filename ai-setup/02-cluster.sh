@@ -215,23 +215,3 @@ log ""
 log "Note: To enable additional components, edit the DataScienceCluster CR:"
 log "  oc edit datasciencecluster $DSC_CR_NAME -n $DSC_NAMESPACE"
 log ""
-
-# Get OpenShift console URL and credentials
-log "Retrieving access information..."
-
-OPENSHIFT_CONSOLE_URL=$(oc whoami --show-console 2>/dev/null || echo "")
-CURRENT_USER=$(oc whoami 2>/dev/null || echo "")
-
-log ""
-log "========================================================="
-log "OpenShift AI Access Information"
-log "========================================================="
-if [ -n "$DASHBOARD_ROUTE" ]; then
-    log "Dashboard URL: https://$DASHBOARD_ROUTE"
-else
-    warning "Dashboard URL not yet available. The dashboard route will be created once the DataScienceCluster is fully ready."
-fi
-log "Username: admin"
-log "Password: OpenShift admin password"
-log "========================================================="
-log ""
