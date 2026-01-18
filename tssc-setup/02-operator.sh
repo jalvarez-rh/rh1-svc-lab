@@ -68,7 +68,40 @@ OIDC_ISSUER_URL="${KEYCLOAK_URL}/auth/realms/openshift"
 echo "✓ Red Hat SSO (Keycloak) URL: $KEYCLOAK_URL"
 echo "✓ OIDC Issuer URL: $OIDC_ISSUER_URL"
 
-# Step 2: Ensure OpenShift realm exists (using KeycloakRealm CR)
+# Step 2: Wait for Keycloak instance to be ready before creating realms/clients
+echo "Waiting for Keycloak instance to be ready..."
+KEYCLOAK_CR_NAME="rhsso-instance"
+KEYCLOAK_CRD="keycloaks"
+if ! oc get $KEYCLOAK_CRD $KEYCLOAK_CR_NAME -n rhsso >/dev/null 2>&1; then
+    KEYCLOAK_CRD="keycloak"
+fi
+
+MAX_WAIT_KEYCLOAK=300
+WAIT_COUNT=0
+KEYCLOAK_READY=false
+
+while [ $WAIT_COUNT -lt $MAX_WAIT_KEYCLOAK ]; do
+    KEYCLOAK_READY_STATUS=$(oc get $KEYCLOAK_CRD $KEYCLOAK_CR_NAME -n rhsso -o jsonpath='{.status.ready}' 2>/dev/null || echo "false")
+    KEYCLOAK_PHASE=$(oc get $KEYCLOAK_CRD $KEYCLOAK_CR_NAME -n rhsso -o jsonpath='{.status.phase}' 2>/dev/null || echo "")
+    
+    if [ "$KEYCLOAK_READY_STATUS" = "true" ] || [ "$KEYCLOAK_PHASE" = "reconciled" ]; then
+        KEYCLOAK_READY=true
+        echo "✓ Keycloak instance is ready"
+        break
+    fi
+    sleep 5
+    WAIT_COUNT=$((WAIT_COUNT + 5))
+    if [ $((WAIT_COUNT % 30)) -eq 0 ] && [ $WAIT_COUNT -gt 0 ]; then
+        echo "  Still waiting for Keycloak instance... (${WAIT_COUNT}s/${MAX_WAIT_KEYCLOAK}s) - Phase: ${KEYCLOAK_PHASE:-unknown}, Ready: ${KEYCLOAK_READY_STATUS:-false}"
+    fi
+done
+
+if [ "$KEYCLOAK_READY" = false ]; then
+    echo "Warning: Keycloak instance did not become ready within ${MAX_WAIT_KEYCLOAK} seconds, but continuing..."
+fi
+
+# Step 3: Ensure OpenShift realm exists (using KeycloakRealm CR)
+echo ""
 echo "Ensuring OpenShift realm exists..."
 REALM="openshift"
 REALM_CR_NAME="openshift"
@@ -77,28 +110,30 @@ REALM_CR_NAME="openshift"
 if oc get keycloakrealm $REALM_CR_NAME -n rhsso >/dev/null 2>&1; then
     echo "✓ KeycloakRealm CR '${REALM_CR_NAME}' already exists"
     
-    # Wait for realm to be ready
-    echo "Waiting for realm to be ready..."
-    MAX_WAIT_REALM=120
+    # Wait for realm to be ready/reconciled
+    echo "Waiting for realm to be reconciled..."
+    MAX_WAIT_REALM=300
     WAIT_COUNT=0
     REALM_READY=false
     
     while [ $WAIT_COUNT -lt $MAX_WAIT_REALM ]; do
         REALM_STATUS=$(oc get keycloakrealm $REALM_CR_NAME -n rhsso -o jsonpath='{.status.ready}' 2>/dev/null || echo "false")
-        if [ "$REALM_STATUS" = "true" ]; then
+        REALM_PHASE=$(oc get keycloakrealm $REALM_CR_NAME -n rhsso -o jsonpath='{.status.phase}' 2>/dev/null || echo "")
+        
+        if [ "$REALM_STATUS" = "true" ] || [ "$REALM_PHASE" = "reconciled" ]; then
             REALM_READY=true
-            echo "✓ Realm is ready"
+            echo "✓ Realm is reconciled"
             break
         fi
-        sleep 2
-        WAIT_COUNT=$((WAIT_COUNT + 2))
-        if [ $((WAIT_COUNT % 10)) -eq 0 ] && [ $WAIT_COUNT -gt 0 ]; then
-            echo "  Still waiting for realm to be ready... (${WAIT_COUNT}s/${MAX_WAIT_REALM}s)"
+        sleep 5
+        WAIT_COUNT=$((WAIT_COUNT + 5))
+        if [ $((WAIT_COUNT % 30)) -eq 0 ] && [ $WAIT_COUNT -gt 0 ]; then
+            echo "  Still waiting for realm... (${WAIT_COUNT}s/${MAX_WAIT_REALM}s) - Phase: ${REALM_PHASE:-unknown}, Ready: ${REALM_STATUS:-false}"
         fi
     done
     
     if [ "$REALM_READY" = false ]; then
-        echo "Warning: Realm did not become ready within ${MAX_WAIT_REALM} seconds, but continuing..."
+        echo "Warning: Realm did not become reconciled within ${MAX_WAIT_REALM} seconds, but continuing..."
     fi
 else
     echo "Creating KeycloakRealm CR '${REALM_CR_NAME}'..."
@@ -128,32 +163,34 @@ EOF
     
     echo "✓ KeycloakRealm CR created successfully"
     
-    # Wait for realm to be ready
-    echo "Waiting for realm to be ready..."
-    MAX_WAIT_REALM=120
+    # Wait for realm to be ready/reconciled
+    echo "Waiting for realm to be reconciled..."
+    MAX_WAIT_REALM=300
     WAIT_COUNT=0
     REALM_READY=false
     
     while [ $WAIT_COUNT -lt $MAX_WAIT_REALM ]; do
         REALM_STATUS=$(oc get keycloakrealm $REALM_CR_NAME -n rhsso -o jsonpath='{.status.ready}' 2>/dev/null || echo "false")
-        if [ "$REALM_STATUS" = "true" ]; then
+        REALM_PHASE=$(oc get keycloakrealm $REALM_CR_NAME -n rhsso -o jsonpath='{.status.phase}' 2>/dev/null || echo "")
+        
+        if [ "$REALM_STATUS" = "true" ] || [ "$REALM_PHASE" = "reconciled" ]; then
             REALM_READY=true
-            echo "✓ Realm is ready"
+            echo "✓ Realm is reconciled"
             break
         fi
-        sleep 2
-        WAIT_COUNT=$((WAIT_COUNT + 2))
-        if [ $((WAIT_COUNT % 10)) -eq 0 ] && [ $WAIT_COUNT -gt 0 ]; then
-            echo "  Still waiting for realm to be ready... (${WAIT_COUNT}s/${MAX_WAIT_REALM}s)"
+        sleep 5
+        WAIT_COUNT=$((WAIT_COUNT + 5))
+        if [ $((WAIT_COUNT % 30)) -eq 0 ] && [ $WAIT_COUNT -gt 0 ]; then
+            echo "  Still waiting for realm... (${WAIT_COUNT}s/${MAX_WAIT_REALM}s) - Phase: ${REALM_PHASE:-unknown}, Ready: ${REALM_STATUS:-false}"
         fi
     done
     
     if [ "$REALM_READY" = false ]; then
-        echo "Warning: Realm did not become ready within ${MAX_WAIT_REALM} seconds, but continuing..."
+        echo "Warning: Realm did not become reconciled within ${MAX_WAIT_REALM} seconds, but continuing..."
     fi
 fi
 
-# Step 3: Create Keycloak User for authentication
+# Step 4: Create Keycloak User for authentication
 echo ""
 echo "Creating Keycloak User for authentication..."
 KEYCLOAK_USER_NAME="admin"
@@ -350,28 +387,30 @@ CLIENT_CR_NAME="trusted-artifact-signer"
 if oc get keycloakclient $CLIENT_CR_NAME -n rhsso >/dev/null 2>&1; then
     echo "✓ KeycloakClient CR '${CLIENT_CR_NAME}' already exists"
     
-    # Wait for client to be ready
-    echo "Waiting for client to be ready..."
-    MAX_WAIT_CLIENT=120
+    # Wait for client to be ready/reconciled
+    echo "Waiting for client to be reconciled..."
+    MAX_WAIT_CLIENT=300
     WAIT_COUNT=0
     CLIENT_READY=false
     
     while [ $WAIT_COUNT -lt $MAX_WAIT_CLIENT ]; do
         CLIENT_STATUS=$(oc get keycloakclient $CLIENT_CR_NAME -n rhsso -o jsonpath='{.status.ready}' 2>/dev/null || echo "false")
-        if [ "$CLIENT_STATUS" = "true" ]; then
+        CLIENT_PHASE=$(oc get keycloakclient $CLIENT_CR_NAME -n rhsso -o jsonpath='{.status.phase}' 2>/dev/null || echo "")
+        
+        if [ "$CLIENT_STATUS" = "true" ] || [ "$CLIENT_PHASE" = "reconciled" ]; then
             CLIENT_READY=true
-            echo "✓ Client is ready"
+            echo "✓ Client is reconciled"
             break
         fi
-        sleep 2
-        WAIT_COUNT=$((WAIT_COUNT + 2))
-        if [ $((WAIT_COUNT % 10)) -eq 0 ] && [ $WAIT_COUNT -gt 0 ]; then
-            echo "  Still waiting for client to be ready... (${WAIT_COUNT}s/${MAX_WAIT_CLIENT}s)"
+        sleep 5
+        WAIT_COUNT=$((WAIT_COUNT + 5))
+        if [ $((WAIT_COUNT % 30)) -eq 0 ] && [ $WAIT_COUNT -gt 0 ]; then
+            echo "  Still waiting for client... (${WAIT_COUNT}s/${MAX_WAIT_CLIENT}s) - Phase: ${CLIENT_PHASE:-unknown}, Ready: ${CLIENT_STATUS:-false}"
         fi
     done
     
     if [ "$CLIENT_READY" = false ]; then
-        echo "Warning: Client did not become ready within ${MAX_WAIT_CLIENT} seconds, but continuing..."
+        echo "Warning: Client did not become reconciled within ${MAX_WAIT_CLIENT} seconds, but continuing..."
     fi
 else
     echo "Creating KeycloakClient CR '${CLIENT_CR_NAME}'..."
@@ -413,28 +452,30 @@ EOF
     
     echo "✓ KeycloakClient CR created successfully"
     
-    # Wait for client to be ready
-    echo "Waiting for client to be ready..."
-    MAX_WAIT_CLIENT=120
+    # Wait for client to be ready/reconciled
+    echo "Waiting for client to be reconciled..."
+    MAX_WAIT_CLIENT=300
     WAIT_COUNT=0
     CLIENT_READY=false
     
     while [ $WAIT_COUNT -lt $MAX_WAIT_CLIENT ]; do
         CLIENT_STATUS=$(oc get keycloakclient $CLIENT_CR_NAME -n rhsso -o jsonpath='{.status.ready}' 2>/dev/null || echo "false")
-        if [ "$CLIENT_STATUS" = "true" ]; then
+        CLIENT_PHASE=$(oc get keycloakclient $CLIENT_CR_NAME -n rhsso -o jsonpath='{.status.phase}' 2>/dev/null || echo "")
+        
+        if [ "$CLIENT_STATUS" = "true" ] || [ "$CLIENT_PHASE" = "reconciled" ]; then
             CLIENT_READY=true
-            echo "✓ Client is ready"
+            echo "✓ Client is reconciled"
             break
         fi
-        sleep 2
-        WAIT_COUNT=$((WAIT_COUNT + 2))
-        if [ $((WAIT_COUNT % 10)) -eq 0 ] && [ $WAIT_COUNT -gt 0 ]; then
-            echo "  Still waiting for client to be ready... (${WAIT_COUNT}s/${MAX_WAIT_CLIENT}s)"
+        sleep 5
+        WAIT_COUNT=$((WAIT_COUNT + 5))
+        if [ $((WAIT_COUNT % 30)) -eq 0 ] && [ $WAIT_COUNT -gt 0 ]; then
+            echo "  Still waiting for client... (${WAIT_COUNT}s/${MAX_WAIT_CLIENT}s) - Phase: ${CLIENT_PHASE:-unknown}, Ready: ${CLIENT_STATUS:-false}"
         fi
     done
     
     if [ "$CLIENT_READY" = false ]; then
-        echo "Warning: Client did not become ready within ${MAX_WAIT_CLIENT} seconds, but continuing..."
+        echo "Warning: Client did not become reconciled within ${MAX_WAIT_CLIENT} seconds, but continuing..."
     fi
 fi
 
