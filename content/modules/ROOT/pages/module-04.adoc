@@ -37,21 +37,9 @@ The first script installs the Red Hat OpenShift AI Operator, which provides the 
 
 *Procedure*
 
-[start=1]
-. Navigate to the acs-passthrough directory:
-
 [source,sh,role=execute]
 ----
-cd ~/rh1-svc-lab/acs-passthrough
-----
-
-[start=2]
-. Run the OpenShift AI installation script:
-
-[source,sh,role=execute]
-----
-./09-install-openshift-ai.sh
-10-install-data-science-cluster.sh
+cd ~/rh1-svc-lab/ai-setup && ./setup.sh
 ----
 
 [start=3]
@@ -189,33 +177,3 @@ oc get route rhods-dashboard -n redhat-ods-applications -o jsonpath='{.spec.host
 NOTE: The first time you create a workbench, it may take a few minutes to pull the container image and start the server. Subsequent starts will be faster.
 
 [[data-pipeline]]
-
-== Create Simple Data Pipeline Across Environments
-
-[[pipeline-overview]]
-
-=== Data Pipeline Overview
-
-[[source-cluster]]
-
-=== Source Cluster (AWS) Data
-
-[[target-cluster]]
-
-=== Target Cluster (OpenShift CNV) Data
-
-[[ai-compute]]
-
-== Bringing AI/Compute to Your Data
-
-[[ai-overview]]
-
-=== AI/Compute Flexibility
-
-[[data-location]]
-
-=== Data Location Considerations
-
-[[gpu-inference]]
-
-== GPU Support and Inference Server

@@ -228,10 +228,10 @@ log "OpenShift AI Access Information"
 log "========================================================="
 if [ -n "$DASHBOARD_ROUTE" ]; then
     log "Dashboard URL: https://$DASHBOARD_ROUTE"
+else
+    warning "Dashboard URL not yet available. The dashboard route will be created once the DataScienceCluster is fully ready."
 fi
-if [ -n "$CURRENT_USER" ]; then
-    log "Username: admin"
-fi
+log "Username: admin"
 log "Password: OpenShift admin password"
 log "========================================================="
 log ""

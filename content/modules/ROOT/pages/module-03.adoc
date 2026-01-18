@@ -314,14 +314,18 @@ NOTE: As mentioned above, the signing process ties an identity (an OIDC identity
 
 In this example, the "OAuth2 browser-based flow" is used. In other words, you will authenticate to the OIDC system by user and password via a browser login. We are running `cosign` in an `ssh` session with no connection to your system, therefore the check for a browser to open the login page fails: `error opening browser: exec: "xdg-open": executable file not found in $PATH`.
 
+TIP: As an alternative to the browser flow, you can use direct access grants (password grant) to get an OIDC token first, then pass it to cosign with `--identity-token=$OIDC_TOKEN`. See the example later in this module for details.
+
 [start=4]
-. Copy the URL and paste it in a new browser window or tab and log in—use the following credentials:
+. Copy the URL and paste it in a new browser window or tab and log in—use one of the following user credentials:
 
 [cols="2,2"]
 |===
-| *Username:* | *jdoe@redhat.com*
-| *Password:* | *secure*
+| *Username:* | *jdoe@redhat.com* or *user1* or *admin*
+| *Password:* | *secure* (for jdoe) or *116608* (for user1/admin)
 |===
+
+NOTE: You can use any of the created users (jdoe, user1, or admin) to sign images. The username can be entered as the username (e.g., `user1`) or email address (e.g., `user1@demo.redhat.com`).
 
 image::11-signing-sso-login.png[keycloak login]
 
@@ -413,11 +417,16 @@ echo $OIDC_TOKEN_SERVICE
 https://keycloak-rhsso.apps.cluster-l2ktc.l2ktc.sandbox75.opentlc.com/auth/realms/openshift/protocol/openid-connect/token
 ----
 
-2) Now, we are requesting a token from that endpoint for our signing user.
+2) Now, we are requesting a token from that endpoint for our signing user. You can use any of the created users (jdoe, user1, or admin):
 
 [source,sh,subs="attributes",role=execute]
 ----
+# Using jdoe user
 export OIDC_TOKEN=$(curl -s --request POST --url $OIDC_TOKEN_SERVICE --header 'content-type: application/x-www-form-urlencoded' --data 'grant_type=password' --data 'client_id=trusted-artifact-signer' --data 'username=jdoe@redhat.com'  --data 'password=secure' --data 'scope=openid email' | jq -r '.["access_token"]')
+
+# Or using user1 user (alternative)
+# export OIDC_TOKEN=$(curl -s --request POST --url $OIDC_TOKEN_SERVICE --header 'content-type: application/x-www-form-urlencoded' --data 'grant_type=password' --data 'client_id=trusted-artifact-signer' --data 'username=user1'  --data 'password=116608' --data 'scope=openid email' | jq -r '.["access_token"]')
+
 echo $OIDC_TOKEN
 ----
 
