@@ -5,6 +5,8 @@
 # Assumes Red Hat SSO (Keycloak) is installed in the rhsso namespace
 # Usage: ./08-install-trusted-artifact-signer.sh
 
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
 # Step 1: Get Red Hat SSO (Keycloak) OIDC Issuer URL
 echo "Retrieving Red Hat SSO (Keycloak) OIDC Issuer URL..."
 
@@ -190,6 +192,82 @@ EOF
     fi
 fi
 
+# Step 3a: Create OpenShift OAuth Client
+echo ""
+echo "Creating OpenShift OAuth Client..."
+CLIENT_CR_NAME_OCP="openshift"
+CLIENT_YAML_FILE="${SCRIPT_DIR}/keycloak-client-openshift.yaml"
+
+if oc get keycloakclient $CLIENT_CR_NAME_OCP -n rhsso >/dev/null 2>&1; then
+    echo "✓ KeycloakClient CR '${CLIENT_CR_NAME_OCP}' already exists"
+    
+    # Wait for client to be ready/reconciled
+    echo "Waiting for client to be reconciled..."
+    MAX_WAIT_CLIENT=300
+    WAIT_COUNT=0
+    CLIENT_READY=false
+    
+    while [ $WAIT_COUNT -lt $MAX_WAIT_CLIENT ]; do
+        CLIENT_STATUS=$(oc get keycloakclient $CLIENT_CR_NAME_OCP -n rhsso -o jsonpath='{.status.ready}' 2>/dev/null || echo "false")
+        CLIENT_PHASE=$(oc get keycloakclient $CLIENT_CR_NAME_OCP -n rhsso -o jsonpath='{.status.phase}' 2>/dev/null || echo "")
+        
+        if [ "$CLIENT_STATUS" = "true" ] || [ "$CLIENT_PHASE" = "reconciled" ]; then
+            CLIENT_READY=true
+            echo "✓ Client is reconciled"
+            break
+        fi
+        sleep 5
+        WAIT_COUNT=$((WAIT_COUNT + 5))
+        if [ $((WAIT_COUNT % 30)) -eq 0 ] && [ $WAIT_COUNT -gt 0 ]; then
+            echo "  Still waiting for client... (${WAIT_COUNT}s/${MAX_WAIT_CLIENT}s) - Phase: ${CLIENT_PHASE:-unknown}, Ready: ${CLIENT_STATUS:-false}"
+        fi
+    done
+    
+    if [ "$CLIENT_READY" = false ]; then
+        echo "Warning: Client did not become reconciled within ${MAX_WAIT_CLIENT} seconds, but continuing..."
+    fi
+else
+    echo "Creating KeycloakClient CR '${CLIENT_CR_NAME_OCP}' from ${CLIENT_YAML_FILE}..."
+    
+    if [ ! -f "$CLIENT_YAML_FILE" ]; then
+        echo "Error: YAML file not found: ${CLIENT_YAML_FILE}"
+        exit 1
+    fi
+    
+    if ! oc apply -f "$CLIENT_YAML_FILE"; then
+        echo "Error: Failed to create KeycloakClient CR"
+        exit 1
+    fi
+    
+    echo "✓ KeycloakClient CR created successfully"
+    
+    # Wait for client to be ready/reconciled
+    echo "Waiting for client to be reconciled..."
+    MAX_WAIT_CLIENT=300
+    WAIT_COUNT=0
+    CLIENT_READY=false
+    
+    while [ $WAIT_COUNT -lt $MAX_WAIT_CLIENT ]; do
+        CLIENT_STATUS=$(oc get keycloakclient $CLIENT_CR_NAME_OCP -n rhsso -o jsonpath='{.status.ready}' 2>/dev/null || echo "false")
+        CLIENT_PHASE=$(oc get keycloakclient $CLIENT_CR_NAME_OCP -n rhsso -o jsonpath='{.status.phase}' 2>/dev/null || echo "")
+        
+        if [ "$CLIENT_STATUS" = "true" ] || [ "$CLIENT_PHASE" = "reconciled" ]; then
+            CLIENT_READY=true
+            echo "✓ Client is reconciled"
+            break
+        fi
+        sleep 5
+        WAIT_COUNT=$((WAIT_COUNT + 5))
+        if [ $((WAIT_COUNT % 30)) -eq 0 ] && [ $WAIT_COUNT -gt 0 ]; then
+            echo "  Still waiting for client... (${WAIT_COUNT}s/${MAX_WAIT_CLIENT}s) - Phase: ${CLIENT_PHASE:-unknown}, Ready: ${CLIENT_STATUS:-false}"
+        fi
+    done
+    
+    if [ "$CLIENT_READY" = false ]; then
+        echo "Warning: Client did not become reconciled within ${MAX_WAIT_CLIENT} seconds, but continuing..."
+    fi
+fi
+
 # Step 4: Create Keycloak User for authentication
 echo ""
 echo "Creating Keycloak User for authentication..."
@@ -360,6 +438,79 @@ EOF
     
     while [ $WAIT_COUNT -lt $MAX_WAIT_USER ]; do
         USER_PHASE=$(oc get keycloakuser $KEYCLOAK_USER_NAME_JDOE -n rhsso -o jsonpath='{.status.phase}' 2>/dev/null || echo "")
+        if [ "$USER_PHASE" = "reconciled" ]; then
+            USER_READY=true
+            echo "✓ User is ready"
+            break
+        fi
+        sleep 2
+        WAIT_COUNT=$((WAIT_COUNT + 2))
+        if [ $((WAIT_COUNT % 10)) -eq 0 ] && [ $WAIT_COUNT -gt 0 ]; then
+            echo "  Still waiting for user to be ready... (${WAIT_COUNT}s/${MAX_WAIT_USER}s) - Phase: ${USER_PHASE:-unknown}"
+        fi
+    done
+    
+    if [ "$USER_READY" = false ]; then
+        echo "Warning: User did not become ready within ${MAX_WAIT_USER} seconds, but continuing..."
+    fi
+fi
+
+# Step 3c: Create user1 Keycloak User
+echo ""
+echo "Creating user1 Keycloak User..."
+KEYCLOAK_USER_NAME_USER1="user1"
+USER_YAML_FILE="${SCRIPT_DIR}/keycloak-user-user1.yaml"
+
+# Check if KeycloakUser CR already exists
+if oc get keycloakuser $KEYCLOAK_USER_NAME_USER1 -n rhsso >/dev/null 2>&1; then
+    echo "✓ KeycloakUser CR '${KEYCLOAK_USER_NAME_USER1}' already exists"
+    
+    # Wait for user to be ready
+    echo "Waiting for user to be ready..."
+    MAX_WAIT_USER=120
+    WAIT_COUNT=0
+    USER_READY=false
+    
+    while [ $WAIT_COUNT -lt $MAX_WAIT_USER ]; do
+        USER_PHASE=$(oc get keycloakuser $KEYCLOAK_USER_NAME_USER1 -n rhsso -o jsonpath='{.status.phase}' 2>/dev/null || echo "")
+        if [ "$USER_PHASE" = "reconciled" ]; then
+            USER_READY=true
+            echo "✓ User is ready"
+            break
+        fi
+        sleep 2
+        WAIT_COUNT=$((WAIT_COUNT + 2))
+        if [ $((WAIT_COUNT % 10)) -eq 0 ] && [ $WAIT_COUNT -gt 0 ]; then
+            echo "  Still waiting for user to be ready... (${WAIT_COUNT}s/${MAX_WAIT_USER}s) - Phase: ${USER_PHASE:-unknown}"
+        fi
+    done
+    
+    if [ "$USER_READY" = false ]; then
+        echo "Warning: User did not become ready within ${MAX_WAIT_USER} seconds, but continuing..."
+    fi
+else
+    echo "Creating KeycloakUser CR '${KEYCLOAK_USER_NAME_USER1}' from ${USER_YAML_FILE}..."
+    
+    if [ ! -f "$USER_YAML_FILE" ]; then
+        echo "Error: YAML file not found: ${USER_YAML_FILE}"
+        exit 1
+    fi
+    
+    if ! oc apply -f "$USER_YAML_FILE"; then
+        echo "Error: Failed to create KeycloakUser CR"
+        exit 1
+    fi
+    
+    echo "✓ KeycloakUser CR created successfully"
+    
+    # Wait for user to be ready
+    echo "Waiting for user to be ready..."
+    MAX_WAIT_USER=120
+    WAIT_COUNT=0
+    USER_READY=false
+    
+    while [ $WAIT_COUNT -lt $MAX_WAIT_USER ]; do
+        USER_PHASE=$(oc get keycloakuser $KEYCLOAK_USER_NAME_USER1 -n rhsso -o jsonpath='{.status.phase}' 2>/dev/null || echo "")
         if [ "$USER_PHASE" = "reconciled" ]; then
             USER_READY=true
             echo "✓ User is ready"
