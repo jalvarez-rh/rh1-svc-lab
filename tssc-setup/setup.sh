@@ -165,6 +165,68 @@ log "========================================================="
 log ""
 log "All components have been installed and deployed successfully."
 log ""
+
+# Retrieve Keycloak credentials and URL
+if [ "$SKIP_KEYCLOAK" = false ]; then
+    log "Retrieving Keycloak access information..."
+    KEYCLOAK_NAMESPACE="rhsso"
+    KEYCLOAK_CR_NAME="rhsso-instance"
+    
+    # Determine the correct CRD name
+    KEYCLOAK_CRD="keycloaks"
+    if ! oc get $KEYCLOAK_CRD $KEYCLOAK_CR_NAME -n $KEYCLOAK_NAMESPACE >/dev/null 2>&1; then
+        KEYCLOAK_CRD="keycloak"
+    fi
+    
+    # Get Keycloak external URL
+    KEYCLOAK_URL=$(oc get $KEYCLOAK_CRD $KEYCLOAK_CR_NAME -n $KEYCLOAK_NAMESPACE -o jsonpath='{.status.externalURL}' 2>/dev/null || echo "")
+    if [ -z "$KEYCLOAK_URL" ]; then
+        KEYCLOAK_URL=$(oc get route keycloak -n $KEYCLOAK_NAMESPACE -o jsonpath='https://{.spec.host}' 2>/dev/null || echo "")
+    fi
+    
+    # Get credential secret name
+    KEYCLOAK_CREDENTIAL_SECRET=$(oc get $KEYCLOAK_CRD $KEYCLOAK_CR_NAME -n $KEYCLOAK_NAMESPACE -o jsonpath='{.status.credentialSecret}' 2>/dev/null || echo "")
+    if [ -z "$KEYCLOAK_CREDENTIAL_SECRET" ]; then
+        # Try common secret names
+        for secret_name in "credential-rhsso-instance" "keycloak-credential" "rhsso-instance-credential"; do
+            if oc get secret $secret_name -n $KEYCLOAK_NAMESPACE >/dev/null 2>&1; then
+                KEYCLOAK_CREDENTIAL_SECRET=$secret_name
+                break
+            fi
+        done
+    fi
+    
+    # Get username and password from secret
+    KEYCLOAK_ADMIN_USER=""
+    KEYCLOAK_ADMIN_PASSWORD=""
+    if [ -n "$KEYCLOAK_CREDENTIAL_SECRET" ]; then
+        KEYCLOAK_ADMIN_USER=$(oc get secret $KEYCLOAK_CREDENTIAL_SECRET -n $KEYCLOAK_NAMESPACE -o jsonpath='{.data.username}' 2>/dev/null | base64 -d 2>/dev/null || echo "")
+        KEYCLOAK_ADMIN_PASSWORD=$(oc get secret $KEYCLOAK_CREDENTIAL_SECRET -n $KEYCLOAK_NAMESPACE -o jsonpath='{.data.password}' 2>/dev/null | base64 -d 2>/dev/null || echo "")
+    fi
+    
+    log ""
+    log "========================================================="
+    log "Keycloak Admin Access Information"
+    log "========================================================="
+    if [ -n "$KEYCLOAK_URL" ]; then
+        log "Keycloak URL: $KEYCLOAK_URL"
+    else
+        warning "Keycloak URL not found"
+    fi
+    if [ -n "$KEYCLOAK_ADMIN_USER" ] && [ -n "$KEYCLOAK_ADMIN_PASSWORD" ]; then
+        log "Admin Username: $KEYCLOAK_ADMIN_USER"
+        log "Admin Password: $KEYCLOAK_ADMIN_PASSWORD"
+    elif [ -n "$KEYCLOAK_CREDENTIAL_SECRET" ]; then
+        log "Credentials stored in secret: $KEYCLOAK_CREDENTIAL_SECRET"
+        log "  Retrieve username: oc get secret $KEYCLOAK_CREDENTIAL_SECRET -n $KEYCLOAK_NAMESPACE -o jsonpath='{.data.username}' | base64 -d"
+        log "  Retrieve password: oc get secret $KEYCLOAK_CREDENTIAL_SECRET -n $KEYCLOAK_NAMESPACE -o jsonpath='{.data.password}' | base64 -d"
+    else
+        warning "Keycloak credentials not found"
+    fi
+    log "========================================================="
+    log ""
+fi
+
 log "To verify the installation:"
 log "  oc get pods -n rhsso"
 log "  oc get pods -n trusted-artifact-signer"
