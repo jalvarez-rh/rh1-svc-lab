@@ -83,23 +83,57 @@ WAIT_COUNT=0
 KEYCLOAK_READY=false
 
 while [ $WAIT_COUNT -lt $MAX_WAIT_KEYCLOAK ]; do
+    # First check CR status if CR exists
     KEYCLOAK_READY_STATUS=$(oc get $KEYCLOAK_CRD $KEYCLOAK_CR_NAME -n rhsso -o jsonpath='{.status.ready}' 2>/dev/null || echo "false")
     KEYCLOAK_PHASE=$(oc get $KEYCLOAK_CRD $KEYCLOAK_CR_NAME -n rhsso -o jsonpath='{.status.phase}' 2>/dev/null || echo "")
     
+    # Check if CR status indicates ready
     if [ "$KEYCLOAK_READY_STATUS" = "true" ] || [ "$KEYCLOAK_PHASE" = "reconciled" ]; then
         KEYCLOAK_READY=true
-        echo "✓ Keycloak instance is ready"
+        echo "✓ Keycloak instance is ready (CR status)"
         break
     fi
+    
+    # Fallback: Check if Keycloak pods are running
+    KEYCLOAK_PODS_READY=$(oc get pods -n rhsso -l app=keycloak --field-selector=status.phase=Running -o jsonpath='{.items[0].status.phase}' 2>/dev/null || echo "")
+    if [ "$KEYCLOAK_PODS_READY" = "Running" ]; then
+        # Check if route exists and pods are running - consider it ready
+        if [ -n "$KEYCLOAK_ROUTE" ]; then
+            KEYCLOAK_READY=true
+            echo "✓ Keycloak instance is ready (pods running and route available)"
+            break
+        else
+            # If pods are running but no route check, consider it ready
+            KEYCLOAK_READY=true
+            echo "✓ Keycloak instance is ready (pods running)"
+            break
+        fi
+    fi
+    
+    # Alternative: Check StatefulSet ready replicas
+    KEYCLOAK_STS_READY=$(oc get statefulset keycloak -n rhsso -o jsonpath='{.status.readyReplicas}/{.status.replicas}' 2>/dev/null || echo "")
+    if [ -n "$KEYCLOAK_STS_READY" ] && [ "$KEYCLOAK_STS_READY" != "0/0" ] && [ "$KEYCLOAK_STS_READY" != "/" ]; then
+        READY_REPLICAS=$(echo "$KEYCLOAK_STS_READY" | cut -d'/' -f1)
+        TOTAL_REPLICAS=$(echo "$KEYCLOAK_STS_READY" | cut -d'/' -f2)
+        if [ "$READY_REPLICAS" -ge 1 ] && [ "$READY_REPLICAS" = "$TOTAL_REPLICAS" ] 2>/dev/null; then
+            KEYCLOAK_READY=true
+            echo "✓ Keycloak instance is ready (StatefulSet ready)"
+            break
+        fi
+    fi
+    
     sleep 5
     WAIT_COUNT=$((WAIT_COUNT + 5))
     if [ $((WAIT_COUNT % 30)) -eq 0 ] && [ $WAIT_COUNT -gt 0 ]; then
-        echo "  Still waiting for Keycloak instance... (${WAIT_COUNT}s/${MAX_WAIT_KEYCLOAK}s) - Phase: ${KEYCLOAK_PHASE:-unknown}, Ready: ${KEYCLOAK_READY_STATUS:-false}"
+        echo "  Still waiting for Keycloak instance... (${WAIT_COUNT}s/${MAX_WAIT_KEYCLOAK}s) - Phase: ${KEYCLOAK_PHASE:-unknown}, Ready: ${KEYCLOAK_READY_STATUS:-false}, Pods: ${KEYCLOAK_PODS_READY:-none}"
     fi
 done
 
 if [ "$KEYCLOAK_READY" = false ]; then
     echo "Warning: Keycloak instance did not become ready within ${MAX_WAIT_KEYCLOAK} seconds, but continuing..."
+    echo "  Checking current status..."
+    oc get pods -n rhsso -l app=keycloak 2>/dev/null || echo "  No Keycloak pods found"
+    oc get route keycloak -n rhsso 2>/dev/null || echo "  No Keycloak route found"
 fi
 
 # Step 3: Ensure OpenShift realm exists (using KeycloakRealm CR)
