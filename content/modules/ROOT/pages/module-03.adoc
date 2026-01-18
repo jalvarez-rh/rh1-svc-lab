@@ -18,19 +18,27 @@ TIP: Run the following command to ensure the environment is up to date and study
 
 [source,sh,subs="attributes",role=execute]
 ----
-./rh1-svc-lab/tssc-setup/setup.sh
+cd ~/rh1-svc-lab/tssc-setup && ./setup.sh
 curl -fsSL https://raw.githubusercontent.com/redhat-tssc-tmm/security-roadshow/main/cosign_gitsign_installer.sh | bash
+sudo dnf -y install podman
 ----
 
 **OUTPUT**
-[source,sh,subs="attributes",role=execute]
-----
-
-----
-
 [.console-output]
 [source,bash,subs="+macros,+attributes"]
 ----
+[INFO] Gitsign installed successfully:
+gitsign version v0.0.0-20251119095025-6ae9439418bc+dirty
+env:
+         TUF_URL=https://tuf-trusted-artifact-signer.apps.cluster-gk5g4.dynamic.redhatworkshops.io
+         SIGSTORE_REKOR_URL=https://rekor-server-trusted-artifact-signer.apps.cluster-gk5g4.dynamic.redhatworkshops.io
+         SIGSTORE_FULCIO_URL=https://fulcio-server-trusted-artifact-signer.apps.cluster-gk5g4.dynamic.redhatworkshops.io
+         SIGSTORE_OIDC_ISSUER=https://keycloak-rhsso.apps.cluster-gk5g4.dynamic.redhatworkshops.io/auth/realms/openshift
+parsed config:
+----
+
+
+IMPORTANT: If you have issues make sure to as for help from a proctor. 
 
 [[trusted-artifact-signer]]
 
@@ -62,11 +70,7 @@ Sigstore is designed to address the pain points and limitations of GPG in the co
 * Reduces risks from long-term private key compromises.
 * Aligns with modern software practices and supply chain security requirements.
 
-[[signing-our-software]]
-
-== Signing our software
-
-*Procedure*
+== Rebuilding the patient portal patient-portal-frontend application
 
 . Run the following commands in the terminal to retrieve your Quay user and registry URL using oc:
 
@@ -81,12 +85,36 @@ echo $QUAY_USER
 echo $QUAY_URL
 ----
 
+**OUTPUT**
 [.console-output]
 [source,bash,subs="+macros,+attributes"]
 ----
-quayadmin
-quay.apps.cluster-gk5g4.dynamic.redhatworkshops.io
+
 ----
+
+. Run the following commands in the terminal to retrieve your Quay user and registry URL using oc:
+
+[source,sh,subs="attributes",role=execute]
+----
+cd ~/
+git clone https://github.com/mfosterrox/demo-applications.git demo-applications
+cd demo-applications/image-builds/patient-portal-frontend
+QUAY_REGISTRY=${QUAY_URL#https://}
+QUAY_REGISTRY=${QUAY_REGISTRY#http://}
+podman build -t $QUAY_REGISTRY/$QUAY_USER/patient-portal-frontend:1.0 .
+podman login $QUAY_URL -u $QUAY_USER -p {quay_admin_password}
+podman push $QUAY_REGISTRY/$QUAY_USER/patient-portal-frontend:1.0
+----
+
+**OUTPUT**
+[.console-output]
+[source,bash,subs="+macros,+attributes"]
+----
+----
+
+[[signing-our-software]]
+
+== Signing our software
 
 For signing and verification of container images, we'll be using the `cosign` CLI binary, which has already been installed on your bastion host (and can also be downloaded from the OpenShift Console).
 
@@ -120,8 +148,6 @@ GoVersion:     go1.22.9 (Red Hat 1.22.9-2.el9_5)
 Compiler:      gc
 Platform:      linux/amd64
 ----
-
-> `cosign` needs to be initialized with all the required endpoints that it communicates with. Additionally, during initialization, it will download the public trust root certificate in a local cache.
 
 This initialization can be done via command-line parameters or by setting environment variables that are read when no command-line parameters are present.
 
@@ -167,10 +193,8 @@ COSIGN_REKOR_URL=https://rekor-server-trusted-artifact-signer.apps.cluster-88k5s
 
 NOTE: The reason we define multiple variables with the same values is due to the long history of the upstream Sigstore project. Some tools (like cosign and gitsign) use different environment variables for the same purpose. For various reasons, including open source principles and compatibility, we are not creating a specialized Red Hat version with simplified environment parameters. These variables will be maintained in both the upstream project and the Red Hat enterprise-ready version.
 
-> As the last step, initialize `cosign` so it knows who to talk to.
-
 [start=4]
-. Run the following command in the terminal:
+. As the last step, initialize `cosign` so it knows who to talk to. Run the following command in the terminal
 
 [source,sh,subs="attributes",role=execute]
 ----
@@ -238,42 +262,38 @@ cosign login $QUAY_URL -u $QUAY_USER -p {quay_admin_password}
 [source,bash,subs="+macros,+attributes"]
 ----
 [lab-user@bastion ~]$ cosign login $QUAY_URL -u $QUAY_USER -p MzI2OTI0
-auth.go:203: logged in via /home/lab-user/.docker/config.json
+auth.go:203: logged in via /home/lab-user/.podman/config.json
 ----
-
-TIP: To verify that the image we created xref:00-acs-setup-install-navigation.adoc#build-a-container-image[here] is still available and cosign can access the image, we can use the `cosign tree` command that checks for signatures, SBOMs (Software Bills of Materials), and attestations (e.g., build provenance attestation):
 
 [start=2]
 . Run the following command in the terminal:
 
 [source,sh,subs="attributes",role=execute]
 ----
-cosign tree $QUAY_URL/$QUAY_USER/frontend:0.1
+cosign tree $QUAY_URL/$QUAY_USER/patient-portal-frontend:0.1
 ----
 
 [.console-output]
 [source,bash,subs="+macros,+attributes"]
 ----
-[lab-user@bastion ~]$ cosign tree $QUAY_URL/$QUAY_USER/frontend:0.1
-📦 Supply Chain Security Related artifacts for an image: quay-l2ktc.apps.cluster-l2ktc.l2ktc.sandbox75.opentlc.com/quayadmin/frontend:0.1
-No Supply Chain Security Related Artifacts artifacts found for image quay-l2ktc.apps.cluster-l2ktc.l2ktc.sandbox75.opentlc.com/quayadmin/frontend:0.1
-, start creating one with simply running$ COSIGN_EXPERIMENTAL=1 cosign sign <img>
+[lab-user@bastion ~]$ cosign tree $QUAY_URL/$QUAY_USER/patient-portal-frontend:0.1
+📦 Supply Chain Security Related artifacts for an image: quay.apps.cluster-gk5g4.dynamic.redhatworkshops.io/quayadmin/patient-portal-frontend:0.1
+Error: entity not found in registry, error: GET https://quay.apps.cluster-gk5g4.dynamic.redhatworkshops.io/v2/quayadmin/patient-portal-frontend/manifests/0.1: MANIFEST_UNKNOWN: manifest unknown; map[]
+error during command execution: entity not found in registry, error: GET https://quay.apps.cluster-gk5g4.dynamic.redhatworkshops.io/v2/quayadmin/patient-portal-frontend/manifests/0.1: MANIFEST_UNKNOWN: manifest unknown; map[]
 ----
 
-> As `cosign` suggests, signing this image is as simple as the following:
-
 [start=3]
-. Run the following command in the terminal:
+. As `cosign` suggests, signing this image is as simple as the following. Run the following command in the terminal:
 
 [source,sh,subs="attributes",role=execute]
 ----
-cosign sign $QUAY_URL/$QUAY_USER/frontend:0.1
+cosign sign $QUAY_URL/$QUAY_USER/patient-portal-frontend:0.1
 ----
 
 [.console-output]
 [source,bash,subs="+macros,+attributes"]
 ----
-[lab-user@bastion ~]$ cosign sign $QUAY_URL/$QUAY_USER/frontend:0.1
+[lab-user@bastion ~]$ cosign sign $QUAY_URL/$QUAY_USER/patient-portal-frontend:0.1
 Generating ephemeral keys...
 Retrieving signed certificate...
 
@@ -320,7 +340,7 @@ NOTE: You may have to run `rm -rf ~/.sigstore` if you get a cache error.
 Enter verification code: 3cc0c9fc-db2e-4920-ba2e-7adac8c685cb.6309e23d-facd-4bca-8855-0443a3c4ddf5.d8370879-39c7-41ec-99ab-669101e99f91
 
 Successfully verified SCT...
-WARNING: Image reference quay-l2ktc.apps.cluster-l2ktc.l2ktc.sandbox75.opentlc.com/quayadmin/frontend:0.1 uses a tag, not a digest, to identify the image to sign.
+WARNING: Image reference quay-l2ktc.apps.cluster-l2ktc.l2ktc.sandbox75.opentlc.com/quayadmin/patient-portal-frontend:0.1 uses a tag, not a digest, to identify the image to sign.
     This can lead you to sign a different image than the intended one. Please use a
     digest (example.com/ubuntu@sha256:abc123...) rather than tag
     (example.com/ubuntu:latest) for the input to cosign. The ability to refer to
@@ -341,14 +361,14 @@ With one command, you have signed the container image and pushed the container i
 
 [source,sh,subs="attributes",role=execute]
 ----
-cosign tree $QUAY_URL/$QUAY_USER/frontend:0.1
+cosign tree $QUAY_URL/$QUAY_USER/patient-portal-frontend:0.1
 ----
 
 [.console-output]
 [source,bash,subs="+macros,+attributes"]
 ----
-[lab-user@bastion ~]$ cosign tree $QUAY_URL/$QUAY_USER/frontend:0.1
-📦 Supply Chain Security Related artifacts for an image: quay-l2ktc.apps.cluster-l2ktc.l2ktc.sandbox75.opentlc.com/quayadmin/frontend:0.1
+[lab-user@bastion ~]$ cosign tree $QUAY_URL/$QUAY_USER/patient-portal-frontend:0.1
+📦 Supply Chain Security Related artifacts for an image: quay-l2ktc.apps.cluster-l2ktc.l2ktc.sandbox75.opentlc.com/quayadmin/patient-portal-frontend:0.1
 └── 🔐 Signatures for an image tag: quay-l2ktc.apps.cluster-l2ktc.l2ktc.sandbox75.opentlc.com/quayadmin/ctf-web-to-system:sha256-4530d5e1556631804ce21d37271b0d3f173c350956f2312421db0840fd103c82.sig
    └── 🍒 sha256:f638a989546b998409719e3eb78c0843d880e0bbb5237afa831da685fee48880
 ----
@@ -397,14 +417,14 @@ https://keycloak-rhsso.apps.cluster-l2ktc.l2ktc.sandbox75.opentlc.com/auth/realm
 
 [source,sh,subs="attributes",role=execute]
 ----
-export OIDC_TOKEN=$(curl -s --request POST --url $OIDC_TOKEN_SERVICE --header 'content-type: application/x-www-form-urlencoded' --data 'grant_type=password' --data 'client_id=trusted-artifact-signer' --data 'username=jdoe@redhat.com'  --data 'password=secure' --data 'scope=openid' | jq -r '.["access_token"]')
+export OIDC_TOKEN=$(curl -s --request POST --url $OIDC_TOKEN_SERVICE --header 'content-type: application/x-www-form-urlencoded' --data 'grant_type=password' --data 'client_id=trusted-artifact-signer' --data 'username=jdoe@redhat.com'  --data 'password=secure' --data 'scope=openid email' | jq -r '.["access_token"]')
 echo $OIDC_TOKEN
 ----
 
 [.console-output]
 [source,bash,subs="+macros,+attributes"]
 ----
-[lab-user@bastion ~]$ export OIDC_TOKEN=$(curl -s --request POST --url $OIDC_TOKEN_SERVICE --header 'content-type: application/x-www-form-urlencoded' --data 'grant_type=password' --data 'client_id=trusted-artifact-signer' --data 'username=jdoe@redhat.com'  --data 'password=secure' --data 'scope=openid' | jq -r '.["access_token"]')
+[lab-user@bastion ~]$ export OIDC_TOKEN=$(curl -s --request POST --url $OIDC_TOKEN_SERVICE --header 'content-type: application/x-www-form-urlencoded' --data 'grant_type=password' --data 'client_id=trusted-artifact-signer' --data 'username=jdoe@redhat.com'  --data 'password=secure' --data 'scope=openid email' | jq -r '.["access_token"]')
 echo $OIDC_TOKEN
 eyJhbGciOiJSUzI1NiIsInR5cC...
 ...IgOiAiSldUIiwia2lkIiA6ICJl
@@ -416,17 +436,17 @@ WARNING: This is just an example—naturally, in your own CI system, you would n
 
 [source,sh,subs="attributes",role=execute]
 ----
-cosign sign -y --identity-token=$OIDC_TOKEN $QUAY_URL/$QUAY_USER/frontend:0.1
+cosign sign -y --identity-token=$OIDC_TOKEN $QUAY_URL/$QUAY_USER/patient-portal-frontend:0.1
 ----
 
 [.console-output]
 [source,bash,subs="+macros,+attributes"]
 ----
-[lab-user@bastion ~]$ cosign sign -y --identity-token=$OIDC_TOKEN $QUAY_URL/$QUAY_USER/frontend:0.1
+[lab-user@bastion ~]$ cosign sign -y --identity-token=$OIDC_TOKEN $QUAY_URL/$QUAY_USER/patient-portal-frontend:0.1
 Generating ephemeral keys...
 Retrieving signed certificate...
 Successfully verified SCT...
-WARNING: Image reference quay-l2ktc.apps.cluster-l2ktc.l2ktc.sandbox75.opentlc.com/quayadmin/frontend:0.1 uses a tag, not a digest, to identify the image to sign.
+WARNING: Image reference quay-l2ktc.apps.cluster-l2ktc.l2ktc.sandbox75.opentlc.com/quayadmin/patient-portal-frontend:0.1 uses a tag, not a digest, to identify the image to sign.
     This can lead you to sign a different image than the intended one. Please use a
     digest (example.com/ubuntu@sha256:abc123...) rather than tag
     (example.com/ubuntu:latest) for the input to cosign. The ability to refer to
@@ -470,15 +490,15 @@ Verifying an image signature is even easier than signing:
 
 [source,sh,subs="attributes",role=execute]
 ----
-cosign verify --certificate-identity jdoe@redhat.com $QUAY_URL/$QUAY_USER/frontend:0.1 | jq
+cosign verify --certificate-identity jdoe@redhat.com $QUAY_URL/$QUAY_USER/patient-portal-frontend:0.1 | jq
 ----
 
 [.console-output]
 [source,bash,subs="+macros,+attributes"]
 ----
-[lab-user@bastion ~]$ cosign verify --certificate-identity jdoe@redhat.com $QUAY_URL/$QUAY_USER/frontend:0.1 | jq
+[lab-user@bastion ~]$ cosign verify --certificate-identity jdoe@redhat.com $QUAY_URL/$QUAY_USER/patient-portal-frontend:0.1 | jq
 
-Verification for quay-lpv5s.apps.cluster-lpv5s.lpv5s.sandbox1300.opentlc.com/quayadmin/frontend:0.1 --
+Verification for quay-lpv5s.apps.cluster-lpv5s.lpv5s.sandbox1300.opentlc.com/quayadmin/patient-portal-frontend:0.1 --
 The following checks were performed on each of these signatures:
   - The cosign claims were validated
   - Existence of the claims in the transparency log was verified offline
@@ -487,10 +507,10 @@ The following checks were performed on each of these signatures:
   {
     "critical": {
       "identity": {
-        "docker-reference": "quay-lpv5s.apps.cluster-lpv5s.lpv5s.sandbox1300.opentlc.com/quayadmin/frontend"
+        "podman-reference": "quay-lpv5s.apps.cluster-lpv5s.lpv5s.sandbox1300.opentlc.com/quayadmin/patient-portal-frontend"
       },
       "image": {
-        "docker-manifest-digest": "sha256:9323448ee75bfb5380004038bd04e2d7be5a45707f3895b620e6937aac6ebba7"
+        "podman-manifest-digest": "sha256:9323448ee75bfb5380004038bd04e2d7be5a45707f3895b620e6937aac6ebba7"
       },
       "type": "cosign container image signature"
     },
@@ -506,15 +526,15 @@ In this case, we are asking `cosign` (and therefore *Trusted Artifact Signer*) t
 
 [source,sh,subs="attributes",role=execute]
 ----
-cosign verify --certificate-identity-regexp ^[a-zA-Z0-9._%+-]+@redhat\.com$ $QUAY_URL/$QUAY_USER/frontend:0.1 | jq
+cosign verify --certificate-identity-regexp ^[a-zA-Z0-9._%+-]+@redhat\.com$ $QUAY_URL/$QUAY_USER/patient-portal-frontend:0.1 | jq
 ----
 
 [.console-output]
 [source,bash,subs="+macros,+attributes"]
 ----
-[lab-user@bastion ~]$ cosign verify --certificate-identity-regexp ^[a-zA-Z0-9._%+-]+@redhat\.com$ $QUAY_URL/$QUAY_USER/frontend:0.1 | jq
+[lab-user@bastion ~]$ cosign verify --certificate-identity-regexp ^[a-zA-Z0-9._%+-]+@redhat\.com$ $QUAY_URL/$QUAY_USER/patient-portal-frontend:0.1 | jq
 
-Verification for quay-lpv5s.apps.cluster-lpv5s.lpv5s.sandbox1300.opentlc.com/quayadmin/frontend:0.1 --
+Verification for quay-lpv5s.apps.cluster-lpv5s.lpv5s.sandbox1300.opentlc.com/quayadmin/patient-portal-frontend:0.1 --
 The following checks were performed on each of these signatures:
   - The cosign claims were validated
   - Existence of the claims in the transparency log was verified offline
@@ -523,10 +543,10 @@ The following checks were performed on each of these signatures:
   {
     "critical": {
       "identity": {
-        "docker-reference": "quay-lpv5s.apps.cluster-lpv5s.lpv5s.sandbox1300.opentlc.com/quayadmin/frontend"
+        "podman-reference": "quay-lpv5s.apps.cluster-lpv5s.lpv5s.sandbox1300.opentlc.com/quayadmin/patient-portal-frontend"
       },
       "image": {
-        "docker-manifest-digest": "sha256:9323448ee75bfb5380004038bd04e2d7be5a45707f3895b620e6937aac6ebba7"
+        "podman-manifest-digest": "sha256:9323448ee75bfb5380004038bd04e2d7be5a45707f3895b620e6937aac6ebba7"
       },
       "type": "cosign container image signature"
     },
@@ -541,7 +561,7 @@ We can also verify that the person (to be correct, the OIDC identity) who signed
 
 [source,sh,subs="attributes",role=execute]
 ----
-cosign verify --certificate-identity jdoe@redhat.com --certificate-oidc-issuer-regexp \.opentlc\.com $QUAY_URL/$QUAY_USER/frontend:0.1 | jq
+cosign verify --certificate-identity jdoe@redhat.com --certificate-oidc-issuer-regexp \.opentlc\.com $QUAY_URL/$QUAY_USER/patient-portal-frontend:0.1 | jq
 ----
 
 NOTE: We are using `jq` for readability in these examples; it is not required.
@@ -549,9 +569,9 @@ NOTE: We are using `jq` for readability in these examples; it is not required.
 [.console-output]
 [source,bash,subs="+macros,+attributes"]
 ----
-[lab-user@bastion ~]$ cosign verify --certificate-identity jdoe@redhat.com --certificate-oidc-issuer-regexp \.opentlc\.com $QUAY_URL/$QUAY_USER/frontend:0.1 | jq
+[lab-user@bastion ~]$ cosign verify --certificate-identity jdoe@redhat.com --certificate-oidc-issuer-regexp \.opentlc\.com $QUAY_URL/$QUAY_USER/patient-portal-frontend:0.1 | jq
 
-Verification for quay-l2ktc.apps.cluster-l2ktc.l2ktc.sandbox75.opentlc.com/quayadmin/frontend:0.1 --
+Verification for quay-l2ktc.apps.cluster-l2ktc.l2ktc.sandbox75.opentlc.com/quayadmin/patient-portal-frontend:0.1 --
 The following checks were performed on each of these signatures:
   - The cosign claims were validated
   - Existence of the claims in the transparency log was verified offline
@@ -570,415 +590,15 @@ NOTE: If you haven't already done so, please execute the following steps from pr
 
 2. We won't go through setting up the environment for signing and verification (the Trusted Artifact Signer endpoints) again. If you have followed this chapter from the beginning, you have everything configured already. If not, please set the environment variables as shown xref:#setting-up-the-environment-variables[here], followed by a `cosign initialize`
 
-==== Setting up gitsign
+=== Setting up gitsign for commit signing
+Configure git to automatically sign commits using gitsign instead of using the CLI directly. This enables automatic signing for all commits and tags, including from IDEs like VSCode. After preparing a local repository and pushing it to a GitLab instance on the cluster, configure git with local settings that enable GPG signing using gitsign as the X.509 program, and specify the Trusted Artifact Signer endpoints (Fulcio, Rekor, and OIDC issuer) along with the client ID. This ensures every commit is automatically signed without manual intervention.
 
-While you *could* use the `gitsign` CLI binary directly for signing your commits, it is much easier to configure your local (or global, if you want) `git` configuration, so that commits will be signed every time you issue a `git commit` or `git tag`, for example. This also applies to using your `git` installation from e.g. VSCode or other IDEs leveraging the local git installation.
+==== Signing commits with OIDC authentication
+When making a commit, gitsign triggers an OIDC authentication flow through Keycloak. In an SSH session, it provides a browser URL for manual authentication, similar to container image signing. After authenticating as the signing user (e.g., jdoe@redhat.com), the commit is signed and the signature is recorded in the Rekor transparency log. It's important to distinguish between two identities: the committer (stored in git metadata, easily changed) and the signer (the OIDC-authenticated identity, cryptographically verified and immutable in the transparency log). This allows developers to use different committer identities across git systems while maintaining a consistent, verifiable signing identity.
 
-Go to the `demo-apps` local repository you created earlier:
+==== Verifying commit signatures
 
-[source,sh,subs="attributes",role=execute]
-----
-cd /home/lab-user/demo-apps
-git status
-git remote -v
-----
-
-[.console-output]
-[source,bash,subs="+macros,+attributes"]
-----
-[lab-user@bastion demo-apps]$ cd /home/lab-user/demo-apps
-git status
-git remote -v
-On branch main
-Your branch is up to date with 'origin/main'.
-
-nothing to commit, working tree clean
-origin  https://github.com/mfosterrox/demo-apps.git (fetch)
-origin  https://github.com/mfosterrox/demo-apps.git (push)
-----
-
-Since we don't want to push our commits to the original source, we will use a GitLab instance on this cluster:
-
-You can access the => {gitlab_url}[GitLab instance UI^] on the cluster using
-
-[cols="2,2"]
-|===
-| *GitLab Username:* | {gitlab_user}
-| *GitLab Password:* | {gitlab_user_password}
-|===
-
-TIP: You can also create an empty repository in GitLab with just a README and clone this to your console - but since we already have a repo, we'll use that. However, for our signing and verification exercise, the actual content isn't really important, so an arbitrary repo will do.
-
-Your GitLab instance, logged in as user1:
-
-image::11-gitlab-projects.png[gitlab ui]
-
-So, before we proceed, let's quickly push our local git repo to GitLab:
-
-[start=1]
-. In our local repository, let's replace the origin with the a new one on GitLab:
-
-[source,sh,subs="attributes",role=execute]
-----
-export GITLAB_REPO_URL=https://$(oc get route gitlab -n gitlab | tail -n 1 | awk '{print $2}')/user1/demo-apps.git
-git remote remove origin
-git remote add origin $GITLAB_REPO_URL
-git remote -v
-----
-
-[.console-output]
-[source,bash,subs="+macros,+attributes"]
-----
-[lab-user@bastion demo-apps]$ export GITLAB_REPO_URL=https://$(oc get route gitlab -n gitlab | tail -n 1 | awk '{print $2}')/user1/demo-apps.git
-[lab-user@bastion demo-apps]$ git remote remove origin
-[lab-user@bastion demo-apps]$ git remote add origin $GITLAB_REPO_URL
-[lab-user@bastion demo-apps]$ git remote -v
-origin  https://gitlab-gitlab.apps.cluster-47fg6.47fg6.sandbox2892.opentlc.com/user1/demo-apps.git (fetch)
-origin  https://gitlab-gitlab.apps.cluster-47fg6.47fg6.sandbox2892.opentlc.com/user1/demo-apps.git (push)
-----
-
-[start=2]
-. Now let's push it to GitLab
-
-[source,sh,subs="attributes",role=execute]
-----
-git push --set-upstream origin main
-----
-
-Use the GitLab *username* and *password* from above ( {gitlab_user} / {gitlab_user_password} )
-
-[.console-output]
-[source,bash,subs="+macros,+attributes"]
-----
-[lab-user@bastion demo-apps]$ git push --set-upstream origin main
-Username for 'https://gitlab-gitlab.apps.cluster-47fg6.47fg6.sandbox2892.opentlc.com': user1
-Password for 'https://user1@gitlab-gitlab.apps.cluster-47fg6.47fg6.sandbox2892.opentlc.com':
-Enumerating objects: 2907, done.
-Counting objects: 100% (2907/2907), done.
-Delta compression using up to 32 threads
-Compressing objects: 100% (2240/2240), done.
-Writing objects: 100% (2907/2907), 73.15 MiB | 137.19 MiB/s, done.
-Total 2907 (delta 499), reused 2907 (delta 499), pack-reused 0
-remote: Resolving deltas: 100% (499/499), done.
-remote:
-remote:
-remote: The private project user1/demo-apps was successfully created.
-remote:
-remote: To configure the remote, run:
-remote:   git remote add origin https://gitlab-gitlab.apps.cluster-47fg6.47fg6.sandbox2892.opentlc.com/user1/demo-apps.git
-remote:
-remote: To view the project, visit:
-remote:   https://gitlab-gitlab.apps.cluster-47fg6.47fg6.sandbox2892.opentlc.com/user1/demo-apps
-remote:
-remote:
-remote:
-To https://gitlab-gitlab.apps.cluster-47fg6.47fg6.sandbox2892.opentlc.com/user1/demo-apps.git
- * [new branch]      main -> main
-branch 'main' set up to track 'origin/main'.
-----
-
-[start=3]
-. (optional) If you'd like to double check on GitLab, go to {gitlab_url}/user1/demo-apps[the app repo^]
-
-image::11-gitlab-project.png[gitlab ui]
-
-[start=4]
-. Configure `git`
-
-As stated above, we could use the `gitsign` command directly - but it is much easier to configure your `git` environment to use gitsign:
-
-[source,sh,subs="attributes",role=execute]
-----
-git config --local commit.gpgsign true
-git config --local tag.gpgsign true
-git config --local gpg.x509.program gitsign
-git config --local gpg.format x509
-git config --local gitsign.fulcio $SIGSTORE_FULCIO_URL
-git config --local gitsign.rekor $SIGSTORE_REKOR_URL
-git config --local gitsign.issuer $SIGSTORE_OIDC_ISSUER
-git config --local gitsign.clientID trusted-artifact-signer
-git config --local --list
-----
-
-[.console-output]
-[source,bash,subs="+macros,+attributes"]
-----
-[lab-user@bastion demo-apps]$ git config --local commit.gpgsign true
-git config --local tag.gpgsign true
-git config --local gpg.x509.program gitsign
-git config --local gpg.format x509
-git config --local gitsign.fulcio $SIGSTORE_FULCIO_URL
-git config --local gitsign.rekor $SIGSTORE_REKOR_URL
-git config --local gitsign.issuer $SIGSTORE_OIDC_ISSUER
-git config --local gitsign.clientID trusted-artifact-signer
-git config --local --list
-core.repositoryformatversion=0
-core.filemode=true
-core.bare=false
-core.logallrefupdates=true
-remote.origin.url=https://gitlab-gitlab.apps.cluster-47fg6.47fg6.sandbox2892.opentlc.com/user1/demo-apps.git
-remote.origin.fetch=+refs/heads/*:refs/remotes/origin/*
-branch.main.remote=origin
-branch.main.merge=refs/heads/main
-commit.gpgsign=true
-tag.gpgsign=true
-gpg.x509.program=gitsign
-gpg.format=x509
-gitsign.fulcio=https://fulcio-server-trusted-artifact-signer.apps.cluster-47fg6.47fg6.sandbox2892.opentlc.com
-gitsign.rekor=https://rekor-server-trusted-artifact-signer.apps.cluster-47fg6.47fg6.sandbox2892.opentlc.com
-gitsign.issuer=https://keycloak-rhsso.apps.cluster-47fg6.47fg6.sandbox2892.opentlc.com/auth/realms/openshift
-gitsign.clientid=trusted-artifact-signer
-----
-
-==== Signing a commit
-
-Now, let's quickly modify our repo and commit the changes (you can of course make any modification you like, we'll simply add an empty file)
-
-[source,sh,subs="attributes",role=execute]
-----
-touch make-a-commit.txt
-git add .
-git status
-----
-
-[.console-output]
-[source,bash,subs="+macros,+attributes"]
-----
-[lab-user@bastion demo-apps]$ touch make-a-commit.txt
-git add .
-git status
-On branch main
-Your branch is up to date with 'origin/main'.
-
-Changes to be committed:
-  (use "git restore --staged <file>..." to unstage)
-        new file:   make-a-commit.txt
-----
-
-[source,sh,subs="attributes",role=execute]
-----
-git commit -m "added an empty file"
-----
-
-NOTE: Similarly to signing an image, you will be asked to open your browser to the OIDC System (in our case Keycloak) to authenticate. This is because you are working in an SSH session with no connection to your local computer, so it can't automatically open your browser.
-
-Please use the "signing user" *`jdoe@redhat.com`* with password *`secure`* again.
-
-[.console-output]
-[source,bash,subs="+macros,+attributes"]
-----
-[lab-user@bastion demo-apps]$ git commit -m "added an empty file"
-error opening browser: exec: "xdg-open": executable file not found in $PATH
-Go to the following link in a browser:
-
-         https://keycloak-rhsso.apps.cluster-47fg6.47fg6.sandbox2892.opentlc.com/auth/realms/openshift/protocol/openid-connect/auth?access_type=online&client_id=trusted-artifact-signer&code_challenge=QzAAVp3Bo82vhdN0DFX1nUBHA3iSzrvD1-GFxj58xCI&code_challenge_method=S256&nonce=2raUg4ukP7RtOKQCOJiVfYyCQp2&redirect_uri=urn%3Aietf%3Awg%3Aoauth%3A2.0%3Aoob&response_type=code&scope=openid+email&state=2raUg74ynB8w1azNM8rV5va2Ypr
-Enter verification code:
-tlog entry created with index: 2
-[main 390aeb4] added an empty file
- Committer: Red Hat Demo Platform Student <lab-user@bastion.47fg6.internal>
-Your name and email address were configured automatically based
-on your username and hostname. Please check that they are accurate.
-You can suppress this message by setting them explicitly. Run the
-following command and follow the instructions in your editor to edit
-your configuration file:
-
-    git config --global --edit
-
-After doing this, you may fix the identity used for this commit with:
-
-    git commit --amend --reset-author
-
- 1 file changed, 0 insertions(+), 0 deletions(-)
- create mode 100644 make-a-commit.txt
-----
-
-TIP: `gitsign` doesn't echo the output of the verification code, so don't worry if you don't see it when pasting from your browser.
-
-image::11-signing-sso-login.png[keycloak login]
-
-image::11-signing-successcode.png[copy the success code]
-
-IMPORTANT: If you look closer at the `git` console output, you will notice that you have committed your code change as "Red Hat Demo Platform Student". That is because your git environment hasn't been configured with an explicit user. It is important to understand that we have two user types here - and depending on your requirements, these can be the same or different users: Firstly, the *committer*. This is what `git` is storing as the user metadata. However, this is not secure, as it can be changed easily, just by configuring your local `git` environment. Secondly, the *signer* - in our case, "jdoe@redhat.com". Since that user just authenticated against the "Company SSO" (Keycloak), this signature is safe - and furthermore, the signing event in the transparency log cannot be altered. This also gives a user the option to work in different git systems with different committer IDs - but all commits would be signed with the same identifiable OIDC identity.
-
-Now we can push the signed commit to our remote GitLab repository:
-
-Remember to use the GitLab *username* and *password* from above ( {gitlab_user} / {gitlab_user_password} )
-
-[source,sh,subs="attributes",role=execute]
-----
-git push
-----
-
-[.console-output]
-[source,bash,subs="+macros,+attributes"]
-----
-[lab-user@bastion demo-apps]$ git push
-Username for 'https://gitlab-gitlab.apps.cluster-47fg6.47fg6.sandbox2892.opentlc.com': user1
-Password for 'https://user1@gitlab-gitlab.apps.cluster-47fg6.47fg6.sandbox2892.opentlc.com':
-Enumerating objects: 4, done.
-Counting objects: 100% (4/4), done.
-Delta compression using up to 32 threads
-Compressing objects: 100% (2/2), done.
-Writing objects: 100% (3/3), 1.41 KiB | 1.41 MiB/s, done.
-Total 3 (delta 1), reused 1 (delta 0), pack-reused 0
-To https://gitlab-gitlab.apps.cluster-47fg6.47fg6.sandbox2892.opentlc.com/user1/demo-apps.git
-   cc456d6..390aeb4  main -> main
-----
-
-NOTE: If you check the GitLab repository after you pushed the commit, you might have noticed the "unverified" badge. It means that GitLab recognizes that the commit has been signed, but currently GitLab cannot verify "keyless" signatures - however, given the demand and ease of use of Sigstore / Trusted Artifact Signer, many vendors (including the GitLab community and company backing it) are working on it: https://gitlab.com/gitlab-org/gitlab/-/issues/364428[GitLab issue^]
-
-image::11-gitlab-signature.png[unverified badge]
-
-=== Verifying a commit signature
-
-Now that we have signed our latest commit (and pushed it), first let's take a look at the signature.
-
-With the traditional `git show <commit-hash>` we'd get a mixture of signature and actual commit information. Depending on your usecase and personal taste, this might be sufficient or not.
-
-[source,sh,subs="attributes",role=execute]
-----
-git show --show-signature
-----
-
-[.console-output]
-[source,bash,subs="+macros,+attributes"]
-----
-[lab-user@bastion demo-apps]$ git show --show-signature
-commit d9f7258dfc05d6d86d197fc3c4ac54e2a4bcfbe6 (HEAD -> main, origin/main)
-tlog index: 2
-gitsign: Signature made using certificate ID 0x463cfdb3c69173adfeead655e333194e53fb23ad | CN=fulcio.hostname,O=Red Hat
-gitsign: Good signature from [jdoe@redhat.com](https://keycloak-rhsso.apps.cluster-lpv5s.lpv5s.sandbox1300.opentlc.com/auth/realms/openshift)
-Validated Git signature: true
-Validated Rekor entry: true
-Validated Certificate claims: false
-WARNING: git verify-commit does not verify cert claims. Prefer using `gitsign verify` instead.
-Author: Red Hat Demo Platform Student <lab-user@bastion.lpv5s.internal>
-Date:   Mon Aug 4 16:08:41 2025 +0000
-
-    added an empty file
-
-diff --git a/app-images/frontend/Dockerfile b/app-images/frontend/Dockerfile
-index 8af98676..fb442656 100644
---- a/app-images/frontend/Dockerfile
-+++ b/app-images/frontend/Dockerfile
-@@ -1,4 +1,4 @@
--FROM python:3.12-alpine AS build
-+FROM quay-lpv5s.apps.cluster-lpv5s.lpv5s.sandbox1300.opentlc.com/quayadmin/python-alpine-golden:0.1 AS build
- 
- # Install Bash and other dependencies
- RUN apk add --no-cache bash
-@@ -13,7 +13,7 @@ RUN pip install --no-cache-dir Django==1.11.29
- RUN pip install --no-cache-dir requests==2.19.0
- RUN pip install --no-cache-dir PyYAML==3.12
- 
--FROM python:3.12-alpine AS run
-+FROM quay-lpv5s.apps.cluster-lpv5s.lpv5s.sandbox1300.opentlc.com/quayadmin/python-alpine-golden:0.1 AS run
- 
- # Install Bash in the runtime container
- RUN apk add --no-cache bash
-diff --git a/make-a-commit.txt b/make-a-commit.txt
-new file mode 100644
-index 00000000..e69de29b
-----
-
-`gitsign` gives us a similar command that allows us to inspect the signature and its metadata in more detail: `gitsign show <commit-hash>`
-
-[source,sh,subs="attributes",role=execute]
-----
-gitsign show
-----
-
-[.console-output]
-[source,bash,subs="+macros,+attributes"]
-----
-[lab-user@bastion demo-apps]$ gitsign show
-{
-  "_type": "https://in-toto.io/Statement/v0.1",
-  "predicateType": "https://gitsign.sigstore.dev/predicate/git/v0.1",
-  "subject": [
-    {
-      "name": "https://gitlab-gitlab.apps.cluster-lpv5s.lpv5s.sandbox1300.opentlc.com/user1/demo-apps.git",
-      "digest": {
-        "sha1": "d9f7258dfc05d6d86d197fc3c4ac54e2a4bcfbe6"
-      }
-    }
-  ],
-  "predicate": {
-    "source": {
-      "tree": "45c938637cb151eb384e43a730d1dcd4e812c20c",
-      "parents": [
-        "91b7f65b245b1e0b925747c20fee4c83a683cc16"
-      ],
-      "author": {
-        "name": "Red Hat Demo Platform Student",
-        "email": "lab-user@bastion.lpv5s.internal",
-        "date": "2025-08-04T16:08:41Z"
-      },
-      "committer": {
-        "name": "Red Hat Demo Platform Student",
-        "email": "lab-user@bastion.lpv5s.internal",
-        "date": "2025-08-04T16:08:41Z"
-      },
-      "message": "added an empty file\n"
-    },
-    "signature": "-----BEGIN SIGNED MESSAGE-----\nMIIEmAYJKoZIhvcNAQcCoIIEiTCC
-    ...
-    upWtFh86YBa5P7do2vALyfoDxb3GMcVZCawg==\n-----END SIGNED MESSAGE-----\n",
-    "signer_info": [
-      {
-        "attributes": "MWkwGAYJKoZIhvcNAQkDMQsGCSqGSIb3DQEHATAcBgkqhkiG9w0BCQUxDxcNMjUwODA0MTYwOTA2WjAvBgkqhkiG9w0BCQQxIgQgAgWjvWIIh+ltKuFl0+t9ov73qpaDNyWgiz+D2Vh6iIo=",
-        "certificate": "-----BEGIN CERTIFICATE-----\nMIIDQDCCAsegAwIBAgIUZsHGCFYOhYsRXkb
-        ...
-        2wVuy1ruf0yUPvDc2wZIy4=\n-----END CERTIFICATE-----\n"
-      }
-    ]
-  }
-}
-----
-
-NOTE: It is important to note that this just shows the signature information - this could in theory be forged and does not count as _verification_ (see the warning in the `git show` command output above: `WARNING: git verify-commit does not verify cert claims. Prefer using `gitsign verify` instead.)!
-
-Ok, now that we have seen what signing information is stored in our git repo, let's verify this information against the Rekor transparency database and the trust root:
-
-Similar to the image signature verification examples above, we can explicitly check if the commit was really signed by our colleague `Jon Doe` and he authenticated against the Keycloak instance:
-
-[source,sh,subs="attributes",role=execute]
-----
-gitsign verify --certificate-identity=jdoe@redhat.com --certificate-oidc-issuer $OIDC_ISSUER_URL
-----
-
-[.console-output]
-[source,bash,subs="+macros,+attributes"]
-----
-[lab-user@bastion demo-apps]$ gitsign verify --certificate-identity=jdoe@redhat.com --certificate-oidc-issuer $OIDC_ISSUER_URL 
-tlog index: 2
-gitsign: Signature made using certificate ID 0x463cfdb3c69173adfeead655e333194e53fb23ad | CN=fulcio.hostname,O=Red Hat
-gitsign: Good signature from [jdoe@redhat.com](https://keycloak-rhsso.apps.cluster-lpv5s.lpv5s.sandbox1300.opentlc.com/auth/realms/openshift)
-Validated Git signature: true
-Validated Rekor entry: true
-Validated Certificate claims: true
-----
-
-
-Since coding is a team effort, we don't want to be too restrictive here, so let's verify that someone from Red Hat signed this commit and authenticated against any OIDC system in the `opentlc.com` domain:
-
-[source,sh,subs="attributes",role=execute]
-----
-gitsign verify --certificate-identity-regexp ^[a-zA-Z0-9._%+-]+@redhat\.com$ --certificate-oidc-issuer-regexp \.opentlc\.com
-----
-
-
-[.console-output]
-[source,bash,subs="+macros,+attributes"]
-----
-[lab-user@bastion demo-apps]$ gitsign verify --certificate-identity-regexp ^[a-zA-Z0-9._%+-]+@redhat\.com$ --certificate-oidc-issuer-regexp \.opentlc\.com
-tlog index: 2
-gitsign: Signature made using certificate ID 0x463cfdb3c69173adfeead655e333194e53fb23ad | CN=fulcio.hostname,O=Red Hat
-gitsign: Good signature from [jdoe@redhat.com](https://keycloak-rhsso.apps.cluster-lpv5s.lpv5s.sandbox1300.opentlc.com/auth/realms/openshift)
-Validated Git signature: true
-Validated Rekor entry: true
-Validated Certificate claims: true
----- 
+Verification can be done with git show --show-signature or gitsign show to inspect signature metadata, but these only display information and don't fully verify against the trust root. For proper verification, use gitsign verify, which validates the signature against the Rekor transparency database and certificate claims. You can verify specific identities (e.g., --certificate-identity=jdoe@redhat.com) or use regex patterns to verify broader criteria, such as any Red Hat email address (@redhat.com) authenticated against any OIDC issuer in a specific domain. This provides flexible verification policies suitable for team environments while maintaining strong security guarantees through cryptographic verification and transparency log validation.
 
 === Summary
 
@@ -991,8 +611,6 @@ The artifact is now:
 * *Signed*: By using a Sigstore client (cosign/gitsign).
 * *Associated*: With an identity through the certificate authority (Fulcio).
 * *Witnessed*: By recording the signing information in a permanent transparency log (Rekor).
-
-
 
 [[trusted-profile-analyzer]]
 
@@ -1053,60 +671,6 @@ In addition, several regulatory requirements and frameworks either *mandate* or 
 
 *As cybersecurity frameworks continue to evolve, the use of SBOMs is increasingly seen as foundational for compliance and risk mitigation. In sovereign cloud environments, SBOMs are essential for maintaining operational independence and ensuring that all software components meet your organization's security and compliance requirements.*
 
-=== *Using the Trusted Profile Analyzer UI*
-
-A Red Hat Trusted Profile Analyzer has been created for you to use. The proctor will make the URL available to you once you've completed the previous section.
-
-When you are given the URL, log into the RHTPA UI using the username and password provided.
-
-image::lab11.1-tpa.png[]
-
-You can search for an SBOM, advisory, or CVE directly from the home page, or you can click on Search in the left menu for further options.
-
-From the Search page, you can choose to browse SBOMs, Packages, CVEs, and Advisories from the Tabs, and further filter using the filter menu on the left.
-
-Let's take a look at some packages.
-
-Click the Packages tab, then check the Red Hat box under supplier.
-
-The list now shows packages that are supplied by Red Hat.
-
-You may click on a package to get information like related vulnerabilities, if any exist, and related products.
-
-==== Uploading an SBOM
-
-An SBOM has been made available for you to download https://github.com/SeanRickerd/sbom/blob/main/home-banking-bom.json[here].
-
-Upload the SBOM.
-
-image::lab11.1-sbom.gif[lab11.1]
-
-It will take a few minutes for the SBOM to be processed by TPA, so click in the Search bar and type "home". Once you see home-banking, click on it.
-
-image::lab11.2-sbom.gif[lab11.2]
-
-This will open the page for the home-banking SBOM you've uploaded.
-
-The Info tab will give you standard information about the SBOM itself, including the version, the CycloneDX version, and the serial number.
-
-Click on the Packages tab.
-
-image::lab11.3-sbom.png[lab11.3]
-
-The Packages tab will list all the packages found in this SBOM.
-
-Click on Dependency Analytics Report.
-
-The Dependency Analytics Report tab will list the security issues found in this SBOM. As you can see, there are a number of violations found. 3 of them are Critical, 3 High, and 2 Medium.
-
-Scroll down the page to find the osv tab.
-
-Here you will find further information about the detected vulnerabilities. Clicking on the Direct Vulnerabilities to the right of the log4j entry will expand the entry to show more information about the vulnerabilities, including Remediation.
-
-The same can be done with the Transitive Vulnerabilities next to the struts2-core entry.
-
-image::lab11.4-sbom.gif[lab11.4]
-
 [[module-cleanup]]
 
 == Module Cleanup
@@ -1117,3 +681,7 @@ Once you're done with this module, kindly execute the following command to reset
 ----
 curl -fsSL https://raw.githubusercontent.com/redhat-tssc-tmm/security-roadshow/main/cleanup_tssc-module.sh | bash -s {quay_admin_username} {quay_admin_password}
 ----
+
+You're crushing it!
+
+image::https://media.giphy.com/media/v1.Y2lkPWVjZjA1ZTQ3MzBvNTN6eWR3MHF0eWNoZTI0eTVvMmRrZTMzaW4xbGIwOXJhZTJwMCZlcD12MV9naWZzX3NlYXJjaCZjdD1n/kAUtsLfsEfqaJRwe80/giphy.gif[width=400, Celebration!]
