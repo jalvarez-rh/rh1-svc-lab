@@ -400,6 +400,9 @@ spec:
       - "urn:ietf:wg:oauth:2.0:oob"
     webOrigins:
       - "+"
+    defaultScopes:
+      - "openid"
+      - "email"
     attributes:
       access.token.lifespan: "300"
 EOF

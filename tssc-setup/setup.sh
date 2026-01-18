@@ -251,7 +251,8 @@ if [ "$SKIP_KEYCLOAK" = false ]; then
             fi
         fi
     fi
-    
+fi
+
 log "To verify the installation:"
 log "  oc get pods -n rhsso"
 log "  oc get pods -n trusted-artifact-signer"
@@ -290,3 +291,4 @@ if [ "$SKIP_KEYCLOAK" = false ]; then
     log "========================================================="
     log ""
 fi
+
