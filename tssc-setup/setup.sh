@@ -252,6 +252,17 @@ if [ "$SKIP_KEYCLOAK" = false ]; then
         fi
     fi
     
+log "To verify the installation:"
+log "  oc get pods -n rhsso"
+log "  oc get pods -n trusted-artifact-signer"
+log "  oc get securesigns -n trusted-artifact-signer"
+log ""
+log "To get cosign configuration URLs, run:"
+log "  bash ${DEPLOY_SCRIPT}"
+log ""
+
+# Display Keycloak Admin Access Information at the end
+if [ "$SKIP_KEYCLOAK" = false ]; then
     log ""
     log "========================================================="
     log "Keycloak Admin Access Information"
@@ -279,12 +290,3 @@ if [ "$SKIP_KEYCLOAK" = false ]; then
     log "========================================================="
     log ""
 fi
-
-log "To verify the installation:"
-log "  oc get pods -n rhsso"
-log "  oc get pods -n trusted-artifact-signer"
-log "  oc get securesigns -n trusted-artifact-signer"
-log ""
-log "To get cosign configuration URLs, run:"
-log "  bash ${DEPLOY_SCRIPT}"
-log ""

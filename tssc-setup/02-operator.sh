@@ -247,6 +247,99 @@ EOF
     fi
 fi
 
+# Step 3b: Create jdoe Keycloak User for signing
+echo ""
+echo "Creating jdoe Keycloak User for signing..."
+KEYCLOAK_USER_NAME_JDOE="jdoe"
+KEYCLOAK_USER_USERNAME_JDOE="jdoe"
+KEYCLOAK_USER_EMAIL_JDOE="jdoe@redhat.com"
+KEYCLOAK_USER_PASSWORD_JDOE="secure"
+
+# Check if KeycloakUser CR already exists
+if oc get keycloakuser $KEYCLOAK_USER_NAME_JDOE -n rhsso >/dev/null 2>&1; then
+    echo "✓ KeycloakUser CR '${KEYCLOAK_USER_NAME_JDOE}' already exists"
+    
+    # Wait for user to be ready
+    echo "Waiting for user to be ready..."
+    MAX_WAIT_USER=120
+    WAIT_COUNT=0
+    USER_READY=false
+    
+    while [ $WAIT_COUNT -lt $MAX_WAIT_USER ]; do
+        USER_PHASE=$(oc get keycloakuser $KEYCLOAK_USER_NAME_JDOE -n rhsso -o jsonpath='{.status.phase}' 2>/dev/null || echo "")
+        if [ "$USER_PHASE" = "reconciled" ]; then
+            USER_READY=true
+            echo "✓ User is ready"
+            break
+        fi
+        sleep 2
+        WAIT_COUNT=$((WAIT_COUNT + 2))
+        if [ $((WAIT_COUNT % 10)) -eq 0 ] && [ $WAIT_COUNT -gt 0 ]; then
+            echo "  Still waiting for user to be ready... (${WAIT_COUNT}s/${MAX_WAIT_USER}s) - Phase: ${USER_PHASE:-unknown}"
+        fi
+    done
+    
+    if [ "$USER_READY" = false ]; then
+        echo "Warning: User did not become ready within ${MAX_WAIT_USER} seconds, but continuing..."
+    fi
+else
+    echo "Creating KeycloakUser CR '${KEYCLOAK_USER_NAME_JDOE}'..."
+    
+    if ! cat <<EOF | oc apply -f -
+apiVersion: keycloak.org/v1alpha1
+kind: KeycloakUser
+metadata:
+  name: ${KEYCLOAK_USER_NAME_JDOE}
+  namespace: rhsso
+  labels:
+    app: trusted-artifact-signer
+spec:
+  realmSelector:
+    matchLabels:
+      app: openshift
+  user:
+    username: ${KEYCLOAK_USER_USERNAME_JDOE}
+    email: ${KEYCLOAK_USER_EMAIL_JDOE}
+    emailVerified: true
+    enabled: true
+    firstName: Jane
+    lastName: Doe
+    credentials:
+      - type: password
+        value: ${KEYCLOAK_USER_PASSWORD_JDOE}
+EOF
+    then
+        echo "Error: Failed to create KeycloakUser CR for jdoe"
+        exit 1
+    fi
+    
+    echo "✓ KeycloakUser CR created successfully"
+    
+    # Wait for user to be ready
+    echo "Waiting for user to be ready..."
+    MAX_WAIT_USER=120
+    WAIT_COUNT=0
+    USER_READY=false
+    
+    while [ $WAIT_COUNT -lt $MAX_WAIT_USER ]; do
+        USER_PHASE=$(oc get keycloakuser $KEYCLOAK_USER_NAME_JDOE -n rhsso -o jsonpath='{.status.phase}' 2>/dev/null || echo "")
+        if [ "$USER_PHASE" = "reconciled" ]; then
+            USER_READY=true
+            echo "✓ User is ready"
+            break
+        fi
+        sleep 2
+        WAIT_COUNT=$((WAIT_COUNT + 2))
+        if [ $((WAIT_COUNT % 10)) -eq 0 ] && [ $WAIT_COUNT -gt 0 ]; then
+            echo "  Still waiting for user to be ready... (${WAIT_COUNT}s/${MAX_WAIT_USER}s) - Phase: ${USER_PHASE:-unknown}"
+        fi
+    done
+    
+    if [ "$USER_READY" = false ]; then
+        echo "Warning: User did not become ready within ${MAX_WAIT_USER} seconds, but continuing..."
+    fi
+fi
+
 # Step 4: Create OAuth Client in Red Hat SSO (Keycloak) for Trusted Artifact Signer
 echo ""
 echo "Creating OAuth Client in Red Hat SSO (Keycloak) for Trusted Artifact Signer..."
