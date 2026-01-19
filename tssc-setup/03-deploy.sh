@@ -274,8 +274,106 @@ EOF
     fi
 fi
 
-# Wait for components to be ready
+# Diagnostic check: Verify operator is running and CRs are being reconciled
 log ""
+log "Checking operator status and CR reconciliation..."
+
+# Check if operator pods are running
+OPERATOR_PODS=$(oc get pods -n openshift-operators -l name=trusted-artifact-signer-operator --no-headers 2>/dev/null | wc -l || echo "0")
+if [ "$OPERATOR_PODS" -eq 0 ]; then
+    warning "No RHTAS operator pods found in openshift-operators namespace"
+    log "Checking for operator in other namespaces..."
+    OPERATOR_PODS_ALL=$(oc get pods -A -l name=trusted-artifact-signer-operator --no-headers 2>/dev/null | wc -l || echo "0")
+    if [ "$OPERATOR_PODS_ALL" -eq 0 ]; then
+        warning "RHTAS operator pods not found in any namespace"
+        log "Please verify the operator is installed: oc get csv -n openshift-operators | grep trusted-artifact-signer"
+    else
+        log "Found operator pods in other namespaces"
+    fi
+else
+    OPERATOR_POD_STATUS=$(oc get pods -n openshift-operators -l name=trusted-artifact-signer-operator -o jsonpath='{.items[0].status.phase}' 2>/dev/null || echo "")
+    OPERATOR_POD_READY=$(oc get pods -n openshift-operators -l name=trusted-artifact-signer-operator -o jsonpath='{.items[0].status.containerStatuses[0].ready}' 2>/dev/null || echo "")
+    if [ "$OPERATOR_POD_STATUS" = "Running" ] && [ "$OPERATOR_POD_READY" = "true" ]; then
+        log "✓ Operator pod is running and ready"
+    else
+        warning "Operator pod status: ${OPERATOR_POD_STATUS:-Unknown}, Ready: ${OPERATOR_POD_READY:-Unknown}"
+        log "Check operator logs: oc logs -n openshift-operators -l name=trusted-artifact-signer-operator --tail=50"
+    fi
+fi
+
+# Check CR status and events
+if [ -n "$SECURESIGN_NAME" ]; then
+    log "Checking Securesign CR status..."
+    SECURESIGN_STATUS=$(oc get securesigns $SECURESIGN_NAME -n $RHTAS_NAMESPACE -o jsonpath='{.status.phase}' 2>/dev/null || echo "")
+    SECURESIGN_CONDITIONS=$(oc get securesigns $SECURESIGN_NAME -n $RHTAS_NAMESPACE -o jsonpath='{.status.conditions[*].type}' 2>/dev/null || echo "")
+    if [ -n "$SECURESIGN_STATUS" ]; then
+        log "  Securesign phase: ${SECURESIGN_STATUS}"
+    fi
+    if [ -n "$SECURESIGN_CONDITIONS" ]; then
+        log "  Conditions: ${SECURESIGN_CONDITIONS}"
+        # Check for error conditions
+        ERROR_CONDITIONS=$(oc get securesigns $SECURESIGN_NAME -n $RHTAS_NAMESPACE -o jsonpath='{.status.conditions[?(@.status=="False")].type}' 2>/dev/null || echo "")
+        if [ -n "$ERROR_CONDITIONS" ]; then
+            warning "  Error conditions detected: ${ERROR_CONDITIONS}"
+            for cond in $ERROR_CONDITIONS; do
+                COND_MSG=$(oc get securesigns $SECURESIGN_NAME -n $RHTAS_NAMESPACE -o jsonpath="{.status.conditions[?(@.type==\"$cond\")].message}" 2>/dev/null || echo "")
+                COND_REASON=$(oc get securesigns $SECURESIGN_NAME -n $RHTAS_NAMESPACE -o jsonpath="{.status.conditions[?(@.type==\"$cond\")].reason}" 2>/dev/null || echo "")
+                warning "    $cond: ${COND_REASON:-Unknown} - ${COND_MSG:-No message}"
+            done
+        fi
+    else
+        info "  No status conditions found yet (CR may still be initializing)"
+    fi
+    
+    # Check for recent events
+    log "Checking recent events for ${SECURESIGN_NAME}..."
+    RECENT_EVENTS=$(oc get events -n $RHTAS_NAMESPACE --field-selector involvedObject.name=$SECURESIGN_NAME --sort-by='.lastTimestamp' --no-headers 2>/dev/null | tail -5 || echo "")
+    if [ -n "$RECENT_EVENTS" ]; then
+        info "  Recent events:"
+        echo "$RECENT_EVENTS" | while read -r line; do
+            info "    $line"
+        done
+    else
+        info "  No recent events found"
+    fi
+else
+    # Check individual CRs
+    log "Checking individual CR statuses..."
+    for cr_type in tuf fulcio rekor; do
+        cr_name_var="${cr_type^^}_NAME"
+        eval "cr_name=\$${cr_name_var}"
+        if [ -n "$cr_name" ] && oc get ${cr_type}s $cr_name -n $RHTAS_NAMESPACE >/dev/null 2>&1; then
+            cr_status=$(oc get ${cr_type}s $cr_name -n $RHTAS_NAMESPACE -o jsonpath='{.status.phase}' 2>/dev/null || echo "")
+            cr_ready=$(oc get ${cr_type}s $cr_name -n $RHTAS_NAMESPACE -o jsonpath='{.status.conditions[?(@.type=="Ready")].status}' 2>/dev/null || echo "")
+            if [ -n "$cr_status" ] || [ -n "$cr_ready" ]; then
+                log "  ${cr_type^} ($cr_name): Phase=${cr_status:-Unknown}, Ready=${cr_ready:-Unknown}"
+            fi
+            
+            # Check for error conditions
+            error_msg=$(oc get ${cr_type}s $cr_name -n $RHTAS_NAMESPACE -o jsonpath='{.status.conditions[?(@.status=="False")].message}' 2>/dev/null || echo "")
+            error_reason=$(oc get ${cr_type}s $cr_name -n $RHTAS_NAMESPACE -o jsonpath='{.status.conditions[?(@.status=="False")].reason}' 2>/dev/null || echo "")
+            if [ -n "$error_msg" ] || [ -n "$error_reason" ]; then
+                warning "    ${cr_type^} error: ${error_reason:-Unknown} - ${error_msg:-No message}"
+            fi
+        fi
+    done
+fi
+
+# Check for any pods in the namespace
+log "Checking for pods in ${RHTAS_NAMESPACE} namespace..."
+EXISTING_PODS=$(oc get pods -n $RHTAS_NAMESPACE --no-headers 2>/dev/null | wc -l || echo "0")
+if [ "$EXISTING_PODS" -gt 0 ]; then
+    log "  Found $EXISTING_PODS pod(s) in namespace:"
+    oc get pods -n $RHTAS_NAMESPACE --no-headers 2>/dev/null | while read -r line; do
+        info "    $line"
+    done
+else
+    info "  No pods found in namespace yet"
+fi
+
+log ""
+
+# Wait for components to be ready
 log "Waiting for RHTAS components to be ready..."
 
 MAX_WAIT=600
