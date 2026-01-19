@@ -78,9 +78,12 @@ Sigstore is designed to address the pain points and limitations of GPG in the co
 
 [source,sh,subs="attributes",role=execute]
 ----
+QUAY_CONSOLE_URL="{quay_console_url}"
+QUAY_URL=${QUAY_CONSOLE_URL#https://}
+QUAY_URL=${QUAY_URL#http://}
 cat <<EOF >> ~/.bashrc
 export QUAY_USER="{quay_admin_username}"
-export QUAY_URL="{quay_console_url}"
+export QUAY_URL="${QUAY_URL}"
 EOF
 source ~/.bashrc
 echo $QUAY_USER
@@ -94,11 +97,9 @@ echo $QUAY_URL
 cd ~/
 git clone https://github.com/mfosterrox/demo-applications.git demo-applications
 cd demo-applications/image-builds/patient-portal-frontend
-QUAY_REGISTRY=${QUAY_URL#https://}
-QUAY_REGISTRY=${QUAY_REGISTRY#http://}
-podman build -t $QUAY_REGISTRY/$QUAY_USER/patient-portal-frontend:1.0 .
-podman login $QUAY_URL -u $QUAY_USER -p {quay_admin_password}
-podman push $QUAY_REGISTRY/$QUAY_USER/patient-portal-frontend:1.0
+podman build -t $QUAY_URL/$QUAY_USER/patient-portal-frontend:1.0 .
+podman login https://$QUAY_URL -u $QUAY_USER -p {quay_admin_password}
+podman push $QUAY_URL/$QUAY_USER/patient-portal-frontend:1.0
 ----
 
 [[signing-our-software]]
@@ -246,13 +247,13 @@ In sovereign cloud environments, cryptographic signing ensures that only approve
 
 [source,sh,subs="attributes",role=execute]
 ----
-cosign login $QUAY_URL -u $QUAY_USER -p {quay_admin_password}
+cosign login https://$QUAY_URL -u $QUAY_USER -p {quay_admin_password}
 ----
 
 [.console-output]
 [source,bash,subs="+macros,+attributes"]
 ----
-[lab-user@bastion ~]$ cosign login $QUAY_URL -u $QUAY_USER -p MzI2OTI0
+[lab-user@bastion ~]$ cosign login https://$QUAY_URL -u $QUAY_USER -p MzI2OTI0
 auth.go:203: logged in via /home/lab-user/.podman/config.json
 ----
 
