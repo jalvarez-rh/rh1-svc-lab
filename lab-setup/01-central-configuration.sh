@@ -159,78 +159,121 @@ if oc get route central -n "$CENTRAL_NAMESPACE" >/dev/null 2>&1; then
         fi
     else
         warning "Central route host mismatch: expected ${PASSTHROUGH_HOST}, got ${CURRENT_HOST}"
+        # Fix the host
+        log "Fixing central route host to passthrough..."
+        oc patch route central -n "$CENTRAL_NAMESPACE" --type merge -p "{
+          \"spec\": {
+            \"host\": \"${PASSTHROUGH_HOST}\",
+            \"tls\": {
+              \"termination\": \"passthrough\",
+              \"insecureEdgeTerminationPolicy\": \"Redirect\"
+            }
+          }
+        }" || warning "Failed to fix central route host"
+        sleep 5
     fi
+    
+    # Ensure Central CR doesn't have reencrypt enabled (double-check)
+    log "Ensuring Central CR doesn't have reencrypt enabled..."
+    oc patch central "$CENTRAL_NAME" -n "$CENTRAL_NAMESPACE" --type merge -p "{
+      \"spec\": {
+        \"central\": {
+          \"exposure\": {
+            \"route\": {
+              \"enabled\": true,
+              \"host\": \"${PASSTHROUGH_HOST}\",
+              \"reencrypt\": {
+                \"enabled\": false
+              }
+            }
+          }
+        }
+      }
+    }" || warning "Failed to ensure reencrypt is disabled in Central CR"
+    log "✓ Verified Central CR has reencrypt disabled"
+    
+    # Wait a bit to ensure operator has reconciled
+    sleep 10
+    
+    # Re-verify the central route host hasn't changed
+    VERIFIED_HOST=$(oc get route central -n "$CENTRAL_NAMESPACE" -o jsonpath='{.spec.host}' 2>/dev/null || echo "")
+    if [ "$VERIFIED_HOST" != "$PASSTHROUGH_HOST" ]; then
+        error "Central route host changed to ${VERIFIED_HOST} after ensuring reencrypt is disabled. Cannot proceed with reencrypt route creation."
+    fi
+    log "✓ Verified central route still has passthrough host: ${VERIFIED_HOST}"
 else
     warning "Central route not found after configuration"
 fi
 
-# Now enable reencrypt route in Central CR
+# Don't enable reencrypt in Central CR - it causes the operator to change the central route host
+# Instead, create the reencrypt route manually to avoid conflicts
 log ""
-log "Configuring Central CR with reencrypt route..."
-oc patch central "$CENTRAL_NAME" -n "$CENTRAL_NAMESPACE" --type merge -p "{
-  \"spec\": {
-    \"central\": {
-      \"exposure\": {
-        \"route\": {
-          \"enabled\": true,
-          \"host\": \"${PASSTHROUGH_HOST}\",
-          \"reencrypt\": {
-            \"enabled\": true,
-            \"host\": \"${RECENCRYPT_HOST}\"
-          }
-        }
+log "Creating reencrypt route manually (not via Central CR to avoid host conflicts)..."
+
+# First, verify the central route still has the passthrough host
+CENTRAL_ROUTE_HOST=$(oc get route central -n "$CENTRAL_NAMESPACE" -o jsonpath='{.spec.host}' 2>/dev/null || echo "")
+if [ "$CENTRAL_ROUTE_HOST" != "$PASSTHROUGH_HOST" ]; then
+    warning "Central route host changed to ${CENTRAL_ROUTE_HOST}, expected ${PASSTHROUGH_HOST}"
+    log "Fixing central route host back to passthrough..."
+    oc patch route central -n "$CENTRAL_NAMESPACE" --type merge -p "{
+      \"spec\": {
+        \"host\": \"${PASSTHROUGH_HOST}\"
       }
-    }
-  }
-}" || error "Failed to update Central CR with reencrypt route"
+    }" || warning "Failed to fix central route host"
+    sleep 5
+fi
 
-log "✓ Central CR configured with reencrypt route"
-
-# Wait for operator to create the reencrypt route
-log ""
-log "Waiting for operator to create reencrypt route..."
-sleep 20
-
-# Verify and fix the reencrypt route
+# Delete any existing central-reencrypt route that might have wrong host
 if oc get route central-reencrypt -n "$CENTRAL_NAMESPACE" >/dev/null 2>&1; then
-    CURRENT_HOST=$(oc get route central-reencrypt -n "$CENTRAL_NAMESPACE" -o jsonpath='{.spec.host}' 2>/dev/null || echo "")
-    CURRENT_TERMINATION=$(oc get route central-reencrypt -n "$CENTRAL_NAMESPACE" -o jsonpath='{.spec.tls.termination}' 2>/dev/null || echo "")
-    
-    if [ "$CURRENT_HOST" = "$RECENCRYPT_HOST" ]; then
-        if [ "$CURRENT_TERMINATION" != "reencrypt" ]; then
-            log "Patching central-reencrypt route to use reencrypt termination (current: ${CURRENT_TERMINATION})..."
-            oc patch route central-reencrypt -n "$CENTRAL_NAMESPACE" --type merge -p "{
-              \"spec\": {
-                \"tls\": {
-                  \"termination\": \"reencrypt\",
-                  \"insecureEdgeTerminationPolicy\": \"Redirect\"
-                }
-              }
-            }" || warning "Failed to patch central-reencrypt route termination"
-            log "✓ Central-reencrypt route patched to reencrypt"
-        else
-            log "✓ Central-reencrypt route already has reencrypt termination"
-        fi
-    else
-        warning "Central-reencrypt route host mismatch: expected ${RECENCRYPT_HOST}, got ${CURRENT_HOST}"
-        # Try to fix the host
-        log "Patching central-reencrypt route host..."
-        oc patch route central-reencrypt -n "$CENTRAL_NAMESPACE" --type merge -p "{
-          \"spec\": {
-            \"host\": \"${RECENCRYPT_HOST}\"
-          }
-        }" || warning "Failed to patch central-reencrypt route host"
+    EXISTING_RECENCRYPT_HOST=$(oc get route central-reencrypt -n "$CENTRAL_NAMESPACE" -o jsonpath='{.spec.host}' 2>/dev/null || echo "")
+    if [ "$EXISTING_RECENCRYPT_HOST" != "$RECENCRYPT_HOST" ]; then
+        log "Deleting existing central-reencrypt route with wrong host (${EXISTING_RECENCRYPT_HOST})..."
+        oc delete route central-reencrypt -n "$CENTRAL_NAMESPACE" 2>/dev/null || true
+        sleep 5
     fi
-else
-    # Create reencrypt route manually if operator didn't create it
-    log "Creating central-reencrypt route manually..."
+fi
+
+# Create reencrypt route manually
+if ! oc get route central-reencrypt -n "$CENTRAL_NAMESPACE" >/dev/null 2>&1; then
+    log "Creating central-reencrypt route with host ${RECENCRYPT_HOST}..."
     oc create route reencrypt central-reencrypt \
         --service=central \
         --port=central \
         --hostname="${RECENCRYPT_HOST}" \
         --insecure-policy=Redirect \
-        -n "$CENTRAL_NAMESPACE" 2>/dev/null || warning "Failed to create central-reencrypt route"
+        -n "$CENTRAL_NAMESPACE" 2>/dev/null || error "Failed to create central-reencrypt route"
     log "✓ Central-reencrypt route created"
+    
+    # Wait for route to be admitted
+    sleep 5
+    
+    # Verify the route was created correctly
+    CREATED_HOST=$(oc get route central-reencrypt -n "$CENTRAL_NAMESPACE" -o jsonpath='{.spec.host}' 2>/dev/null || echo "")
+    CREATED_TERMINATION=$(oc get route central-reencrypt -n "$CENTRAL_NAMESPACE" -o jsonpath='{.spec.tls.termination}' 2>/dev/null || echo "")
+    
+    if [ "$CREATED_HOST" = "$RECENCRYPT_HOST" ] && [ "$CREATED_TERMINATION" = "reencrypt" ]; then
+        log "✓ Central-reencrypt route created successfully with correct host and termination"
+    else
+        warning "Central-reencrypt route created but verification failed: host=${CREATED_HOST}, termination=${CREATED_TERMINATION}"
+    fi
+else
+    log "✓ Central-reencrypt route already exists"
+    CURRENT_HOST=$(oc get route central-reencrypt -n "$CENTRAL_NAMESPACE" -o jsonpath='{.spec.host}' 2>/dev/null || echo "")
+    CURRENT_TERMINATION=$(oc get route central-reencrypt -n "$CENTRAL_NAMESPACE" -o jsonpath='{.spec.tls.termination}' 2>/dev/null || echo "")
+    
+    if [ "$CURRENT_HOST" != "$RECENCRYPT_HOST" ] || [ "$CURRENT_TERMINATION" != "reencrypt" ]; then
+        log "Patching central-reencrypt route..."
+        oc patch route central-reencrypt -n "$CENTRAL_NAMESPACE" --type merge -p "{
+          \"spec\": {
+            \"host\": \"${RECENCRYPT_HOST}\",
+            \"tls\": {
+              \"termination\": \"reencrypt\",
+              \"insecureEdgeTerminationPolicy\": \"Redirect\"
+            }
+          }
+        }" || warning "Failed to patch central-reencrypt route"
+        log "✓ Central-reencrypt route patched"
+    fi
 fi
 
 # Wait a bit more for routes to stabilize
