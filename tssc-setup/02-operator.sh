@@ -624,18 +624,42 @@ spec:
       - "urn:ietf:wg:oauth:2.0:oob"
     webOrigins:
       - "+"
+    defaultClientScopes:
+      - profile
+      - email
     defaultScopes:
       - "openid"
       - "email"
+    protocolMappers:
+      - name: audience-mapper
+        protocol: openid-connect
+        protocolMapper: oidc-audience-mapper
+        config:
+          included.client.audience: "${OIDC_CLIENT_ID}"
+          id.token.claim: "true"
+          access.token.claim: "true"
     attributes:
       access.token.lifespan: "300"
 EOF
+    # Note: The protocol mapper sets the audience (aud) claim to the client ID (${OIDC_CLIENT_ID})
+    # which is "trusted-artifact-signer". This matches what Fulcio expects for OIDC token verification.
     then
         echo "Error: Failed to create KeycloakClient CR"
         exit 1
     fi
     
     echo "✓ KeycloakClient CR created successfully"
+    
+    echo ""
+    echo "NOTE: If the protocol mapper is not supported by the KeycloakClient CRD, you may need to"
+    echo "manually configure the Audience protocol mapper in Keycloak admin console:"
+    echo "  1. Log into Keycloak admin console"
+    echo "  2. Navigate to Clients -> ${OIDC_CLIENT_ID}"
+    echo "  3. Go to Client scopes tab -> ${OIDC_CLIENT_ID}-dedicated -> Mappers"
+    echo "  4. Add mapper -> By configuration -> Audience"
+    echo "  5. Set 'Included Client Audience' to '${OIDC_CLIENT_ID}'"
+    echo "  6. Enable 'Add to ID token' and 'Add to access token'"
+    echo ""
     
     # Wait for client to be ready/reconciled
     echo "Waiting for client to be reconciled..."
