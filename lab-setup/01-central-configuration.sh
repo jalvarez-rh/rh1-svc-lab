@@ -110,3 +110,5 @@ sleep 60  # wait for it to stop
 
 # Edit route to passthrough
 oc -n stackrox edit route central 
+
+https://central-stackrox.apps.cluster-dwlwx.dynamic.redhatworkshops.io

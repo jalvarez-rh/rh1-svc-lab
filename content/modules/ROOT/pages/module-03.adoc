@@ -70,6 +70,8 @@ Sigstore is designed to address the pain points and limitations of GPG in the co
 * Reduces risks from long-term private key compromises.
 * Aligns with modern software practices and supply chain security requirements.
 
+[[rebuilding-patient-portal-frontend]]
+
 == Rebuilding the patient portal patient-portal-frontend application
 
 . Run the following commands in the terminal to retrieve your Quay user and registry URL using oc:
@@ -242,6 +244,8 @@ Root status:
         ]
 }
 ----
+
+[[signing-verifying-container-image]]
 
 === Signing and Verifying a Container Image
 
@@ -489,6 +493,8 @@ tlog entry created with index: 4
 Pushing signature to: quay-l2ktc.apps.cluster-l2ktc.l2ktc.sandbox75.opentlc.com/quayadmin/ctf-web-to-system
 ----
 
+[[verifying-signatures]]
+
 ==== Verifying Signatures
 
 Verifying an image signature is even easier than signing:
@@ -587,98 +593,26 @@ The following checks were performed on each of these signatures:
   - The code-signing certificate was verified using trusted certificate authority certificates
 ----
 
+[[next-steps]]
+
+== The Next Steps 
+
+We didn't have time to cover the following topics in this lab, but they are important to consider for your own environment.
+
+[[signing-verifying-git-commits]]
+
 === Signing and Verifying Git Commits
 
-Maintaining sovereign control over your codebase requires verifiable proof of authorship and integrity for all code changes. Git commit signing ensures that all code modifications are cryptographically tied to authenticated identities, providing the auditability and traceability essential for sovereign cloud operations.
+Maintaining sovereign control over your codebase requires verifiable proof of authorship and integrity for all code changes. Git commit signing with *Red Hat Trusted Artifact Signer* (using gitsign, Fulcio, Rekor, and OIDC via Keycloak) cryptographically ties commits to authenticated identities like jdoe@redhat.com—without managing key pairs. Configure git locally for automatic signing on commits/tags (e.g., from VSCode), distinguishing mutable committer metadata from immutable signer identity in the transparency log.
 
-TIP: Using traditional commit signing and verification methods required management and distribution of private/public key pairs to developers - a task that can become quite cumbersome for a large number of developers in your organization. With *Red Hat Trusted Artifact Signer*, there is no need to issue/distribute/re-issue keys due to lost passwords/maintain a key revocation list etc.
-
-NOTE: If you haven't already done so, please execute the following steps from previous exercises:
-
-1. We need a git repository for git signing, therefore please make sure you have cloned the workshop apps repository as shown here: xref:00-acs-setup-install-navigation.adoc#deploy-the-workshop-apps[Deploy the Workshop Applications]
-
-2. We won't go through setting up the environment for signing and verification (the Trusted Artifact Signer endpoints) again. If you have followed this chapter from the beginning, you have everything configured already. If not, please set the environment variables as shown xref:#setting-up-the-environment-variables[here], followed by a `cosign initialize`
-
-=== Setting up gitsign for commit signing
-Configure git to automatically sign commits using gitsign instead of using the CLI directly. This enables automatic signing for all commits and tags, including from IDEs like VSCode. After preparing a local repository and pushing it to a GitLab instance on the cluster, configure git with local settings that enable GPG signing using gitsign as the X.509 program, and specify the Trusted Artifact Signer endpoints (Fulcio, Rekor, and OIDC issuer) along with the client ID. This ensures every commit is automatically signed without manual intervention.
-
-==== Signing commits with OIDC authentication
-When making a commit, gitsign triggers an OIDC authentication flow through Keycloak. In an SSH session, it provides a browser URL for manual authentication, similar to container image signing. After authenticating as the signing user (e.g., jdoe@redhat.com), the commit is signed and the signature is recorded in the Rekor transparency log. It's important to distinguish between two identities: the committer (stored in git metadata, easily changed) and the signer (the OIDC-authenticated identity, cryptographically verified and immutable in the transparency log). This allows developers to use different committer identities across git systems while maintaining a consistent, verifiable signing identity.
-
-==== Verifying commit signatures
-
-Verification can be done with git show --show-signature or gitsign show to inspect signature metadata, but these only display information and don't fully verify against the trust root. For proper verification, use gitsign verify, which validates the signature against the Rekor transparency database and certificate claims. You can verify specific identities (e.g., --certificate-identity=jdoe@redhat.com) or use regex patterns to verify broader criteria, such as any Red Hat email address (@redhat.com) authenticated against any OIDC issuer in a specific domain. This provides flexible verification policies suitable for team environments while maintaining strong security guarantees through cryptographic verification and transparency log validation.
-
-=== Summary
-
-By implementing cryptographic signing and verification for container images and Git commits, you've established foundational controls for maintaining sovereign control over your software supply chain. These capabilities ensure that only approved, verified artifacts enter your infrastructure, providing the auditability and traceability required for regulatory compliance and operational independence in sovereign cloud environments.
-
-With keyless signing and verification, both for container images (or any blob, to be exact) and git commits, we have established artifact and commit integrity, security AND traceability - without the need to create, distribute and manage public/private key pairs.
-
-The artifact is now:
-
-* *Signed*: By using a Sigstore client (cosign/gitsign).
-* *Associated*: With an identity through the certificate authority (Fulcio).
-* *Witnessed*: By recording the signing information in a permanent transparency log (Rekor).
+Verify with `gitsign verify --certificate-identity='*redhat.com'` (regex for team policies) against Rekor and trust roots. This establishes signed, identity-associated, witnessed artifacts for images/commits, ensuring auditability and traceability in sovereign clouds.
 
 [[trusted-profile-analyzer]]
-
 == Trusted Profile Analyzer
 
-The Trusted Profile Analyzer adds management capabilities for *Software Bills of Materials (SBOMs)* to OpenShift. In sovereign cloud environments, SBOMs are essential for maintaining visibility and control over software dependencies, ensuring compliance with data residency requirements, and enabling organizations to make informed decisions about software components that process sensitive data.
+The Trusted Profile Analyzer adds *Software Bills of Materials (SBOM)* management to OpenShift for visibility/control over dependencies in sovereign clouds. An SBOM is a "nested inventory of software components" (per CISA.gov), essential for compliance, data residency, and supply chain decisions.
 
-=== *What is an SBOM?*
-
-https://www.cisa.gov[CISA.gov] defines an SBOM as "a nested inventory, a list of ingredients that make up software components." https://www.cisa.gov/sbom[¹]
-
-Using SBOMs, you can have a clear vision of everything that goes into your application or what you may have received from vendors, such as Red Hat. This enables platform engineers to more easily enforce operational controls and compliance across hybrid multi-cloud environments. For sovereign cloud operations, SBOMs provide the transparency needed to ensure all software components meet regulatory requirements, maintain data sovereignty, and enable organizations to maintain complete control over their software supply chain.
-
-In addition, several regulatory requirements and frameworks either *mandate* or *recommend* the use of *Software Bills of Materials (SBOMs)* to enhance software supply chain transparency and security. Here are some key examples, but the list is continually growing:
-
-==== *1. U.S. Executive Order 14028 (Improving the Nation’s Cybersecurity)*
-
-* *Mandate*: In May 2021, this Executive Order directed the U.S. government to take actions to secure the software supply chain.
-* *SBOM Requirement*:
-  - The *National Telecommunications and Information Administration (NTIA)* was tasked with defining minimum elements for SBOMs.
-  - Vendors providing software to federal agencies must provide SBOMs as part of their cybersecurity practices.
-  - Goal: Increase transparency about software components to mitigate risks from vulnerabilities.
-
-==== *2. EU Cyber Resilience Act*
-
-* *Proposed Mandate*: Expected to become law in the near future, this act will apply to products with digital elements in the EU.
-* *SBOM Requirement*: It encourages or requires organizations to maintain transparency about their software dependencies, including SBOMs, for compliance with security standards.
-
-==== *3. U.S. Food and Drug Administration (FDA) Guidance*
-
-* *Recommendation*: The FDA issued guidance for medical device manufacturers to include SBOMs.
-* *Context*: As part of the *Pre-market Cybersecurity Guidance* for medical devices, manufacturers are encouraged to provide SBOMs to identify vulnerabilities in device software and support risk management.
-* *Goal*: Protect healthcare systems and patient safety.
-
-==== *4. OWASP Software Component Verification Standard (SCVS)*
-
-* *Recommendation*: OWASP promotes SBOMs as part of software composition analysis (SCA) to track components and identify vulnerabilities.
-* *Context*: Although not a regulatory requirement, it is widely recognized in cybersecurity best practices.
-
-==== *5. CISA Binding Operational Directive (BOD) 23-01*
-
-* *Mandate*: U.S. government agencies are required to track and mitigate known vulnerabilities in software they use.
-* *SBOM Role*: Although the directive doesn’t explicitly mandate SBOMs, managing them is critical to identifying and addressing vulnerabilities efficiently.
-
-==== *6. ISO/IEC 5962 (SBOM Standard)*
-
-* *Recommendation*: This international standard formalizes SBOM structure, ensuring consistent implementation across industries. It supports compliance with regulatory and industry standards requiring software transparency.
-
-==== *7. Proposed SEC Cybersecurity Rules*
-
-* *Recommendation*: Companies under U.S. Securities and Exchange Commission (SEC) regulations must report cybersecurity risks, including supply chain vulnerabilities. SBOMs can help meet these transparency requirements.
-
-=== *Why SBOMs are Becoming Standard in Regulations*
-
-* *Transparency*: Knowing what’s in your software reduces the risk of vulnerabilities.
-* *Risk Management*: SBOMs help identify, track, and remediate issues in the software supply chain.
-* *Compliance*: They demonstrate adherence to evolving cybersecurity and data privacy laws, including requirements for data residency, operational control, and regulatory reporting that are central to sovereign cloud operations.
-
-*As cybersecurity frameworks continue to evolve, the use of SBOMs is increasingly seen as foundational for compliance and risk mitigation. In sovereign cloud environments, SBOMs are essential for maintaining operational independence and ensuring that all software components meet your organization's security and compliance requirements.*
+Regulations like U.S. EO 14028 (mandatory SBOMs for federal vendors), EU Cyber Resilience Act, FDA guidance, OWASP SCVS, CISA BOD 23-01, ISO/IEC 5962, and proposed SEC rules increasingly mandate/recommend SBOMs for transparency, risk management, and vulnerability tracking. In sovereign operations, SBOMs ensure all components meet security/regulatory standards, reducing risks while maintaining independence.
 
 [[module-cleanup]]
 

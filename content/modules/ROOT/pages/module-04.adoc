@@ -31,7 +31,7 @@ Before data scientists can begin working with Jupyter notebooks and building AI 
 
 [[install-openshift-ai-operator]]
 
-=== Step 1: Install OpenShift AI Operator
+=== Install OpenShift AI Operator
 
 The first script installs the Red Hat OpenShift AI Operator, which provides the foundational platform for running AI workloads on OpenShift.
 
@@ -48,8 +48,17 @@ cd ~/rh1-svc-lab/ai-setup && ./setup.sh
 +
 [source,sh]
 ----
-✓ CSV is ready: rhods-operator.vX.X.X
-✓ DataScienceCluster CRD is available
+[SETUP] 
+[SETUP] Retrieving OpenShift AI access information...
+[SETUP] 
+[SETUP] =========================================================
+[SETUP] OpenShift AI Access Information
+[SETUP] =========================================================
+[SETUP] Dashboard URL: https://rhods-dashboard-redhat-ods-applications.apps.cluster-gk5g4.dynamic.redhatworkshops.io
+[SETUP] Username: admin
+[SETUP] Password: OpenShift admin password
+[SETUP] =========================================================
+[SETUP] 
 ----
 
 [start=4]
@@ -58,6 +67,7 @@ cd ~/rh1-svc-lab/ai-setup && ./setup.sh
 * Username: admin
 * Password: {openshift_cluster_admin_password}
 
+Make sure you have access to the OpenShift AI dashboard before proceeding.
 
 [[install-datascience-cluster]]
 
@@ -148,32 +158,4 @@ With OpenShift AI installed and the DataScienceCluster configured, data scientis
 *Procedure*
 
 [start=1]
-. Open the OpenShift AI Dashboard using the URL provided at the end of the installation script (or retrieve it with):
-
-[source,sh,role=execute]
-----
-oc get route rhods-dashboard -n redhat-ods-applications -o jsonpath='{.spec.host}'
-----
-
-[start=2]
-. Log in to the dashboard using:
-* Username: `admin`
-* Password: Your OpenShift admin password
-
-[start=3]
-. Once logged in, navigate to the *Applications* -> *Enabled* section to see available components
-
-[start=4]
-. To create a Jupyter notebook server:
-.. Click on *Applications* -> *Enabled* -> *Jupyter*
-.. Click *Create workbench*
-.. Select a notebook image (e.g., "Standard Data Science" or "Minimal Python")
-.. Configure the notebook server resources (CPU, memory) as needed
-.. Click *Create* to launch your notebook server
-
-[start=5]
-. Once your notebook server is running, click *Open* to access your Jupyter environment
-
-NOTE: The first time you create a workbench, it may take a few minutes to pull the container image and start the server. Subsequent starts will be faster.
-
-[[data-pipeline]]
+. 

@@ -155,6 +155,36 @@ if [ "$SKIP_CLUSTER" = false ]; then
         DASHBOARD_ROUTE=$(oc get route -n "$DSC_NAMESPACE" -l app=odh-dashboard -o jsonpath='{.items[0].spec.host}' 2>/dev/null || echo "")
     fi
     
+    # Try to retrieve OpenShift admin password
+    log "Retrieving OpenShift admin password..."
+    ADMIN_PASSWORD=""
+    
+    # Try to get kubeadmin password from kube-system namespace
+    KUBEADMIN_PASSWORD_B64=$(oc get secret kubeadmin -n kube-system -o jsonpath='{.data.password}' 2>/dev/null || echo "")
+    if [ -n "$KUBEADMIN_PASSWORD_B64" ]; then
+        ADMIN_PASSWORD=$(echo "$KUBEADMIN_PASSWORD_B64" | base64 -d 2>/dev/null || echo "")
+    fi
+    
+    # If kubeadmin not found, try to get from htpasswd secret (common in workshop environments)
+    if [ -z "$ADMIN_PASSWORD" ]; then
+        HTPASSWD_SECRET=$(oc get secret -n openshift-config htpasswd -o jsonpath='{.data.htpasswd}' 2>/dev/null || echo "")
+        if [ -n "$HTPASSWD_SECRET" ]; then
+            # htpasswd format is username:hashed_password, try to extract admin user
+            HTPASSWD_CONTENT=$(echo "$HTPASSWD_SECRET" | base64 -d 2>/dev/null || echo "")
+            if echo "$HTPASSWD_CONTENT" | grep -q "^admin:"; then
+                # If admin user exists in htpasswd, note that password is hashed and can't be retrieved
+                ADMIN_PASSWORD="(htpasswd - password is hashed, use your configured admin password)"
+            fi
+        fi
+    fi
+    
+    # If still not found, check if current user is kubeadmin
+    CURRENT_USER=$(oc whoami 2>/dev/null || echo "")
+    if [ "$CURRENT_USER" = "kubeadmin" ] && [ -z "$ADMIN_PASSWORD" ]; then
+        # User is kubeadmin but password not found in secret, try to get from install log or note
+        ADMIN_PASSWORD="(use kubeadmin password from cluster installation)"
+    fi
+    
     log ""
     log "========================================================="
     log "OpenShift AI Access Information"
@@ -167,7 +197,12 @@ if [ "$SKIP_CLUSTER" = false ]; then
         log "    oc get route rhods-dashboard -n $DSC_NAMESPACE"
     fi
     log "Username: admin"
-    log "Password: OpenShift admin password"
+    if [ -n "$ADMIN_PASSWORD" ]; then
+        log "Password: $ADMIN_PASSWORD"
+    else
+        log "Password: (use your OpenShift cluster admin credentials)"
+        log "  To retrieve kubeadmin password: oc get secret kubeadmin -n kube-system -o jsonpath='{.data.password}' | base64 -d"
+    fi
     log "========================================================="
     log ""
 fi

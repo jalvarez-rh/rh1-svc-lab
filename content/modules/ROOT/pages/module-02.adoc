@@ -451,6 +451,8 @@ Congrats! You have successfully stopped yourself from downloading malicious pack
 
 [[report-and-resolve-violations]]
 
+[[violations-reporting-audit-compliance]]
+
 == Violations and Reporting for Audit and Compliance
 
 In this section, you will resolve a few of the issues that you have created. 
@@ -478,12 +480,16 @@ IMPORTANT: You must resolve the issue before it will disappear from the Violatio
 [start=4]
 . Remove the deployment that violates the policy by click the three dots and selecting "Mark as resolved"
 
+[[workload-vulnerability-management-image-signing]]
+
 == Workload Vulnerability Management and Image Signing
 
 In this section, you will look at the Workload Vulnerability Management and image signature verification features of RHACS.
 
 Sovereignty over your organization's data and services is fundamentally linked to how you manage risk across the entire software supply chain. In today's global and hybrid cloud environments, ensuring that only trusted, verified software components are deployed is crucial for maintaining compliance, controlling data flows, and preventing exposure to supply chain vulnerabilities. Effective software supply chain management—encompassing image provenance, signature verification, vulnerability scanning, and compliance enforcement—not only mitigates risk but also upholds your organization's autonomy and ability to meet regulatory requirements unique to each operating region. 
 
+
+[[understanding-responsibilities-software-supply-chain]]
 
 === Understanding Your Responsibilities for Software Supply Chain Management
 
@@ -509,16 +515,15 @@ image::acs-vulnerability-management-04.png[link=self, window=100%, width=100%, V
 
 And while you can create SBOMs while you're here, we wanted to you to work on building your own software and signing it with your own keys. Before that, there is one project we wanted to highlight that can help you shrink the number of vulenrabilities in your environment.
 
+[[project-hummingbird]]
+
 === Project Hummingbird
 
 Project Hummingbird is a Red Hat initiative focused on delivering a lightweight, enterprise-ready version of Red Hat Enterprise Linux designed to be optimized for cloud and edge deployments. It enables organizations to maintain a consistent platform across diverse environments, ensuring robust performance, improved security, and simplified management. Hummingbird’s modern footprint is tailored for fast startup, minimal resource usage, and efficient scalability, making it ideal for running containerized workloads, especially in multi-cloud or distributed edge locations.
 
 For more information, visit the official Red Hat Project Hummingbird page: https://www.redhat.com/en/technologies/linux-platforms/enterprise-linux/hummingbird
 
-[[conclusion]]
-== Conclusion
-
-Hey! Great job! 
+**Hey! Great job! **
 
 image::https://media.giphy.com/media/v1.Y2lkPWVjZjA1ZTQ3ODhkZThkZXVxb2twdHloazAzc2VhNWJpeWowenRpeTJoczY3MTAyZyZlcD12MV9naWZzX3NlYXJjaCZjdD1n/RIjVnmAtOD4l4c2Ert/giphy.gif[Fun celebration, width=400]
 
