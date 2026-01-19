@@ -80,6 +80,29 @@ if ! oc whoami >/dev/null 2>&1; then
 fi
 log "✓ OpenShift CLI connected as: $(oc whoami)"
 
+# Ensure we're using the local-cluster context
+log "Checking OpenShift context..."
+CURRENT_CONTEXT=$(oc config current-context 2>/dev/null || echo "")
+REQUIRED_CONTEXT="local-cluster"
+
+if [ "$CURRENT_CONTEXT" != "$REQUIRED_CONTEXT" ]; then
+    log "Current context is '$CURRENT_CONTEXT', switching to '$REQUIRED_CONTEXT'..."
+    
+    # Check if local-cluster context exists
+    if ! oc config get-contexts "$REQUIRED_CONTEXT" >/dev/null 2>&1; then
+        error "Context '$REQUIRED_CONTEXT' not found. Please ensure the context is configured: oc config get-contexts"
+    fi
+    
+    # Switch to local-cluster context
+    if oc config use-context "$REQUIRED_CONTEXT" >/dev/null 2>&1; then
+        log "✓ Switched to '$REQUIRED_CONTEXT' context"
+    else
+        error "Failed to switch to '$REQUIRED_CONTEXT' context"
+    fi
+else
+    log "✓ Already using '$REQUIRED_CONTEXT' context"
+fi
+
 # Check if scripts exist
 OPERATOR_SCRIPT="${SCRIPT_DIR}/01-operator.sh"
 CLUSTER_SCRIPT="${SCRIPT_DIR}/02-cluster.sh"

@@ -75,30 +75,21 @@ After both scripts complete, verify that OpenShift AI components are running:
 *Procedure*
 
 [start=1]
-. Check that the DataScienceCluster is Ready:
+. Verify the installation by checking the DataScienceCluster status, dashboard route, and pods:
 
 [source,sh,role=execute]
 ----
 oc get datasciencecluster default-dsc -n redhat-ods-applications
+oc get route rhods-dashboard -n redhat-ods-applications 2>/dev/null || echo "Route not yet available"
+oc get pods -n redhat-ods-applications | grep -i dashboard 
 ----
 
-[start=2]
-. Verify the dashboard route exists:
+You should see:
+* DataScienceCluster status showing "Ready"
+* Dashboard route named `rhods-dashboard`
+* Dashboard pods (typically named `rhods-dashboard-*`) in "Running" status
 
-[source,sh,role=execute]
-----
-oc get route rhods-dashboard -n redhat-ods-applications
-----
-
-[start=3]
-. Check that the dashboard pod is running:
-
-[source,sh,role=execute]
-----
-oc get pods -n redhat-ods-applications -l app=odh-dashboard
-----
-
-You should see a pod in "Running" status.
+NOTE:The dashboard runs with multiple replicas for high availability, so you may see 2 or more dashboard pods. If components are not ready, wait a few minutes and run the command again.
 
 [[jupyter-notebooks-access]]
 
