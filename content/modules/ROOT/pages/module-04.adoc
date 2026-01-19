@@ -1,6 +1,6 @@
 [[data-ai]]
 
-= Data & AI
+= Data and AI
 
 [[sovereign-ai-overview]]
 

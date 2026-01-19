@@ -1,12 +1,12 @@
 [[operations-security]]
 
-= Operations & Security
+= Operations and Security
 
 **Operations and Security Sovereignty** means ensuring organizations can operate their technology independently and autonomously, with full control over their data, infrastructure, and security postures.
 
 [[multi-env-clusters]]
 
-== Multi-environment Red Hat OpenShift cluster and virtual machine creation and management
+== Multi-Environment Red Hat OpenShift Cluster and Virtual Machine Creation and Management
 
 Cluster creation and management marks the essential first step in building a truly sovereign cloud environment. By owning the full lifecycle of your clusters—from initial deployment to ongoing operations—your organization maintains direct control over infrastructure, security policies, and data locality. This foundational capability ensures that critical workloads and data remain within your jurisdiction, enabling you to adapt rapidly to regulatory changes, respond to evolving business needs, and operate independently of external providers. Flexible cluster and virtual machine management empowers you to design cloud environments tailored specifically to your sovereignty requirements—ensuring resilience, autonomy, and full compliance from the ground up.
 
@@ -88,7 +88,7 @@ NOTE: Deploying this Hosted Control Plane (HCP) cluster will take about 5 to 10 
 
 [[label-an-existing-cluster]]
 
-== Label an existing Cluster
+== Label an Existing Cluster
 
 While we wait for the cluster to deploy, lets tag the existing *aws-us* cluster with a location tag, we will leverage this tag once we deploy an application.
 
@@ -117,7 +117,7 @@ Sovereign cloud operations require that organizations retain full control over w
 
 [[create-manage-vms]]
 
-== Create and manage virtual machines
+== Create and Manage Virtual Machines
 
 Red Hat Advanced Cluster Management (RHACM) with OpenShift Virtualization delivers centralized, policy-driven control—labeling clusters/VMs (e.g., location=emea/us), enforcing placement rules, and automating compliance to keep sovereign workloads in approved geographies via a unified console. In traditional environments, administrators often struggle with context switching—jumping between virtualization hypervisors to manage legacy workloads and Kubernetes consoles to manage modern applications. This fragmentation slows down operations and complicates governance. This single-pane-of-glass approach for VMs alongside Kubernetes resources simplifies operations, ensures auditability, and applies consistent sovereign controls to legacy and cloud-native workloads, mirroring real-world architect workflows for scalable, secure multi-cluster solutions.
 
@@ -127,7 +127,7 @@ By the end of this exercise, you will:
 . Provision a new Virtual Machine using the RHACM Creation Wizard.
 . Perform Day 2 operations (Stop, Start, Migrate) directly from the multi-cluster view.
 
-=== Deploy a Virtual Machines Using the RHACM console
+=== Deploy Virtual Machines Using the RHACM Console
 
 *Procedure*
 

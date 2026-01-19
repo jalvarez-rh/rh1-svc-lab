@@ -1,6 +1,6 @@
 [[technology-supply-chain]]
 
-= Technology & Supply Chain
+= Technology and Supply Chain
 
 [[module-goals]]
 
@@ -72,7 +72,7 @@ Sigstore is designed to address the pain points and limitations of GPG in the co
 
 [[rebuilding-patient-portal-frontend]]
 
-== Rebuilding the patient portal patient-portal-frontend application
+== Rebuilding the Patient Portal Frontend Application
 
 . Run the following commands in the terminal to retrieve your Quay user and registry URL using oc:
 
@@ -104,7 +104,7 @@ podman push $QUAY_URL/$QUAY_USER/patient-portal-frontend:1.0
 
 [[signing-our-software]]
 
-== Signing our software
+== Signing Our Software
 
 For signing and verification of container images, we'll be using the `cosign` CLI binary, which has already been installed on your bastion host (and can also be downloaded from the OpenShift Console).
 

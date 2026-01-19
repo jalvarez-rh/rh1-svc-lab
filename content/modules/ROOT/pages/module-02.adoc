@@ -246,7 +246,7 @@ For even better results, you can automate these settings so new clusters are sec
 
 [[maintaining-control-in-sovereign-multi-region-environments]]
 
-== Maintaining Control in Sovereign & Multi-Region Environments
+== Maintaining Control in Sovereign and Multi-Region Environments
 
 In sovereign cloud setups, strict control over what runs inside your infrastructure is essential for data protection, regulatory compliance, and operational independence.
 
@@ -356,7 +356,7 @@ EOF
 ----
 
 
-=== Testing the runtime policy
+=== Testing the Runtime Policy
 
 Next, you will use tmux to watch OpenShift events while running the test so you can see how RHACS enforces the policy at runtime.
 

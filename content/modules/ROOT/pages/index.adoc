@@ -12,7 +12,7 @@ Red Hat is perfectly positioned to take advantage of these customer needs. With 
 In this lab, you will progress through a simplified migration process where you, the customer, will bring your workflows and applications to an on premise and cloud environment, bringing your platform, to your data, in a compliant, secure, and repeatable manner.
 
 [[what-youll-learn]]
-== What you'll learn
+== What You Will Learn
 
 This lab demonstrates how Red Hat Solutions can empower enterprises to manage their own sovereign cloud architectures enabling application and data mobility and policy enforcement.
 
@@ -37,15 +37,15 @@ Before beginning this lab, you should have:
 
 This lab is organized into four modules:
 
-* xref:module-01.adoc[Module 1: Operations & Security] - Multi-environment cluster and workload management
+* xref:module-01.adoc[Module 1: Operations and Security] - Multi-environment cluster and workload management
 * xref:module-02.adoc[Module 2: Assurance] - Cluster conformance, compliance, and security insights
-* xref:module-03.adoc[Module 3: Technology & Supply Chain] - Secure supply chain and SLSA framework
-* xref:module-04.adoc[Module 4: Data & AI] - Data pipelines and AI compute capabilities
+* xref:module-03.adoc[Module 3: Technology and Supply Chain] - Secure supply chain and SLSA framework
+* xref:module-04.adoc[Module 4: Data and AI] - Data pipelines and AI compute capabilities
 
 [[getting-started]]
 == Getting Started
 
-Before proceeding with the lab modules, you'll need to configure kubectl contexts for the clusters, install a few insecure applications and the roxctl CLI tool.
+Before proceeding with the lab modules, you will need to configure kubectl contexts for the clusters, install a few insecure applications and the roxctl CLI tool.
 
 ==== Configure kubectl Contexts
 
@@ -158,7 +158,7 @@ Administrator login credentials:
 |===
 
 [[whats-next]]
-== What's next?
+== What Is Next
 
 Click on any module above to begin. We recommend starting with Module 1 and proceeding sequentially, as each module builds upon concepts from previous modules.
 
