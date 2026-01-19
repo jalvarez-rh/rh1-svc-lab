@@ -1,6 +1,6 @@
 #!/bin/bash
-# RHACS Central Passthrough Route Configuration Script
-# Ensures Central route uses passthrough termination (TLS terminated at backend service)
+# RHACS Central Route Configuration Script
+# Configures Central CR with passthrough and reencrypt routes
 
 # Exit immediately on error, show error message
 set -euo pipefail
@@ -44,50 +44,93 @@ if ! oc whoami &>/dev/null; then
 fi
 log "✓ OpenShift CLI connected as: $(oc whoami)"
 
-# Check current route termination
-log ""
-log "Checking route termination..."
-CURRENT_TERMINATION=$(oc get route "$CENTRAL_ROUTE_NAME" -n "$CENTRAL_NAMESPACE" -o jsonpath='{.spec.tls.termination}' 2>/dev/null || echo "")
-CENTRAL_ROUTE_HOST=$(oc get route "$CENTRAL_ROUTE_NAME" -n "$CENTRAL_NAMESPACE" -o jsonpath='{.spec.host}' 2>/dev/null || echo "")
-
-log "Current route termination: ${CURRENT_TERMINATION:-edge}"
-
 # Find Central CR name
 CENTRAL_NAME=$(oc get central -n "$CENTRAL_NAMESPACE" -o jsonpath='{.items[0].metadata.name}' 2>/dev/null || echo "")
 if [ -z "$CENTRAL_NAME" ]; then
     error "Central CR not found in namespace $CENTRAL_NAMESPACE"
 fi
+log "✓ Found Central CR: $CENTRAL_NAME"
 
-# Check Central CR for reencrypt configuration
-EXISTING_RECENCRYPT=$(oc get central "$CENTRAL_NAME" -n "$CENTRAL_NAMESPACE" -o jsonpath='{.spec.central.exposure.route.reencrypt.enabled}' 2>/dev/null || echo "")
-
-# Configure passthrough if needed
-if [ "$CURRENT_TERMINATION" != "passthrough" ] || [ "$EXISTING_RECENCRYPT" = "true" ]; then
-    log ""
-    log "Configuring route for passthrough termination..."
-    
-    # Remove reencrypt from Central CR if it exists
-    if [ "$EXISTING_RECENCRYPT" = "true" ]; then
-        log "Removing reencrypt configuration from Central CR..."
-        oc patch central "$CENTRAL_NAME" -n "$CENTRAL_NAMESPACE" --type json -p '[{"op": "remove", "path": "/spec/central/exposure/route/reencrypt"}]' || error "Failed to remove reencrypt configuration"
-        log "✓ Reencrypt configuration removed"
-    fi
-    
-    # Wait for operator to reconcile
-    log "Waiting for operator to reconcile route configuration..."
-    sleep 10
-    
-    # Verify route is now passthrough
-    UPDATED_TERMINATION=$(oc get route "$CENTRAL_ROUTE_NAME" -n "$CENTRAL_NAMESPACE" -o jsonpath='{.spec.tls.termination}' 2>/dev/null || echo "")
-    
-    if [ "$UPDATED_TERMINATION" = "passthrough" ]; then
-        log "✓ Route is now configured as passthrough"
+# Get cluster domain from existing route or ingress config
+log ""
+log "Detecting cluster domain..."
+CLUSTER_DOMAIN=$(oc get ingress.config cluster -o jsonpath='{.spec.domain}' 2>/dev/null || echo "")
+if [ -z "$CLUSTER_DOMAIN" ]; then
+    # Try to extract from existing route
+    EXISTING_ROUTE_HOST=$(oc get route "$CENTRAL_ROUTE_NAME" -n "$CENTRAL_NAMESPACE" -o jsonpath='{.spec.host}' 2>/dev/null || echo "")
+    if [ -n "$EXISTING_ROUTE_HOST" ]; then
+        # Extract domain from route host (e.g., apps.cluster-xxx.dynamic.redhatworkshops.io)
+        CLUSTER_DOMAIN=$(echo "$EXISTING_ROUTE_HOST" | sed 's/^[^.]*\.//')
+        log "✓ Extracted cluster domain from existing route: $CLUSTER_DOMAIN"
     else
-        warning "Route termination is still: ${UPDATED_TERMINATION:-edge}"
-        warning "Operator may need more time to reconcile"
+        error "Could not determine cluster domain. Please ensure Central is installed or provide cluster domain."
     fi
 else
-    log "✓ Route is already configured as passthrough"
+    log "✓ Cluster domain: $CLUSTER_DOMAIN"
+fi
+
+# Construct route hosts
+PASSTHROUGH_HOST="central-passthrough.${CLUSTER_DOMAIN}"
+RECENCRYPT_HOST="central-stackrox.${CLUSTER_DOMAIN}"
+
+log ""
+log "Configuring Central CR with routes:"
+log "  Passthrough route: $PASSTHROUGH_HOST"
+log "  Reencrypt route: $RECENCRYPT_HOST"
+
+# Check current Central CR route configuration
+CURRENT_ROUTE_ENABLED=$(oc get central "$CENTRAL_NAME" -n "$CENTRAL_NAMESPACE" -o jsonpath='{.spec.central.exposure.route.enabled}' 2>/dev/null || echo "true")
+CURRENT_ROUTE_HOST=$(oc get central "$CENTRAL_NAME" -n "$CENTRAL_NAMESPACE" -o jsonpath='{.spec.central.exposure.route.host}' 2>/dev/null || echo "")
+CURRENT_RECENCRYPT_ENABLED=$(oc get central "$CENTRAL_NAME" -n "$CENTRAL_NAMESPACE" -o jsonpath='{.spec.central.exposure.route.reencrypt.enabled}' 2>/dev/null || echo "false")
+CURRENT_RECENCRYPT_HOST=$(oc get central "$CENTRAL_NAME" -n "$CENTRAL_NAMESPACE" -o jsonpath='{.spec.central.exposure.route.reencrypt.host}' 2>/dev/null || echo "")
+
+# Configure Central CR with both routes
+log ""
+log "Updating Central CR route configuration..."
+
+# Use oc patch to update the route configuration
+oc patch central "$CENTRAL_NAME" -n "$CENTRAL_NAMESPACE" --type merge -p "{
+  \"spec\": {
+    \"central\": {
+      \"exposure\": {
+        \"route\": {
+          \"enabled\": true,
+          \"host\": \"${PASSTHROUGH_HOST}\",
+          \"reencrypt\": {
+            \"enabled\": true,
+            \"host\": \"${RECENCRYPT_HOST}\"
+          }
+        }
+      }
+    }
+  }
+}" || error "Failed to update Central CR route configuration"
+
+log "✓ Central CR updated successfully"
+
+# Wait for operator to reconcile
+log ""
+log "Waiting for operator to reconcile route configuration..."
+sleep 15
+
+# Verify routes were created
+log ""
+log "Verifying routes..."
+PASSTHROUGH_ROUTE_EXISTS=$(oc get route -n "$CENTRAL_NAMESPACE" -o jsonpath="{.items[?(@.spec.host=='${PASSTHROUGH_HOST}')].metadata.name}" 2>/dev/null || echo "")
+RECENCRYPT_ROUTE_EXISTS=$(oc get route -n "$CENTRAL_NAMESPACE" -o jsonpath="{.items[?(@.spec.host=='${RECENCRYPT_HOST}')].metadata.name}" 2>/dev/null || echo "")
+
+if [ -n "$PASSTHROUGH_ROUTE_EXISTS" ]; then
+    PASSTHROUGH_TERMINATION=$(oc get route "$PASSTHROUGH_ROUTE_EXISTS" -n "$CENTRAL_NAMESPACE" -o jsonpath='{.spec.tls.termination}' 2>/dev/null || echo "")
+    log "✓ Passthrough route '$PASSTHROUGH_ROUTE_EXISTS' exists (termination: ${PASSTHROUGH_TERMINATION:-passthrough})"
+else
+    warning "Passthrough route not found yet (may need more time to reconcile)"
+fi
+
+if [ -n "$RECENCRYPT_ROUTE_EXISTS" ]; then
+    RECENCRYPT_TERMINATION=$(oc get route "$RECENCRYPT_ROUTE_EXISTS" -n "$CENTRAL_NAMESPACE" -o jsonpath='{.spec.tls.termination}' 2>/dev/null || echo "")
+    log "✓ Reencrypt route '$RECENCRYPT_ROUTE_EXISTS' exists (termination: ${RECENCRYPT_TERMINATION:-reencrypt})"
+else
+    warning "Reencrypt route not found yet (may need more time to reconcile)"
 fi
 
 # Final verification
@@ -95,20 +138,9 @@ log ""
 log "========================================================="
 log "RHACS Central Route Configuration"
 log "========================================================="
-FINAL_TERMINATION=$(oc get route "$CENTRAL_ROUTE_NAME" -n "$CENTRAL_NAMESPACE" -o jsonpath='{.spec.tls.termination}' 2>/dev/null || echo "")
-log "Route Termination: ${FINAL_TERMINATION:-passthrough}"
-if [ -n "$CENTRAL_ROUTE_HOST" ]; then
-    log "Central URL: https://$CENTRAL_ROUTE_HOST"
+log "Passthrough Route: https://${PASSTHROUGH_HOST}"
+if [ -n "$RECENCRYPT_ROUTE_EXISTS" ]; then
+    log "Reencrypt Route: https://${RECENCRYPT_HOST}"
 fi
 log "========================================================="
 log ""
-
-
-# Scale down operator to stop reconciliation
-oc scale deployment/central -n stackrox --replicas=0
-sleep 60  # wait for it to stop
-
-# Edit route to passthrough
-oc -n stackrox edit route central 
-
-https://central-stackrox.apps.cluster-dwlwx.dynamic.redhatworkshops.io

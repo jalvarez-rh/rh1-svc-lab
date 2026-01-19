@@ -30,7 +30,7 @@ warning() {
 # Array of scripts to execute in order
 SCRIPTS=(
     "00-install-roxctl.sh"
-    # "01-central-configuration.sh"
+    "01-central-configuration.sh"
     "02-compliance-operator-install.sh"
     "03-deploy-applications.sh"
     # "04-configure-rhacs-settings.sh"

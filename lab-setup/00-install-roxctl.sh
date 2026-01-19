@@ -199,3 +199,107 @@ else
     log "Make sure $USER_BIN_DIR is in your PATH"
 fi
 log "========================================================="
+
+# Configure RHACS environment variables
+log ""
+log "Configuring RHACS environment variables..."
+
+# Check if oc is available
+if command -v oc >/dev/null 2>&1 && oc whoami >/dev/null 2>&1; then
+    # Detect RHACS namespace
+    RHACS_NAMESPACE=""
+    if oc get route central -n "stackrox" -o jsonpath='{.spec.host}' >/dev/null 2>&1; then
+        RHACS_NAMESPACE="stackrox"
+    elif oc get route central -n "rhacs-operator" -o jsonpath='{.spec.host}' >/dev/null 2>&1; then
+        RHACS_NAMESPACE="rhacs-operator"
+    fi
+    
+    if [ -n "$RHACS_NAMESPACE" ]; then
+        # Get Central route - prefer reencrypt route (central-stackrox), fallback to central route
+        RECENCRYPT_ROUTE=$(oc get route -n "$RHACS_NAMESPACE" -o jsonpath="{.items[?(@.spec.host=~'central-stackrox.*')].spec.host}" 2>/dev/null || echo "")
+        if [ -n "$RECENCRYPT_ROUTE" ]; then
+            ROX_CENTRAL_ADDRESS="https://${RECENCRYPT_ROUTE}"
+        else
+            CENTRAL_ROUTE=$(oc get route central -n "$RHACS_NAMESPACE" -o jsonpath='{.spec.host}' 2>/dev/null || echo "")
+            if [ -n "$CENTRAL_ROUTE" ]; then
+                CENTRAL_TLS=$(oc get route central -n "$RHACS_NAMESPACE" -o jsonpath='{.spec.tls}' 2>/dev/null || echo "")
+                if [ -n "$CENTRAL_TLS" ] && [ "$CENTRAL_TLS" != "null" ]; then
+                    ROX_CENTRAL_ADDRESS="https://${CENTRAL_ROUTE}"
+                else
+                    ROX_CENTRAL_ADDRESS="http://${CENTRAL_ROUTE}"
+                fi
+            fi
+        fi
+        
+        # Get admin password from secret
+        ACS_PORTAL_PASSWORD=""
+        if oc get secret central-htpasswd -n "$RHACS_NAMESPACE" >/dev/null 2>&1; then
+            ADMIN_PASSWORD_B64=$(oc get secret central-htpasswd -n "$RHACS_NAMESPACE" -o jsonpath='{.data.password}' 2>/dev/null || echo "")
+            if [ -z "$ADMIN_PASSWORD_B64" ]; then
+                ADMIN_PASSWORD_B64=$(oc get secret central-htpasswd -n "$RHACS_NAMESPACE" -o jsonpath='{.data.adminPassword}' 2>/dev/null || echo "")
+            fi
+            if [ -n "$ADMIN_PASSWORD_B64" ]; then
+                ACS_PORTAL_PASSWORD="$ADMIN_PASSWORD_B64"
+            fi
+        fi
+        
+        # Fallback to environment variable if secret not found
+        if [ -z "$ACS_PORTAL_PASSWORD" ] && [ -n "${ACS_PORTAL_PASSWORD:-}" ]; then
+            ACS_PORTAL_PASSWORD="$ACS_PORTAL_PASSWORD"
+        fi
+        
+        # Set ACS_PORTAL_USERNAME
+        ACS_PORTAL_USERNAME="admin"
+        
+        # Set GRPC_ENFORCE_ALPN_ENABLED
+        GRPC_ENFORCE_ALPN_ENABLED="false"
+        
+        # Add variables to ~/.bashrc
+        if [ -n "$ROX_CENTRAL_ADDRESS" ]; then
+            log "Adding RHACS environment variables to ~/.bashrc..."
+            
+            # Remove existing RHACS variable lines if they exist, then add updated ones
+            TEMP_BASHRC=$(mktemp)
+            grep -v "export ROX_CENTRAL_ADDRESS=" ~/.bashrc 2>/dev/null | \
+            grep -v "export ACS_PORTAL_USERNAME=" | \
+            grep -v "export ACS_PORTAL_PASSWORD=" | \
+            grep -v "export GRPC_ENFORCE_ALPN_ENABLED=" | \
+            grep -v "# RHACS Environment Variables" > "$TEMP_BASHRC" || cat ~/.bashrc > "$TEMP_BASHRC" 2>/dev/null || true
+            
+            # Add updated variables section
+            cat >> "$TEMP_BASHRC" << EOF
+
+# RHACS Environment Variables
+export ROX_CENTRAL_ADDRESS="${ROX_CENTRAL_ADDRESS}"
+export ACS_PORTAL_USERNAME="${ACS_PORTAL_USERNAME}"
+export ACS_PORTAL_PASSWORD="${ACS_PORTAL_PASSWORD}"
+export GRPC_ENFORCE_ALPN_ENABLED=${GRPC_ENFORCE_ALPN_ENABLED}
+EOF
+            
+            # Replace .bashrc with updated version
+            mv "$TEMP_BASHRC" ~/.bashrc
+            
+            # Source .bashrc to make variables available in current session
+            source ~/.bashrc 2>/dev/null || true
+            
+            log "✓ RHACS environment variables configured"
+            log "  ROX_CENTRAL_ADDRESS: ${ROX_CENTRAL_ADDRESS}"
+            log "  ACS_PORTAL_USERNAME: ${ACS_PORTAL_USERNAME}"
+            if [ -n "$ACS_PORTAL_PASSWORD" ]; then
+                log "  ACS_PORTAL_PASSWORD: (configured)"
+            else
+                warning "  ACS_PORTAL_PASSWORD: Not found (will need to be set manually)"
+            fi
+            log "  GRPC_ENFORCE_ALPN_ENABLED: ${GRPC_ENFORCE_ALPN_ENABLED}"
+        else
+            warning "Central route not found. RHACS environment variables not configured."
+            warning "Run this script again after Central is installed, or set variables manually."
+        fi
+    else
+        warning "RHACS Central not found. RHACS environment variables not configured."
+        warning "Run this script again after Central is installed, or set variables manually."
+    fi
+else
+    warning "OpenShift CLI not available or not connected. Skipping RHACS environment variable configuration."
+fi
+log ""
