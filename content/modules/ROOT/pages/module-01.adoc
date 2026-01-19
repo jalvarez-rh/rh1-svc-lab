@@ -40,8 +40,8 @@ image::104-aws-credentials.png[link=self, window=blank, width=100%, AWS Credenti
 . Click on the *hosted* option.
 . Leave the infrastructure Provider Credentials as *hcp* 
 . Name your cluster *hcp-emea*, and verify that is on the *clusters* space for the hosted cluster namespace
-. Select *default* for the Cluster Set
-. Next, select the release image *OpenShift 4.20.8*. 
+. Select *managed* for the Cluster Set
+. Next, select the release image *OpenShift 4.20.10*. 
 . Select *single replica* for both the Controller availability policy and the Infrastructure availability policy. 
 
 [TIP]
@@ -241,7 +241,7 @@ NOTE: These changes are only required as you will be modifying the application Y
 
 [start=12]
 . Under *Placement* for application deployment, verify that *New Placement* is selected.
-* Cluster set: managed
+* *Cluster set:* managed
 . Under *Label expressions* click *add label* and select the following
 * *Label:* location
 * *Operator:* equals any off
