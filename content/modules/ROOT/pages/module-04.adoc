@@ -39,7 +39,7 @@ The first script installs the Red Hat OpenShift AI Operator, which provides the 
 cd ~/rh1-svc-lab/ai-setup && ./setup.sh
 ----
 
-[start=3]
+[start=1]
 . Verify the installation completed successfully. You should see output indicating:
 
 +
@@ -58,23 +58,15 @@ cd ~/rh1-svc-lab/ai-setup && ./setup.sh
 [SETUP] 
 ----
 
-[start=4]
-. At the end of the script output, note the access information that will be displayed. This includes:
+[start=2]
+. Make sure you have access to the OpenShift AI dashboard before proceeding.
+
+At the end of the script output, note the access information that will be displayed. This includes:
 * Dashboard URL (will be available after DataScienceCluster is created)
 * Username: admin
 * Password: {openshift_cluster_admin_password}
 
-Make sure you have access to the OpenShift AI dashboard before proceeding.
-
-[[verify-installation]]
-
-=== Verifying the Installation
-
-After both scripts complete, verify that OpenShift AI components are running:
-
-*Procedure*
-
-[start=1]
+[start=3]
 . Verify the installation by checking the DataScienceCluster status, dashboard route, and pods:
 
 [source,sh,role=execute]
@@ -100,4 +92,93 @@ With OpenShift AI installed and the DataScienceCluster configured, data scientis
 *Procedure*
 
 [start=1]
-. 
+. Open the OpenShift AI Dashboard using the URL provided at the end of the installation script (or retrieve it with):
+
+[source,sh,role=execute]
+----
+oc get route rhods-dashboard -n redhat-ods-applications -o jsonpath='{.spec.host}'
+----
+
+[start=2]
+. Log in to the dashboard using:
+* Username: `admin`
+* Password: Your OpenShift admin password (same as ACS_PORTAL_PASSWORD)
+
+image::04-openshift-ai-dashboard-01.png[OpenShift AI Dashboard Login, width=100%]
+
+[start=3]
+. Once logged in, you'll see the OpenShift AI dashboard home page:
+
+image::04-openshift-ai-dashboard-02.png[OpenShift AI Dashboard Home, width=100%]
+
+[start=4]
+. Navigate to the *Applications* -> *Enabled* section to see available components:
+
+image::04-openshift-ai-dashboard-03.png[OpenShift AI Applications View, width=100%]
+
+[start=5]
+. To create a Jupyter notebook server:
+.. Click on *Applications* -> *Enabled* -> *Jupyter*
+.. Click *Create workbench*
+
+image::04-openshift-ai-dashboard-04.png[Create Jupyter Workbench, width=100%]
+
+[start=6]
+. Configure your workbench:
+.. Select a notebook image (e.g., "Standard Data Science" or "Minimal Python")
+.. Configure the notebook server resources (CPU, memory) as needed
+.. Click *Create* to launch your notebook server
+
+image::04-openshift-ai-dashboard-05.png[Configure Jupyter Workbench, width=100%]
+
+[start=7]
+. Once your notebook server is running, click *Open* to access your Jupyter environment:
+
+image::04-openshift-ai-dashboard-06.png[Jupyter Notebook Server Running, width=100%]
+
+[start=8]
+. Your Jupyter notebook interface will open in a new tab:
+
+image::04-openshift-ai-dashboard-07.png[Jupyter Notebook Interface, width=100%]
+
+[start=9]
+. In the Jupyter notebook interface, you can create new notebooks, upload files, or browse existing projects:
+
+image::04-openshift-ai-dashboard-08.png[Jupyter Notebook File Browser, width=100%]
+
+[start=10]
+. Create a new Python notebook by clicking *New* -> *Python 3* (or your preferred kernel):
+
+image::04-openshift-ai-dashboard-09.png[Create New Notebook, width=100%]
+
+[start=11]
+. Your new notebook will open, ready for you to write and execute code cells:
+
+image::04-openshift-ai-dashboard-10.png[New Python Notebook, width=100%]
+
+[start=12]
+. You can install additional Python packages using pip in a code cell:
+
+image::04-openshift-ai-dashboard-11.png[Installing Python Packages, width=100%]
+
+[start=13]
+. The notebook environment provides access to your OpenShift cluster resources. You can verify connectivity:
+
+image::04-openshift-ai-dashboard-12.png[Notebook Cluster Access, width=100%]
+
+[start=14]
+. You can also manage your workbenches from the OpenShift AI dashboard. Navigate back to see your running workbench:
+
+image::04-openshift-ai-dashboard-13.png[Workbench Management View, width=100%]
+
+[start=15]
+. From the workbench details page, you can stop, restart, or delete your notebook server:
+
+image::04-openshift-ai-dashboard-14.png[Workbench Details and Actions, width=100%]
+
+[start=16]
+. The OpenShift AI dashboard also provides monitoring and resource usage information for your workbenches:
+
+image::04-openshift-ai-dashboard-15.png[Workbench Resource Monitoring, width=100%]
+
+NOTE: The first time you create a workbench, it may take a few minutes to pull the container image and start the server. Subsequent starts will be faster.

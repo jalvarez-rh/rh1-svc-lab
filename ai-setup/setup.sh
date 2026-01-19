@@ -198,44 +198,42 @@ if [ "$SKIP_CLUSTER" = false ]; then
     log "Retrieving OpenShift admin password..."
     ADMIN_PASSWORD=""
     
-    # First, try to get kubeadmin password from kube-system namespace (most common)
-    KUBEADMIN_PASSWORD_B64=$(oc get secret kubeadmin -n kube-system -o jsonpath='{.data.password}' 2>/dev/null || echo "")
-    if [ -n "$KUBEADMIN_PASSWORD_B64" ]; then
-        ADMIN_PASSWORD=$(echo "$KUBEADMIN_PASSWORD_B64" | base64 -d 2>/dev/null || echo "")
-        if [ -n "$ADMIN_PASSWORD" ]; then
-            log "✓ Retrieved kubeadmin password from secret"
+    # First, check for ACS_PORTAL_PASSWORD from environment (set in ~/.bashrc)
+    if [ -n "${ACS_PORTAL_PASSWORD:-}" ]; then
+        ADMIN_PASSWORD="$ACS_PORTAL_PASSWORD"
+        log "✓ Using password from ACS_PORTAL_PASSWORD environment variable"
+    else
+        # Try to source it from ~/.bashrc if not in current environment
+        if [ -f ~/.bashrc ]; then
+            # Extract ACS_PORTAL_PASSWORD from ~/.bashrc
+            EXTRACTED_PASSWORD=$(grep -E "^export ACS_PORTAL_PASSWORD=" ~/.bashrc | sed 's/^export ACS_PORTAL_PASSWORD="\(.*\)"/\1/' | sed "s/^export ACS_PORTAL_PASSWORD='\(.*\)'/\1/" | sed 's/^export ACS_PORTAL_PASSWORD=\(.*\)/\1/' | head -1)
+            if [ -n "$EXTRACTED_PASSWORD" ]; then
+                ADMIN_PASSWORD="$EXTRACTED_PASSWORD"
+                log "✓ Retrieved password from ACS_PORTAL_PASSWORD in ~/.bashrc"
+            fi
         fi
     fi
     
-    # If kubeadmin not found, check for environment variable (common in workshop/lab environments)
+    # If still not found, try to get kubeadmin password from kube-system namespace
+    if [ -z "$ADMIN_PASSWORD" ]; then
+        KUBEADMIN_PASSWORD_B64=$(oc get secret kubeadmin -n kube-system -o jsonpath='{.data.password}' 2>/dev/null || echo "")
+        if [ -n "$KUBEADMIN_PASSWORD_B64" ]; then
+            ADMIN_PASSWORD=$(echo "$KUBEADMIN_PASSWORD_B64" | base64 -d 2>/dev/null || echo "")
+            if [ -n "$ADMIN_PASSWORD" ]; then
+                log "✓ Retrieved kubeadmin password from secret"
+            fi
+        fi
+    fi
+    
+    # If still not found, check for other environment variables
     if [ -z "$ADMIN_PASSWORD" ] && [ -n "${OPENSHIFT_ADMIN_PASSWORD:-}" ]; then
         ADMIN_PASSWORD="$OPENSHIFT_ADMIN_PASSWORD"
         log "✓ Using password from OPENSHIFT_ADMIN_PASSWORD environment variable"
     fi
     
-    # If still not found, check for AWS_OPENSHIFT_KUBEADMIN_PASSWORD (common attribute variable)
     if [ -z "$ADMIN_PASSWORD" ] && [ -n "${AWS_OPENSHIFT_KUBEADMIN_PASSWORD:-}" ]; then
         ADMIN_PASSWORD="$AWS_OPENSHIFT_KUBEADMIN_PASSWORD"
         log "✓ Using password from AWS_OPENSHIFT_KUBEADMIN_PASSWORD environment variable"
-    fi
-    
-    # If still not found, try to get from htpasswd secret (common in workshop environments)
-    # Note: htpasswd passwords are hashed, so we can only detect if admin user exists
-    if [ -z "$ADMIN_PASSWORD" ]; then
-        HTPASSWD_SECRET=$(oc get secret -n openshift-config htpasswd -o jsonpath='{.data.htpasswd}' 2>/dev/null || echo "")
-        if [ -n "$HTPASSWD_SECRET" ]; then
-            HTPASSWD_CONTENT=$(echo "$HTPASSWD_SECRET" | base64 -d 2>/dev/null || echo "")
-            if echo "$HTPASSWD_CONTENT" | grep -q "^admin:"; then
-                # Admin user exists but password is hashed - can't retrieve
-                ADMIN_PASSWORD="(htpasswd configured - password is hashed, use your configured admin password)"
-            fi
-        fi
-    fi
-    
-    # Check current user context
-    CURRENT_USER=$(oc whoami 2>/dev/null || echo "")
-    if [ -z "$ADMIN_PASSWORD" ] && [ "$CURRENT_USER" = "kubeadmin" ]; then
-        ADMIN_PASSWORD="(logged in as kubeadmin - use your cluster installation password)"
     fi
     
     log ""
@@ -253,8 +251,7 @@ if [ "$SKIP_CLUSTER" = false ]; then
     if [ -n "$ADMIN_PASSWORD" ]; then
         log "Password: $ADMIN_PASSWORD"
     else
-        log "Password: (use your OpenShift cluster admin credentials)"
-        log "  To retrieve kubeadmin password: oc get secret kubeadmin -n kube-system -o jsonpath='{.data.password}' | base64 -d"
+        log "Password: OpenShift admin password"
     fi
     log "========================================================="
     log ""

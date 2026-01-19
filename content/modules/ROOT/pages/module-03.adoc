@@ -80,18 +80,11 @@ Sigstore is designed to address the pain points and limitations of GPG in the co
 ----
 cat <<EOF >> ~/.bashrc
 export QUAY_USER="{quay_admin_username}"
-export QUAY_URL="{acs_portal_username}"
+export QUAY_URL="{quay_console_url}"
 EOF
 source ~/.bashrc
 echo $QUAY_USER
 echo $QUAY_URL
-----
-
-**OUTPUT**
-[.console-output]
-[source,bash,subs="+macros,+attributes"]
-----
-
 ----
 
 . Run the following commands in the terminal to retrieve your Quay user and registry URL using oc:
@@ -106,12 +99,6 @@ QUAY_REGISTRY=${QUAY_REGISTRY#http://}
 podman build -t $QUAY_REGISTRY/$QUAY_USER/patient-portal-frontend:1.0 .
 podman login $QUAY_URL -u $QUAY_USER -p {quay_admin_password}
 podman push $QUAY_REGISTRY/$QUAY_USER/patient-portal-frontend:1.0
-----
-
-**OUTPUT**
-[.console-output]
-[source,bash,subs="+macros,+attributes"]
-----
 ----
 
 [[signing-our-software]]

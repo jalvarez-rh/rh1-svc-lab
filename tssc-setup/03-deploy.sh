@@ -385,6 +385,73 @@ while [ $WAIT_COUNT -lt $MAX_WAIT ]; do
         log "    TUF: ${TUF_READY:-false}"
         log "    Fulcio: ${FULCIO_READY:-false}"
         log "    Rekor: ${REKOR_READY:-false}"
+        
+        # Show diagnostic information for components that aren't ready
+        if [ "$TUF_READY" = false ]; then
+            if [ -n "$SECURESIGN_NAME" ]; then
+                TUF_CONDITION_MSG=$(oc get securesigns $SECURESIGN_NAME -n $RHTAS_NAMESPACE -o jsonpath='{.status.conditions[?(@.type=="TufAvailable")].message}' 2>/dev/null || echo "")
+                TUF_CONDITION_REASON=$(oc get securesigns $SECURESIGN_NAME -n $RHTAS_NAMESPACE -o jsonpath='{.status.conditions[?(@.type=="TufAvailable")].reason}' 2>/dev/null || echo "")
+                if [ -n "$TUF_CONDITION_MSG" ] || [ -n "$TUF_CONDITION_REASON" ]; then
+                    info "    TUF Status: ${TUF_CONDITION_REASON:-Unknown} - ${TUF_CONDITION_MSG:-No message}"
+                fi
+            elif [ -n "$TUF_NAME" ] && oc get tufs $TUF_NAME -n $RHTAS_NAMESPACE >/dev/null 2>&1; then
+                TUF_CONDITION_MSG=$(oc get tufs $TUF_NAME -n $RHTAS_NAMESPACE -o jsonpath='{.status.conditions[?(@.type=="Ready")].message}' 2>/dev/null || echo "")
+                TUF_CONDITION_REASON=$(oc get tufs $TUF_NAME -n $RHTAS_NAMESPACE -o jsonpath='{.status.conditions[?(@.type=="Ready")].reason}' 2>/dev/null || echo "")
+                if [ -n "$TUF_CONDITION_MSG" ] || [ -n "$TUF_CONDITION_REASON" ]; then
+                    info "    TUF Status: ${TUF_CONDITION_REASON:-Unknown} - ${TUF_CONDITION_MSG:-No message}"
+                fi
+                # Check for TUF pods
+                TUF_PODS=$(oc get pods -n $RHTAS_NAMESPACE -l app=tuf --no-headers 2>/dev/null | wc -l || echo "0")
+                if [ "$TUF_PODS" -gt 0 ]; then
+                    TUF_POD_STATUS=$(oc get pods -n $RHTAS_NAMESPACE -l app=tuf -o jsonpath='{.items[0].status.phase}' 2>/dev/null || echo "")
+                    info "    TUF Pods: $TUF_PODS pod(s), Status: ${TUF_POD_STATUS:-Unknown}"
+                fi
+            fi
+        fi
+        
+        if [ "$FULCIO_READY" = false ]; then
+            if [ -n "$SECURESIGN_NAME" ]; then
+                FULCIO_CONDITION_MSG=$(oc get securesigns $SECURESIGN_NAME -n $RHTAS_NAMESPACE -o jsonpath='{.status.conditions[?(@.type=="FulcioAvailable")].message}' 2>/dev/null || echo "")
+                FULCIO_CONDITION_REASON=$(oc get securesigns $SECURESIGN_NAME -n $RHTAS_NAMESPACE -o jsonpath='{.status.conditions[?(@.type=="FulcioAvailable")].reason}' 2>/dev/null || echo "")
+                if [ -n "$FULCIO_CONDITION_MSG" ] || [ -n "$FULCIO_CONDITION_REASON" ]; then
+                    info "    Fulcio Status: ${FULCIO_CONDITION_REASON:-Unknown} - ${FULCIO_CONDITION_MSG:-No message}"
+                fi
+            elif [ -n "$FULCIO_NAME" ] && oc get fulcios $FULCIO_NAME -n $RHTAS_NAMESPACE >/dev/null 2>&1; then
+                FULCIO_CONDITION_MSG=$(oc get fulcios $FULCIO_NAME -n $RHTAS_NAMESPACE -o jsonpath='{.status.conditions[?(@.type=="Ready")].message}' 2>/dev/null || echo "")
+                FULCIO_CONDITION_REASON=$(oc get fulcios $FULCIO_NAME -n $RHTAS_NAMESPACE -o jsonpath='{.status.conditions[?(@.type=="Ready")].reason}' 2>/dev/null || echo "")
+                if [ -n "$FULCIO_CONDITION_MSG" ] || [ -n "$FULCIO_CONDITION_REASON" ]; then
+                    info "    Fulcio Status: ${FULCIO_CONDITION_REASON:-Unknown} - ${FULCIO_CONDITION_MSG:-No message}"
+                fi
+                # Check for Fulcio pods
+                FULCIO_PODS=$(oc get pods -n $RHTAS_NAMESPACE -l app=fulcio --no-headers 2>/dev/null | wc -l || echo "0")
+                if [ "$FULCIO_PODS" -gt 0 ]; then
+                    FULCIO_POD_STATUS=$(oc get pods -n $RHTAS_NAMESPACE -l app=fulcio -o jsonpath='{.items[0].status.phase}' 2>/dev/null || echo "")
+                    info "    Fulcio Pods: $FULCIO_PODS pod(s), Status: ${FULCIO_POD_STATUS:-Unknown}"
+                fi
+            fi
+        fi
+        
+        if [ "$REKOR_READY" = false ]; then
+            if [ -n "$SECURESIGN_NAME" ]; then
+                REKOR_CONDITION_MSG=$(oc get securesigns $SECURESIGN_NAME -n $RHTAS_NAMESPACE -o jsonpath='{.status.conditions[?(@.type=="RekorAvailable")].message}' 2>/dev/null || echo "")
+                REKOR_CONDITION_REASON=$(oc get securesigns $SECURESIGN_NAME -n $RHTAS_NAMESPACE -o jsonpath='{.status.conditions[?(@.type=="RekorAvailable")].reason}' 2>/dev/null || echo "")
+                if [ -n "$REKOR_CONDITION_MSG" ] || [ -n "$REKOR_CONDITION_REASON" ]; then
+                    info "    Rekor Status: ${REKOR_CONDITION_REASON:-Unknown} - ${REKOR_CONDITION_MSG:-No message}"
+                fi
+            elif [ -n "$REKOR_NAME" ] && oc get rekors $REKOR_NAME -n $RHTAS_NAMESPACE >/dev/null 2>&1; then
+                REKOR_CONDITION_MSG=$(oc get rekors $REKOR_NAME -n $RHTAS_NAMESPACE -o jsonpath='{.status.conditions[?(@.type=="Ready")].message}' 2>/dev/null || echo "")
+                REKOR_CONDITION_REASON=$(oc get rekors $REKOR_NAME -n $RHTAS_NAMESPACE -o jsonpath='{.status.conditions[?(@.type=="Ready")].reason}' 2>/dev/null || echo "")
+                if [ -n "$REKOR_CONDITION_MSG" ] || [ -n "$REKOR_CONDITION_REASON" ]; then
+                    info "    Rekor Status: ${REKOR_CONDITION_REASON:-Unknown} - ${REKOR_CONDITION_MSG:-No message}"
+                fi
+                # Check for Rekor pods
+                REKOR_PODS=$(oc get pods -n $RHTAS_NAMESPACE -l app=rekor --no-headers 2>/dev/null | wc -l || echo "0")
+                if [ "$REKOR_PODS" -gt 0 ]; then
+                    REKOR_POD_STATUS=$(oc get pods -n $RHTAS_NAMESPACE -l app=rekor -o jsonpath='{.items[0].status.phase}' 2>/dev/null || echo "")
+                    info "    Rekor Pods: $REKOR_PODS pod(s), Status: ${REKOR_POD_STATUS:-Unknown}"
+                fi
+            fi
+        fi
     fi
 done
 
@@ -406,7 +473,10 @@ fi
 if [ "$REKOR_READY" = false ]; then
     if [ -n "$SECURESIGN_NAME" ]; then
         REKOR_URL=$(oc get securesigns $SECURESIGN_NAME -n $RHTAS_NAMESPACE -o jsonpath='{.status.rekor.url}' 2>/dev/null || echo "")
-    elif [ -n "$REKOR_NAME" ]; then
+    elif [ -z "$REKOR_NAME" ]; then
+        REKOR_NAME=$(oc get rekors -n $RHTAS_NAMESPACE -o jsonpath='{.items[0].metadata.name}' 2>/dev/null || echo "rekor-server")
+    fi
+    if [ -n "$REKOR_NAME" ]; then
         REKOR_URL=$(oc get rekors $REKOR_NAME -n $RHTAS_NAMESPACE -o jsonpath='{.status.url}' 2>/dev/null || echo "")
     fi
 fi
@@ -446,6 +516,15 @@ log ""
 log "To check status:"
 log "  oc get tufs,fulcios,rekors -n ${RHTAS_NAMESPACE}"
 log "  oc get pods -n ${RHTAS_NAMESPACE}"
+log ""
+log "To diagnose issues:"
+log "  oc describe tufs -n ${RHTAS_NAMESPACE}"
+log "  oc describe fulcios -n ${RHTAS_NAMESPACE}"
+log "  oc describe rekors -n ${RHTAS_NAMESPACE}"
+log "  oc get events -n ${RHTAS_NAMESPACE} --sort-by='.lastTimestamp' | tail -20"
+if [ -n "$SECURESIGN_NAME" ]; then
+    log "  oc describe securesigns ${SECURESIGN_NAME} -n ${RHTAS_NAMESPACE}"
+fi
 log ""
 log "To get URLs for cosign configuration:"
 if [ -n "$TUF_URL" ]; then
