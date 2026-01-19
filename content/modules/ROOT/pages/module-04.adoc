@@ -24,10 +24,7 @@ In this module, you will install Red Hat OpenShift AI and configure a DataScienc
 
 == Installing Red Hat OpenShift AI
 
-Before data scientists can begin working with Jupyter notebooks and building AI models, we need to install Red Hat OpenShift AI. This process involves two steps:
-
-1. Installing the OpenShift AI Operator (which provides the platform capabilities)
-2. Creating a DataScienceCluster custom resource (which configures and deploys the AI components)
+Before data scientists can begin working with OpenShift, we need to install it. 
 
 [[install-openshift-ai-operator]]
 
@@ -68,52 +65,6 @@ cd ~/rh1-svc-lab/ai-setup && ./setup.sh
 * Password: {openshift_cluster_admin_password}
 
 Make sure you have access to the OpenShift AI dashboard before proceeding.
-
-[[install-datascience-cluster]]
-
-=== Step 2: Create DataScienceCluster
-
-Once the operator is installed, the second script creates a DataScienceCluster custom resource that configures and deploys the OpenShift AI components, including the dashboard and Jupyter notebook workbenches.
-
-*Procedure*
-
-[start=1]
-. Run the DataScienceCluster installation script:
-
-[source,sh,role=execute]
-----
-./10-install-data-science-cluster.sh
-----
-
-The script will:
-* Validate that the DataScienceCluster CRD exists (ensuring the operator is installed)
-* Create the `redhat-ods-applications` namespace
-* Create a DataScienceCluster CR named `default-dsc` with:
-** Dashboard component enabled (provides the web UI)
-** Workbenches component enabled (provides Jupyter notebook capabilities)
-** Other components set to "Removed" (can be enabled later as needed)
-* Wait for the DataScienceCluster to reach "Ready" status
-* Retrieve and display the dashboard route URL
-
-NOTE: The DataScienceCluster installation typically takes 10-15 minutes. The script will monitor the status and display progress updates every 60 seconds.
-
-[start=2]
-. Verify the installation completed successfully. You should see output indicating:
-
-+
-[source,sh]
-----
-✓ DataScienceCluster is Ready
-Status: Ready
-----
-
-[start=3]
-. At the end of the script output, you will see the "OpenShift AI Access Information" section with:
-* Dashboard URL: `https://rhods-dashboard-redhat-ods-applications.apps.<cluster-domain>`
-* Username: admin
-* Password: OpenShift admin password
-
-IMPORTANT: Save the Dashboard URL, username, and password information. You will need these credentials to access the OpenShift AI dashboard and Jupyter notebooks in the next steps.
 
 [[verify-installation]]
 

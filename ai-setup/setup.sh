@@ -159,30 +159,44 @@ if [ "$SKIP_CLUSTER" = false ]; then
     log "Retrieving OpenShift admin password..."
     ADMIN_PASSWORD=""
     
-    # Try to get kubeadmin password from kube-system namespace
+    # First, try to get kubeadmin password from kube-system namespace (most common)
     KUBEADMIN_PASSWORD_B64=$(oc get secret kubeadmin -n kube-system -o jsonpath='{.data.password}' 2>/dev/null || echo "")
     if [ -n "$KUBEADMIN_PASSWORD_B64" ]; then
         ADMIN_PASSWORD=$(echo "$KUBEADMIN_PASSWORD_B64" | base64 -d 2>/dev/null || echo "")
+        if [ -n "$ADMIN_PASSWORD" ]; then
+            log "✓ Retrieved kubeadmin password from secret"
+        fi
     fi
     
-    # If kubeadmin not found, try to get from htpasswd secret (common in workshop environments)
+    # If kubeadmin not found, check for environment variable (common in workshop/lab environments)
+    if [ -z "$ADMIN_PASSWORD" ] && [ -n "${OPENSHIFT_ADMIN_PASSWORD:-}" ]; then
+        ADMIN_PASSWORD="$OPENSHIFT_ADMIN_PASSWORD"
+        log "✓ Using password from OPENSHIFT_ADMIN_PASSWORD environment variable"
+    fi
+    
+    # If still not found, check for AWS_OPENSHIFT_KUBEADMIN_PASSWORD (common attribute variable)
+    if [ -z "$ADMIN_PASSWORD" ] && [ -n "${AWS_OPENSHIFT_KUBEADMIN_PASSWORD:-}" ]; then
+        ADMIN_PASSWORD="$AWS_OPENSHIFT_KUBEADMIN_PASSWORD"
+        log "✓ Using password from AWS_OPENSHIFT_KUBEADMIN_PASSWORD environment variable"
+    fi
+    
+    # If still not found, try to get from htpasswd secret (common in workshop environments)
+    # Note: htpasswd passwords are hashed, so we can only detect if admin user exists
     if [ -z "$ADMIN_PASSWORD" ]; then
         HTPASSWD_SECRET=$(oc get secret -n openshift-config htpasswd -o jsonpath='{.data.htpasswd}' 2>/dev/null || echo "")
         if [ -n "$HTPASSWD_SECRET" ]; then
-            # htpasswd format is username:hashed_password, try to extract admin user
             HTPASSWD_CONTENT=$(echo "$HTPASSWD_SECRET" | base64 -d 2>/dev/null || echo "")
             if echo "$HTPASSWD_CONTENT" | grep -q "^admin:"; then
-                # If admin user exists in htpasswd, note that password is hashed and can't be retrieved
-                ADMIN_PASSWORD="(htpasswd - password is hashed, use your configured admin password)"
+                # Admin user exists but password is hashed - can't retrieve
+                ADMIN_PASSWORD="(htpasswd configured - password is hashed, use your configured admin password)"
             fi
         fi
     fi
     
-    # If still not found, check if current user is kubeadmin
+    # Check current user context
     CURRENT_USER=$(oc whoami 2>/dev/null || echo "")
-    if [ "$CURRENT_USER" = "kubeadmin" ] && [ -z "$ADMIN_PASSWORD" ]; then
-        # User is kubeadmin but password not found in secret, try to get from install log or note
-        ADMIN_PASSWORD="(use kubeadmin password from cluster installation)"
+    if [ -z "$ADMIN_PASSWORD" ] && [ "$CURRENT_USER" = "kubeadmin" ]; then
+        ADMIN_PASSWORD="(logged in as kubeadmin - use your cluster installation password)"
     fi
     
     log ""
