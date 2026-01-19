@@ -258,7 +258,7 @@ NOTE: It will take a few minutes to deploy the application, during this time you
 . While this application deploys, Repeat the steps to deploy the application to the *hcp-emea* cluster. Make sure the application name is set to *skupper-patient-demo-emea*
 
 . Under *Placement* for application deployment, verify that *New Placement* is selected.
-* Cluster set: managed
+* *Cluster set:* managed
 . Under *Label expressions* click *add label* and select the following
 * *Label:* location
 * *Operator:* equals any off
