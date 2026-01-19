@@ -262,14 +262,14 @@ auth.go:203: logged in via /home/lab-user/.podman/config.json
 
 [source,sh,subs="attributes",role=execute]
 ----
-cosign tree $QUAY_URL/$QUAY_USER/patient-portal-frontend:0.1
+cosign tree $QUAY_URL/$QUAY_USER/patient-portal-frontend:1.0
 ----
 
 [.console-output]
 [source,bash,subs="+macros,+attributes"]
 ----
-[lab-user@bastion ~]$ cosign tree $QUAY_URL/$QUAY_USER/patient-portal-frontend:0.1
-📦 Supply Chain Security Related artifacts for an image: quay.apps.cluster-gk5g4.dynamic.redhatworkshops.io/quayadmin/patient-portal-frontend:0.1
+[lab-user@bastion ~]$ cosign tree $QUAY_URL/$QUAY_USER/patient-portal-frontend:1.0
+📦 Supply Chain Security Related artifacts for an image: quay.apps.cluster-gk5g4.dynamic.redhatworkshops.io/quayadmin/patient-portal-frontend:1.0
 Error: entity not found in registry, error: GET https://quay.apps.cluster-gk5g4.dynamic.redhatworkshops.io/v2/quayadmin/patient-portal-frontend/manifests/0.1: MANIFEST_UNKNOWN: manifest unknown; map[]
 error during command execution: entity not found in registry, error: GET https://quay.apps.cluster-gk5g4.dynamic.redhatworkshops.io/v2/quayadmin/patient-portal-frontend/manifests/0.1: MANIFEST_UNKNOWN: manifest unknown; map[]
 ----
@@ -279,13 +279,13 @@ error during command execution: entity not found in registry, error: GET https:/
 
 [source,sh,subs="attributes",role=execute]
 ----
-cosign sign $QUAY_URL/$QUAY_USER/patient-portal-frontend:0.1
+cosign sign $QUAY_URL/$QUAY_USER/patient-portal-frontend:1.0
 ----
 
 [.console-output]
 [source,bash,subs="+macros,+attributes"]
 ----
-[lab-user@bastion ~]$ cosign sign $QUAY_URL/$QUAY_USER/patient-portal-frontend:0.1
+[lab-user@bastion ~]$ cosign sign $QUAY_URL/$QUAY_USER/patient-portal-frontend:1.0
 Generating ephemeral keys...
 Retrieving signed certificate...
 
@@ -336,7 +336,7 @@ NOTE: You may have to run `rm -rf ~/.sigstore` if you get a cache error.
 Enter verification code: 3cc0c9fc-db2e-4920-ba2e-7adac8c685cb.6309e23d-facd-4bca-8855-0443a3c4ddf5.d8370879-39c7-41ec-99ab-669101e99f91
 
 Successfully verified SCT...
-WARNING: Image reference quay-l2ktc.apps.cluster-l2ktc.l2ktc.sandbox75.opentlc.com/quayadmin/patient-portal-frontend:0.1 uses a tag, not a digest, to identify the image to sign.
+WARNING: Image reference quay-l2ktc.apps.cluster-l2ktc.l2ktc.sandbox75.opentlc.com/quayadmin/patient-portal-frontend:1.0 uses a tag, not a digest, to identify the image to sign.
     This can lead you to sign a different image than the intended one. Please use a
     digest (example.com/ubuntu@sha256:abc123...) rather than tag
     (example.com/ubuntu:latest) for the input to cosign. The ability to refer to
@@ -357,14 +357,14 @@ With one command, you have signed the container image and pushed the container i
 
 [source,sh,subs="attributes",role=execute]
 ----
-cosign tree $QUAY_URL/$QUAY_USER/patient-portal-frontend:0.1
+cosign tree $QUAY_URL/$QUAY_USER/patient-portal-frontend:1.0
 ----
 
 [.console-output]
 [source,bash,subs="+macros,+attributes"]
 ----
-[lab-user@bastion ~]$ cosign tree $QUAY_URL/$QUAY_USER/patient-portal-frontend:0.1
-📦 Supply Chain Security Related artifacts for an image: quay-l2ktc.apps.cluster-l2ktc.l2ktc.sandbox75.opentlc.com/quayadmin/patient-portal-frontend:0.1
+[lab-user@bastion ~]$ cosign tree $QUAY_URL/$QUAY_USER/patient-portal-frontend:1.0
+📦 Supply Chain Security Related artifacts for an image: quay-l2ktc.apps.cluster-l2ktc.l2ktc.sandbox75.opentlc.com/quayadmin/patient-portal-frontend:1.0
 └── 🔐 Signatures for an image tag: quay-l2ktc.apps.cluster-l2ktc.l2ktc.sandbox75.opentlc.com/quayadmin/ctf-web-to-system:sha256-4530d5e1556631804ce21d37271b0d3f173c350956f2312421db0840fd103c82.sig
    └── 🍒 sha256:f638a989546b998409719e3eb78c0843d880e0bbb5237afa831da685fee48880
 ----
@@ -437,17 +437,17 @@ WARNING: This is just an example—naturally, in your own CI system, you would n
 
 [source,sh,subs="attributes",role=execute]
 ----
-cosign sign -y --identity-token=$OIDC_TOKEN $QUAY_URL/$QUAY_USER/patient-portal-frontend:0.1
+cosign sign -y --identity-token=$OIDC_TOKEN $QUAY_URL/$QUAY_USER/patient-portal-frontend:1.0
 ----
 
 [.console-output]
 [source,bash,subs="+macros,+attributes"]
 ----
-[lab-user@bastion ~]$ cosign sign -y --identity-token=$OIDC_TOKEN $QUAY_URL/$QUAY_USER/patient-portal-frontend:0.1
+[lab-user@bastion ~]$ cosign sign -y --identity-token=$OIDC_TOKEN $QUAY_URL/$QUAY_USER/patient-portal-frontend:1.0
 Generating ephemeral keys...
 Retrieving signed certificate...
 Successfully verified SCT...
-WARNING: Image reference quay-l2ktc.apps.cluster-l2ktc.l2ktc.sandbox75.opentlc.com/quayadmin/patient-portal-frontend:0.1 uses a tag, not a digest, to identify the image to sign.
+WARNING: Image reference quay-l2ktc.apps.cluster-l2ktc.l2ktc.sandbox75.opentlc.com/quayadmin/patient-portal-frontend:1.0 uses a tag, not a digest, to identify the image to sign.
     This can lead you to sign a different image than the intended one. Please use a
     digest (example.com/ubuntu@sha256:abc123...) rather than tag
     (example.com/ubuntu:latest) for the input to cosign. The ability to refer to
@@ -493,15 +493,15 @@ Verifying an image signature is even easier than signing:
 
 [source,sh,subs="attributes",role=execute]
 ----
-cosign verify --certificate-identity jdoe@redhat.com $QUAY_URL/$QUAY_USER/patient-portal-frontend:0.1 | jq
+cosign verify --certificate-identity jdoe@redhat.com $QUAY_URL/$QUAY_USER/patient-portal-frontend:1.0 | jq
 ----
 
 [.console-output]
 [source,bash,subs="+macros,+attributes"]
 ----
-[lab-user@bastion ~]$ cosign verify --certificate-identity jdoe@redhat.com $QUAY_URL/$QUAY_USER/patient-portal-frontend:0.1 | jq
+[lab-user@bastion ~]$ cosign verify --certificate-identity jdoe@redhat.com $QUAY_URL/$QUAY_USER/patient-portal-frontend:1.0 | jq
 
-Verification for quay-lpv5s.apps.cluster-lpv5s.lpv5s.sandbox1300.opentlc.com/quayadmin/patient-portal-frontend:0.1 --
+Verification for quay-lpv5s.apps.cluster-lpv5s.lpv5s.sandbox1300.opentlc.com/quayadmin/patient-portal-frontend:1.0 --
 The following checks were performed on each of these signatures:
   - The cosign claims were validated
   - Existence of the claims in the transparency log was verified offline
@@ -529,15 +529,15 @@ In this case, we are asking `cosign` (and therefore *Trusted Artifact Signer*) t
 
 [source,sh,subs="attributes",role=execute]
 ----
-cosign verify --certificate-identity-regexp ^[a-zA-Z0-9._%+-]+@redhat\.com$ $QUAY_URL/$QUAY_USER/patient-portal-frontend:0.1 | jq
+cosign verify --certificate-identity-regexp ^[a-zA-Z0-9._%+-]+@redhat\.com$ $QUAY_URL/$QUAY_USER/patient-portal-frontend:1.0 | jq
 ----
 
 [.console-output]
 [source,bash,subs="+macros,+attributes"]
 ----
-[lab-user@bastion ~]$ cosign verify --certificate-identity-regexp ^[a-zA-Z0-9._%+-]+@redhat\.com$ $QUAY_URL/$QUAY_USER/patient-portal-frontend:0.1 | jq
+[lab-user@bastion ~]$ cosign verify --certificate-identity-regexp ^[a-zA-Z0-9._%+-]+@redhat\.com$ $QUAY_URL/$QUAY_USER/patient-portal-frontend:1.0 | jq
 
-Verification for quay-lpv5s.apps.cluster-lpv5s.lpv5s.sandbox1300.opentlc.com/quayadmin/patient-portal-frontend:0.1 --
+Verification for quay-lpv5s.apps.cluster-lpv5s.lpv5s.sandbox1300.opentlc.com/quayadmin/patient-portal-frontend:1.0 --
 The following checks were performed on each of these signatures:
   - The cosign claims were validated
   - Existence of the claims in the transparency log was verified offline
@@ -564,7 +564,7 @@ We can also verify that the person (to be correct, the OIDC identity) who signed
 
 [source,sh,subs="attributes",role=execute]
 ----
-cosign verify --certificate-identity jdoe@redhat.com --certificate-oidc-issuer-regexp \.opentlc\.com $QUAY_URL/$QUAY_USER/patient-portal-frontend:0.1 | jq
+cosign verify --certificate-identity jdoe@redhat.com --certificate-oidc-issuer-regexp \.opentlc\.com $QUAY_URL/$QUAY_USER/patient-portal-frontend:1.0 | jq
 ----
 
 NOTE: We are using `jq` for readability in these examples; it is not required.
@@ -572,9 +572,9 @@ NOTE: We are using `jq` for readability in these examples; it is not required.
 [.console-output]
 [source,bash,subs="+macros,+attributes"]
 ----
-[lab-user@bastion ~]$ cosign verify --certificate-identity jdoe@redhat.com --certificate-oidc-issuer-regexp \.opentlc\.com $QUAY_URL/$QUAY_USER/patient-portal-frontend:0.1 | jq
+[lab-user@bastion ~]$ cosign verify --certificate-identity jdoe@redhat.com --certificate-oidc-issuer-regexp \.opentlc\.com $QUAY_URL/$QUAY_USER/patient-portal-frontend:1.0 | jq
 
-Verification for quay-l2ktc.apps.cluster-l2ktc.l2ktc.sandbox75.opentlc.com/quayadmin/patient-portal-frontend:0.1 --
+Verification for quay-l2ktc.apps.cluster-l2ktc.l2ktc.sandbox75.opentlc.com/quayadmin/patient-portal-frontend:1.0 --
 The following checks were performed on each of these signatures:
   - The cosign claims were validated
   - Existence of the claims in the transparency log was verified offline
