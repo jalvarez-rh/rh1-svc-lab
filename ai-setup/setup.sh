@@ -95,6 +95,15 @@ log "✓ All required scripts found"
 log ""
 
 # Step 1: Install OpenShift AI Operator
+# This script (01-operator.sh) installs:
+# - Namespace: redhat-ods-operator
+# - OperatorGroup: redhat-ods-operatorgroup (AllNamespaces mode)
+# - Subscription: rhods-operator (from redhat-operators)
+# - Waits for CSV to be ready
+# - Waits for DataScienceCluster CRD to be available
+# - Namespace: redhat-ods-applications
+# - DataScienceCluster CR: default-dsc (with dashboard and workbenches enabled)
+# - Waits for DataScienceCluster to be Ready
 if [ "$SKIP_OPERATOR" = false ]; then
     log "========================================================="
     log "Step 1: Installing OpenShift AI Operator"
@@ -113,6 +122,13 @@ else
 fi
 
 # Step 2: Deploy DataScienceCluster
+# This script (02-cluster.sh) ensures:
+# - DataScienceCluster CRD exists (validates operator is installed)
+# - Namespace: redhat-ods-applications exists
+# - DataScienceCluster CR: default-dsc exists (creates if needed)
+# - Waits for DataScienceCluster to be Ready
+# Note: If 01-operator.sh already created the DataScienceCluster CR, this script
+#       will detect it exists and wait for it to be ready (idempotent operation)
 if [ "$SKIP_CLUSTER" = false ]; then
     log "========================================================="
     log "Step 2: Deploying DataScienceCluster"
