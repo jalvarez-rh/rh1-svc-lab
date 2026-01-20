@@ -124,7 +124,6 @@ cosign version
 [.console-output]
 [source,bash,subs="+macros,+attributes"]
 ----
-[lab-user@bastion ~]$ cosign version
   ______   ______        _______. __    _______ .__   __.
  /      | /  __  \      /       ||  |  /  _____||  \ |  |
 |  ,----'|  |  |  |    |   (----`|  | |  |  __  |   \|  |
@@ -133,11 +132,11 @@ cosign version
  \______| \______/  |_______/    |__|  \______| |__| \__|
 cosign: A tool for Container Signing, Verification and Storage in an OCI registry.
 
-GitVersion:    366aae20
-GitCommit:     366aae20a8edc21f7402f0d65d36cf8765bcfa42
+GitVersion:    5c43d256
+GitCommit:     5c43d256f1391f505ada9f9c46c3e31b6e219c8e
 GitTreeState:  clean
-BuildDate:     2025-02-24T11:24:47Z
-GoVersion:     go1.22.9 (Red Hat 1.22.9-2.el9_5)
+BuildDate:     2025-11-19T10:04:54Z
+GoVersion:     go1.24.6 (Red Hat 1.24.6-1.el9_6) X:strictfipsruntime
 Compiler:      gc
 Platform:      linux/amd64
 ----
@@ -167,16 +166,13 @@ env | grep URL
 [.console-output]
 [source,bash,subs="+macros,+attributes"]
 ----
-# to verify URL endpoints have been set
-env | grep URL
-TUF_URL=https://tuf-trusted-artifact-signer.apps.cluster-88k5s.88k5s.sandbox139.opentlc.com
-OIDC_ISSUER_URL=https://keycloak-rhsso.apps.cluster-88k5s.88k5s.sandbox139.opentlc.com/auth/realms/openshift
-QUAY_URL=quay-88k5s.apps.cluster-88k5s.88k5s.sandbox139.opentlc.com
-COSIGN_FULCIO_URL=https://fulcio-server-trusted-artifact-signer.apps.cluster-88k5s.88k5s.sandbox139.opentlc.com
-SIGSTORE_REKOR_URL=https://rekor-server-trusted-artifact-signer.apps.cluster-88k5s.88k5s.sandbox139.opentlc.com
-SIGSTORE_FULCIO_URL=https://fulcio-server-trusted-artifact-signer.apps.cluster-88k5s.88k5s.sandbox139.opentlc.com
-COSIGN_REKOR_URL=https://rekor-server-trusted-artifact-signer.apps.cluster-88k5s.88k5s.sandbox139.opentlc.com
-[lab-user@bastion ~]$
+TUF_URL=https://tuf-trusted-artifact-signer.apps.cluster-m2mgb.dyn.redhatworkshops.io
+OIDC_ISSUER_URL=https://keycloak-rhsso.apps.cluster-m2mgb.dyn.redhatworkshops.io/auth/realms/openshift
+QUAY_URL=quay.apps.cluster-m2mgb.dyn.redhatworkshops.io
+COSIGN_FULCIO_URL=https://fulcio-server-trusted-artifact-signer.apps.cluster-m2mgb.dyn.redhatworkshops.io
+SIGSTORE_REKOR_URL=https://rekor-server-trusted-artifact-signer.apps.cluster-m2mgb.dyn.redhatworkshops.io
+SIGSTORE_FULCIO_URL=https://fulcio-server-trusted-artifact-signer.apps.cluster-m2mgb.dyn.redhatworkshops.io
+COSIGN_REKOR_URL=https://rekor-server-trusted-artifact-signer.apps.cluster-m2mgb.dyn.redhatworkshops.io
 ----
 +
 NOTE: The reason we define multiple variables with the same values is due to the long history of the upstream Sigstore project. Some tools (like cosign and gitsign) use different environment variables for the same purpose. For various reasons, including open source principles and compatibility, we are not creating a specialized Red Hat version with simplified environment parameters. These variables will be maintained in both the upstream project and the Red Hat enterprise-ready version.
@@ -250,8 +246,11 @@ cosign login $QUAY_URL -u $QUAY_USER -p {quay_admin_password}
 [.console-output]
 [source,bash,subs="+macros,+attributes"]
 ----
-[lab-user@bastion ~]$ cosign login $QUAY_URL -u $QUAY_USER -p MzI2OTI0
-auth.go:203: logged in via /home/lab-user/.podman/config.json
+WARNING! Your credentials are stored unencrypted in '/home/lab-user/.docker/config.json'.
+Configure a credential helper to remove this warning. See
+https://docs.docker.com/go/credential-store/
+
+logged in via /home/lab-user/.docker/config.json
 ----
 
 . Run the following command in the terminal:
@@ -265,9 +264,9 @@ cosign tree $QUAY_URL/$QUAY_USER/patient-portal-frontend:1.0
 [source,bash,subs="+macros,+attributes"]
 ----
 [lab-user@bastion ~]$ cosign tree $QUAY_URL/$QUAY_USER/patient-portal-frontend:1.0
-📦 Supply Chain Security Related artifacts for an image: quay.apps.cluster-gk5g4.dynamic.redhatworkshops.io/quayadmin/patient-portal-frontend:1.0
-Error: entity not found in registry, error: GET https://quay.apps.cluster-gk5g4.dynamic.redhatworkshops.io/v2/quayadmin/patient-portal-frontend/manifests/0.1: MANIFEST_UNKNOWN: manifest unknown; map[]
-error during command execution: entity not found in registry, error: GET https://quay.apps.cluster-gk5g4.dynamic.redhatworkshops.io/v2/quayadmin/patient-portal-frontend/manifests/0.1: MANIFEST_UNKNOWN: manifest unknown; map[]
+📦 Supply Chain Security Related artifacts for an image: quay.apps.cluster-m2mgb.dyn.redhatworkshops.io/quayadmin/patient-portal-frontend:1.0
+No Supply Chain Security Related Artifacts artifacts found for image quay.apps.cluster-m2mgb.dyn.redhatworkshops.io/quayadmin/patient-portal-frontend:1.0
+, start creating one with simply running$ cosign sign <img>
 ----
 
 . As `cosign` suggests, signing this image is as simple as the following. Run the following command in the terminal:
@@ -352,13 +351,12 @@ cosign tree $QUAY_URL/$QUAY_USER/patient-portal-frontend:1.0
 [.console-output]
 [source,bash,subs="+macros,+attributes"]
 ----
-[lab-user@bastion ~]$ cosign tree $QUAY_URL/$QUAY_USER/patient-portal-frontend:1.0
-📦 Supply Chain Security Related artifacts for an image: quay-l2ktc.apps.cluster-l2ktc.l2ktc.sandbox75.opentlc.com/quayadmin/patient-portal-frontend:1.0
-└── 🔐 Signatures for an image tag: quay-l2ktc.apps.cluster-l2ktc.l2ktc.sandbox75.opentlc.com/quayadmin/ctf-web-to-system:sha256-4530d5e1556631804ce21d37271b0d3f173c350956f2312421db0840fd103c82.sig
-   └── 🍒 sha256:f638a989546b998409719e3eb78c0843d880e0bbb5237afa831da685fee48880
+📦 Supply Chain Security Related artifacts for an image: quay.apps.cluster-m2mgb.dyn.redhatworkshops.io/quayadmin/patient-portal-frontend:1.0
+└── 🔐 Signatures for an image tag: quay.apps.cluster-m2mgb.dyn.redhatworkshops.io/quayadmin/patient-portal-frontend:sha256-22f99a3899129e277d305e187c8d24180c14a050d91455bd3369911f366c4dfb.sig
+   └── 🍒 sha256:c20e35a851fe1f348be662e94f3095edfe85955d1d7b9ee8de2afbfc3c94f7e2
 ----
 +
-> We can also log in to Quay at {quay_console_url}^ using the Quay credentials:
+> We can also log in to Quay[{quay_console_url}^] using the Quay credentials:
 +
 [cols="2,2"]
 |===
@@ -415,7 +413,7 @@ oc get route -n signed-patient-portal
 
 *Let's take a look at it in RHACS.*
 
-. Navigate to Vulnerability Management -> *Results* tab and click on the "Images" button
+. Switch to the *Red Hat Advanced Cluster Security* tab on the right and navigate to *Vulnerability Management* -> *Results* tab. Then click on the *Images* button
 +
 image::vuln-tssc-01.png[link=self, window=blank, width=100%]
 
