@@ -159,6 +159,7 @@ To address this, limit the set of container registries that OpenShift is allowed
 ----
 oc config use-context local-cluster
 oc apply -f - <<EOF
+---
 apiVersion: config.openshift.io/v1
 kind: Image
 metadata:
@@ -249,7 +250,8 @@ Now, our security and operations teams want simplifed workflows and flexibility 
 
 *Procedure*
 
-. First, verify the pods are running in the patient-portal namespace:
+. Switch to the *Bastion* tab on the right.
+. Verify the pods are running in the patient-portal namespace:
 +
 [source,sh,role=execute]
 ----
@@ -285,12 +287,13 @@ apk update
 +
 NOTE: OpenShift enforces strict security policies by default (via the restricted Security Context Constraint or SCC).
 
-. Exit from the container (type exit)and return to the bastion host terminal.
+. Exit from the container (type `exit` or `Ctrl-D`)and return to the bastion host terminal.
 . Then, create a security policy (As code) to enforce runtime protection against package manager execution. Apply the following policy configuration:
 +
 [source,bash,subs="+macros,+attributes",role=execute]
 ----
 oc apply -f - <<EOF
+---
 apiVersion: config.stackrox.io/v1alpha1
 kind: SecurityPolicy
 metadata:
@@ -345,11 +348,16 @@ Next, you will use `tmux` to watch OpenShift events while running the test so yo
 *Procedure*
 
 . Start tmux with two panes:
-
++
 [source,sh,role=execute]
 ----
 tmux new-session \; split-window -v \; attach
 ----
++
+[TIP]
+====
+Should you see some extra characters in one of the tmux panes just delete them.
+====
 
 . Next, run a watch on OpenShift events in the first shell pane:
 +
@@ -421,9 +429,9 @@ NOTE: After a few seconds, you can see the pod is deleted and recreated. In your
 . Exit the tmux session and return to the bastion host terminal:
 .. If you are still inside the container shell, type `exit` to exit the container.
 .. Press `Ctrl+C` to stop the `watch` command running in the tmux pane.
-.. Type `exit` to exit the tmux session and return to the bastion host terminal.
+.. Type `exit` or `Ctrl-D` to exit the tmux session and return to the bastion host terminal.
 
-*Congrats!* You have successfully stopped yourself from downloading malicious packages! However, the security investigative process continues, as you have now raised a flag that must be triaged! you will triage our violations after you look at deploy time policies.
+*Congrats!* You have successfully stopped yourself from downloading malicious packages! However, the security investigative process continues, as you have now raised a flag that must be triaged! You will triage our violations after you look at deploy time policies.
 
 [[report-and-resolve-violations]]
 
@@ -437,8 +445,8 @@ Event audits are crucial not just for security best practices, but also to meet 
 
 *Procedure*
 
-. In RHACS, navigate to the *Violations* page.
-. Filter by the policy violation Policy - Name - r/apk OR by the most recent policy violations. You will see a policy violation that has been enforced.
+. On the right switch back to the *Red Hat Advanced Cluster Security* tab and navigate to the *Violations* page.
+. Filter by the policy violation *Policy*, *Name*, `r/apk` OR by the most recent policy violations (sort by time). You will see a policy violation that has been enforced.
 +
 image::acs-violations-01.png[link=self, window=blank, width=100%, Violations Menu]
 
@@ -453,7 +461,7 @@ If configured properly, each violation record should be pushed to a Security Inf
 +
 NOTE: You must resolve the issue before it will disappear from the Violations page.
 
-. Remove the deployment that violates the policy by click the three dots and selecting "Mark as resolved"
+. Back on the list of violations remove the deployment that violates the policy by click the three dots and selecting "Mark as resolved".
 
 [[workload-vulnerability-management-image-signing]]
 
@@ -467,10 +475,12 @@ Sovereignty over your organization's data and services is fundamentally linked t
 
 === Understanding Your Responsibilities for Software Supply Chain Management
 
-RHACS seperates vulnerability results into  "User workloads", "Platform", and "Nodes" so that your operations teams can understand if a CoreOS node is vulnerable, if OpenShift is vulnerable, or if a user workload is vulnerable and be able to react quickly in a timely manner.
+RHACS seperates vulnerability results into  *User workloads*, *Platform*, and *Nodes* so that your operations teams can understand if a CoreOS node is vulnerable, if OpenShift is vulnerable, or if a user workload is vulnerable and be able to react quickly in a timely manner.
 
+. Navigate to *Vulnerability Management* -> *Results*
++
 image::acs-vulnerability-management-01.png[link=self, window=blank, width=100%, Vulnerability Management]
-
++
 Red Hat always shows you how our software is performing as well.
 
 . Click on the *Platform* tab to see the OpenShift platform related vulnerabilities.
