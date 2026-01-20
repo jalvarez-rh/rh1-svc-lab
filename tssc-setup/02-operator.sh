@@ -756,3 +756,141 @@ while [ $WAIT_COUNT -lt $MAX_WAIT_CSV ]; do
         oc get csv -n openshift-operators -o name 2>/dev/null | head -3 || echo "    No CSVs found yet"
     fi
 done
+
+if [ -z "$CSV_NAME" ]; then
+    echo "Error: Could not find RHTAS Operator CSV after ${MAX_WAIT_CSV} seconds"
+    echo "Please check the subscription status:"
+    oc get subscription trusted-artifact-signer -n openshift-operators -o yaml
+    exit 1
+fi
+
+# Wait for CSV to be in Succeeded phase
+echo "Waiting for CSV to be installed (Succeeded phase)..."
+MAX_WAIT_CSV_INSTALL=600
+WAIT_COUNT=0
+CSV_SUCCEEDED=false
+
+while [ $WAIT_COUNT -lt $MAX_WAIT_CSV_INSTALL ]; do
+    CSV_PHASE=$(oc get csv $CSV_NAME -n openshift-operators -o jsonpath='{.status.phase}' 2>/dev/null || echo "")
+    CSV_CONDITIONS=$(oc get csv $CSV_NAME -n openshift-operators -o jsonpath='{.status.conditions[*].type}' 2>/dev/null || echo "")
+    
+    if [ "$CSV_PHASE" = "Succeeded" ]; then
+        CSV_SUCCEEDED=true
+        echo "✓ CSV is in Succeeded phase"
+        break
+    elif [ "$CSV_PHASE" = "Failed" ]; then
+        echo "Error: CSV installation failed. Phase: $CSV_PHASE"
+        echo "CSV conditions:"
+        oc get csv $CSV_NAME -n openshift-operators -o jsonpath='{.status.conditions[*]}' 2>/dev/null || echo "  No conditions found"
+        exit 1
+    fi
+    
+    sleep 5
+    WAIT_COUNT=$((WAIT_COUNT + 5))
+    if [ $((WAIT_COUNT % 30)) -eq 0 ] && [ $WAIT_COUNT -gt 0 ]; then
+        echo "  Still waiting for CSV installation... (${WAIT_COUNT}s/${MAX_WAIT_CSV_INSTALL}s) - Phase: ${CSV_PHASE:-Unknown}"
+        if [ -n "$CSV_CONDITIONS" ]; then
+            echo "    Conditions: ${CSV_CONDITIONS}"
+        fi
+    fi
+done
+
+if [ "$CSV_SUCCEEDED" = false ]; then
+    echo "Warning: CSV did not reach Succeeded phase within ${MAX_WAIT_CSV_INSTALL} seconds"
+    echo "Current CSV status:"
+    oc get csv $CSV_NAME -n openshift-operators -o yaml | grep -A 10 "status:" || echo "  Could not retrieve CSV status"
+    echo ""
+    echo "Continuing, but operator may not be fully ready..."
+fi
+
+# Wait for CRDs to be installed
+echo ""
+echo "Waiting for RHTAS CRDs to be installed..."
+MAX_WAIT_CRD=300
+WAIT_COUNT=0
+CRDS_INSTALLED=false
+
+REQUIRED_CRDS=(
+    "securesigns.rhtas.redhat.com"
+    "tufs.rhtas.redhat.com"
+    "fulcios.rhtas.redhat.com"
+    "rekors.rhtas.redhat.com"
+)
+
+while [ $WAIT_COUNT -lt $MAX_WAIT_CRD ]; do
+    ALL_CRDS_EXIST=true
+    MISSING_CRDS=""
+    
+    for crd in "${REQUIRED_CRDS[@]}"; do
+        if ! oc get crd "$crd" >/dev/null 2>&1; then
+            ALL_CRDS_EXIST=false
+            MISSING_CRDS="${MISSING_CRDS} ${crd}"
+        fi
+    done
+    
+    if [ "$ALL_CRDS_EXIST" = true ]; then
+        CRDS_INSTALLED=true
+        echo "✓ All required CRDs are installed"
+        break
+    fi
+    
+    sleep 5
+    WAIT_COUNT=$((WAIT_COUNT + 5))
+    if [ $((WAIT_COUNT % 30)) -eq 0 ] && [ $WAIT_COUNT -gt 0 ]; then
+        echo "  Still waiting for CRDs... (${WAIT_COUNT}s/${MAX_WAIT_CRD}s)"
+        echo "    Missing CRDs:${MISSING_CRDS}"
+    fi
+done
+
+if [ "$CRDS_INSTALLED" = false ]; then
+    echo "Error: Required CRDs were not installed within ${MAX_WAIT_CRD} seconds"
+    echo "Missing CRDs:${MISSING_CRDS}"
+    echo ""
+    echo "Please check operator logs:"
+    echo "  oc logs -n openshift-operators -l name=trusted-artifact-signer-operator --tail=50"
+    exit 1
+fi
+
+# Wait for operator pods to be running
+echo ""
+echo "Waiting for RHTAS operator pods to be running..."
+MAX_WAIT_PODS=300
+WAIT_COUNT=0
+OPERATOR_PODS_READY=false
+
+while [ $WAIT_COUNT -lt $MAX_WAIT_PODS ]; do
+    OPERATOR_PODS=$(oc get pods -n openshift-operators -l name=trusted-artifact-signer-operator --field-selector=status.phase=Running --no-headers 2>/dev/null | wc -l || echo "0")
+    
+    if [ "$OPERATOR_PODS" -gt 0 ]; then
+        # Check if pods are actually ready
+        READY_PODS=$(oc get pods -n openshift-operators -l name=trusted-artifact-signer-operator --field-selector=status.phase=Running -o jsonpath='{.items[?(@.status.containerStatuses[0].ready==true)].metadata.name}' 2>/dev/null | wc -w || echo "0")
+        if [ "$READY_PODS" -gt 0 ]; then
+            OPERATOR_PODS_READY=true
+            echo "✓ Operator pods are running and ready"
+            break
+        fi
+    fi
+    
+    sleep 5
+    WAIT_COUNT=$((WAIT_COUNT + 5))
+    if [ $((WAIT_COUNT % 30)) -eq 0 ] && [ $WAIT_COUNT -gt 0 ]; then
+        echo "  Still waiting for operator pods... (${WAIT_COUNT}s/${MAX_WAIT_PODS}s)"
+        echo "    Operator pods status:"
+        oc get pods -n openshift-operators -l name=trusted-artifact-signer-operator 2>/dev/null || echo "    No operator pods found"
+    fi
+done
+
+if [ "$OPERATOR_PODS_READY" = false ]; then
+    echo "Warning: Operator pods are not ready after ${MAX_WAIT_PODS} seconds"
+    echo "Operator pods status:"
+    oc get pods -n openshift-operators -l name=trusted-artifact-signer-operator 2>/dev/null || echo "  No operator pods found"
+    echo ""
+    echo "This may cause issues when deploying RHTAS components. Continuing anyway..."
+fi
+
+echo ""
+echo "✓ RHTAS Operator installation completed"
+echo "  CSV: $CSV_NAME"
+echo "  Phase: $(oc get csv $CSV_NAME -n openshift-operators -o jsonpath='{.status.phase}' 2>/dev/null || echo 'Unknown')"
+echo "  CRDs: Installed"
+echo "  Operator Pods: $(oc get pods -n openshift-operators -l name=trusted-artifact-signer-operator --no-headers 2>/dev/null | wc -l || echo '0') running"

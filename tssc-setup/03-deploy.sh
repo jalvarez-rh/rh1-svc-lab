@@ -47,12 +47,63 @@ if ! oc whoami >/dev/null 2>&1; then
 fi
 log "✓ OpenShift CLI connected as: $(oc whoami)"
 
-# Check if RHTAS Operator is installed
-log "Checking if RHTAS Operator is installed..."
-if ! oc get csv -n openshift-operators | grep -qi "trusted-artifact-signer\|rhtas"; then
-    error "RHTAS Operator not found. Please install it first by running: ./02-operator.sh"
+# Check if RHTAS Operator is installed and ready
+log "Checking if RHTAS Operator is installed and ready..."
+
+# Find CSV
+CSV_NAME=$(oc get csv -n openshift-operators -o jsonpath='{.items[?(@.spec.displayName=="Trusted Artifact Signer Operator")].metadata.name}' 2>/dev/null || echo "")
+if [ -z "$CSV_NAME" ]; then
+    CSV_NAME=$(oc get csv -n openshift-operators -o name 2>/dev/null | grep -i "trusted-artifact-signer\|rhtas" | head -1 | sed 's|clusterserviceversion.operators.coreos.com/||' || echo "")
 fi
-log "✓ RHTAS Operator found"
+
+if [ -z "$CSV_NAME" ]; then
+    error "RHTAS Operator CSV not found. Please install it first by running: ./02-operator.sh"
+fi
+
+# Check CSV phase
+CSV_PHASE=$(oc get csv $CSV_NAME -n openshift-operators -o jsonpath='{.status.phase}' 2>/dev/null || echo "")
+if [ "$CSV_PHASE" != "Succeeded" ]; then
+    warning "RHTAS Operator CSV is not in Succeeded phase. Current phase: ${CSV_PHASE:-Unknown}"
+    warning "The operator may not be fully installed. Continuing anyway..."
+else
+    log "✓ RHTAS Operator CSV is in Succeeded phase"
+fi
+
+# Check if CRDs are installed
+log "Checking if RHTAS CRDs are installed..."
+REQUIRED_CRDS=(
+    "securesigns.rhtas.redhat.com"
+    "tufs.rhtas.redhat.com"
+    "fulcios.rhtas.redhat.com"
+    "rekors.rhtas.redhat.com"
+)
+
+MISSING_CRDS=""
+for crd in "${REQUIRED_CRDS[@]}"; do
+    if ! oc get crd "$crd" >/dev/null 2>&1; then
+        MISSING_CRDS="${MISSING_CRDS} ${crd}"
+    fi
+done
+
+if [ -n "$MISSING_CRDS" ]; then
+    error "Required RHTAS CRDs are missing:${MISSING_CRDS}"
+    error "Please ensure the operator is fully installed by running: ./02-operator.sh"
+fi
+log "✓ All required CRDs are installed"
+
+# Check if operator pods are running
+OPERATOR_PODS=$(oc get pods -n openshift-operators -l name=trusted-artifact-signer-operator --field-selector=status.phase=Running --no-headers 2>/dev/null | wc -l || echo "0")
+if [ "$OPERATOR_PODS" -eq 0 ]; then
+    warning "No RHTAS operator pods found running in openshift-operators namespace"
+    warning "The operator may not be functioning correctly. Continuing anyway..."
+else
+    READY_PODS=$(oc get pods -n openshift-operators -l name=trusted-artifact-signer-operator --field-selector=status.phase=Running -o jsonpath='{.items[?(@.status.containerStatuses[0].ready==true)].metadata.name}' 2>/dev/null | wc -w || echo "0")
+    if [ "$READY_PODS" -gt 0 ]; then
+        log "✓ RHTAS Operator pods are running and ready ($READY_PODS pod(s))"
+    else
+        warning "RHTAS Operator pods exist but are not ready. Continuing anyway..."
+    fi
+fi
 
 # Check if Keycloak is available
 log "Checking if Keycloak is available..."

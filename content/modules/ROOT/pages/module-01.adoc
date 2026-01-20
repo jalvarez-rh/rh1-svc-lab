@@ -143,9 +143,10 @@ image::12-vm-finish.png[link=self, window=blank, width=100%, Create VM]
 
 Feel free to explore the available management screens for VMs, from Metrics to Console to Snapshots and more! 
 
-[TIP]:
-.UI or GitOps—The Choice is Yours!
+[TIP]
 ====
+*UI or GitOps—The Choice is Yours!*
+
 While this lab demonstrates the graphical capabilities of the RHACM console, Virtual Machines in OpenShift are fundamentally Kubernetes objects. You can define your VMs as code using YAML and deploy them using Red Hat OpenShift GitOps (ArgoCD). RHACM supports both workflows: use the UI for quick administration and discovery, or use GitOps for a fully declarative, audit-ready production pipeline. In sovereign cloud environments, GitOps workflows provide version-controlled infrastructure that meets compliance requirements and audit trails for regulatory demonstrations.
 ====
 
@@ -185,29 +186,20 @@ image::13-argo.png[link=self, window=blank, width=100%, ArgoCD Create]
 +
 [source,sh]
 ----
-openshift-gitops
+openshift-gitops-global
 ----
 +
-* *Namespace:* Enter the following:openshift-gitops
-* *ClusterSet:* managed
+* *Namespace:* openshift-gitops
+* *ClusterSet:* global
+
+IMPORTANT: Ensure Cluster set is set to global, otherwise you will have issues in the next steps.
 
 image::03-argoconfig.png[link=self, window=blank, width=100%, ArgoCD Config]
 
 [[deploy-applications-using-openshift-gitops]]
 
-== Deploy Applications Using OpenShift GitOps
-
-In this next step, you'll use Red Hat® OpenShift® GitOps with Argo CD to declaratively deploy the Skupper Patient Demo Application to both your local and hosted control plane (HCP) clusters—showcasing automated, Git-driven multi-cluster consistency while supporting sovereign cloud requirements by keeping patient data securely within approved geographic boundaries.
-
-*Procedure*
-
-. Navigate to *Applications* from the left side menu.
-. Click *Create application*, select *ArgoCD AppicationSet-Push Model*.
-. Enter the following information:
-* *Name:* skupper-patient-demo-world
-* *Argo Server:* openshift-gitops
+. Click *Add*
 . Click *NEXT*
-. Click *Add* then *NEXT*
 
 image::03-app-gitops.png[link=self, window=blank, width=100%, App GitOps]
 
@@ -245,20 +237,17 @@ NOTE: These changes are only required as you will be modifying the application Y
 
 [start=12]
 . Under *Placement* for application deployment, verify that *New Placement* is selected.
-* *Cluster set:* Select nothing. This will deploy the application to all clusters.
+* *Cluster set:* Select *Global*
 . Under *Label expressions* click *add label* and select the following
-* *Label:* location
+* *Label:* name
 * *Operator:* equals any off
-* *Values:* us, emea.
+* *Values:* aws-us, local-cluster
 . Make sure that *Set a limit on the number of clusters selected* is checked 
 . Set the number to 2
-* *Values:* us, on-premise
-+
-. Uncheck "Set a limit on the number of clusters selected"
 
 [IMPORTANT] 
 ====
-Ensure Cluster set is blank and both label values to be present in the placement rule, otherwise you will have issues in the next steps.
+Ensure *Cluster* set is set to Global and the label values to be present in the placement rule, otherwise you will have issues in the next steps.
 ====
 
 image::03-app-placement-us.png[link=self, window=blank, width=100%, ACM App Placement US]
@@ -274,19 +263,10 @@ NOTE: It will take a few minutes to deploy the application, during this time you
 
 [start=15]
 . Navigate back to the application view, find the filter and select *Application Set*
-. Find the *skupper-patient-demo-world* app 
+. Find the *skupper-patient-demo* app 
 . Click on the *Topology Tab* to view and verify that *all of the circles are green*.
 
 image::03-application-topology-git.png[link=self, window=blank, width=100%, Application Topology]
-
-[start=16]
-. Under the topology view, Select the *Route* and click on the *Launch Route URL*
-
-NOTE: This will take you to the Front end for the Patient Portal application, which is now running in both the *aws-us* cluster and the *hcp-emea* Hosted Controlled Plane (HCP) CLuster.
-
-IMPORTANT: If you get a "Application is not available" page change the URL to use http:// and that should fix the issue. 
-
-image::03-application-route-git.png[link=self, window=blank, width=100%, Application Route]
 
 **Congratulations! **
 

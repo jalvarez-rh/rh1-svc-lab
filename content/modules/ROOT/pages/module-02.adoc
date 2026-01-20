@@ -117,13 +117,15 @@ We will not add a delivery destination so we will skip this step. However you ca
 
 image::assurance-05.png[link=self, window=blank, width=100%]
 
-You should see the new schedule in the list and it will be performing it's first scan. If you click the 3 dots on the right side of the schedule you can trigger a manual scan, download the report or delete the schedule.
+
+TIP: You should see the new schedule in the list and it will be performing it's first scan. If you click the 3 dots on the right side of the schedule you can trigger a manual scan, download the report or delete the schedule.
 
 image::assurance-06.png[link=self, window=blank, width=100%]
 
-[start=11]
 
-.Head over to the OpenShift coverage section where you can view all of the details from the scan.
+[start=11]
+. Head over to the OpenShift coverage section where you can view all of the details from the scan.
+
 
 image::assurance-07.png[link=self, window=blank, width=100%]
 
@@ -163,7 +165,7 @@ To address this, limit the set of container registries that OpenShift is allowed
 [start=5]
 . Create the Image Configuration YAML by copying and pasting the following into the bastion host terminal.
 
-[source,bash,subs="+macros,+attributes"]
+[source,bash,subs="+macros,+attributes",role=execute]
 ----
 oc config use-context local-cluster
 oc apply -f - <<EOF
@@ -196,7 +198,7 @@ Here are the notes on the allowed registries policy:
 [start=6]
 . Check that your changes have been accepted:
 
-[source,bash,subs="+macros,+attributes"]
+[source,bash,subs="+macros,+attributes",role=execute]
 ----
 oc get image.config.openshift.io/cluster -o yaml | grep allowedRegistries -A 10
 ----
@@ -237,8 +239,6 @@ status:
 ====
 Changes to Image configuration may take a few minutes to propagate in OpenShift. If the compliance check still fails after rescanning, wait a few minutes and run the scan again.
 ====
-
-Here are the key points simplified into 5 sentences:
 
 Updating your allowed image registries is one of the fastest and most effective ways to improve security and compliance in OpenShift. Other quick hardening steps include enabling audit log forwarding and activating host node auditing with Linux auditd. These security configurations can be applied consistently across the entire cluster using the MachineConfig Operator. 
 
@@ -302,10 +302,13 @@ If you see */home/fritz $* you've confirmed you have a shell and access to the f
 apk update
 ----
 
-[start=5]
-. OpenShift enforces strict security policies by default (via the restricted Security Context Constraint or SCC). Now, create a security policy to enforce runtime protection against package manager execution. Apply the following policy configuration:
+NOTE: OpenShift enforces strict security policies by default (via the restricted Security Context Constraint or SCC). 
 
-[source,bash,subs="+macros,+attributes"]
+[start=5]
+. Exit from the container (type exit)and return to the bastion host terminal.
+. Then, create a security policy (As code) to enforce runtime protection against package manager execution. Apply the following policy configuration:
+
+[source,bash,subs="+macros,+attributes",role=execute]
 ----
 oc apply -f - <<EOF
 apiVersion: config.stackrox.io/v1alpha1
@@ -354,7 +357,6 @@ spec:
   isDefault: false
 EOF
 ----
-
 
 === Testing the Runtime Policy
 
@@ -445,7 +447,11 @@ NOTE: After a few seconds, you can see the pod is deleted and recreated. In your
 
 [start=7]
 
-. Type exit in the terminal, use ctrl+c to stop the 'watch' command, and type exit one more time to get back to the default terminal.
+. Exit the tmux session and return to the bastion host terminal:
++
+.. If you are still inside the container shell, type `exit` to exit the container.
+.. Press `Ctrl+C` to stop the `watch` command running in the tmux pane.
+.. Type `exit` to exit the tmux session and return to the bastion host terminal.
 
 Congrats! You have successfully stopped yourself from downloading malicious packages! However, the security investigative process continues, as you have now raised a flag that must be triaged! you will triage our violations after you look at deploy time policies.
 
@@ -475,7 +481,7 @@ image::acs-violations-02.png[link=self, window=blank, width=100%, Violations Men
 If configured properly, each violation record should be pushed to a Security Information and Event Management (SIEM) application and is available to be retrieved via the API. The forensic data shown in the UI is recorded, including the timestamp, process user IDs, process arguments, process ancestors, and enforcement action.
 ====
 
-IMPORTANT: You must resolve the issue before it will disappear from the Violations page.
+NOTE: You must resolve the issue before it will disappear from the Violations page.
 
 [start=4]
 . Remove the deployment that violates the policy by click the three dots and selecting "Mark as resolved"
@@ -503,9 +509,7 @@ Red Hat always shows you how our software is performing as well.
 
 image::acs-vulnerability-management-02.png[link=self, window=100%, width=100%, Vulnerability Management]
 
-If you love vulnerability tracking you can read more about it here: https://access.redhat.com/security/updates/classification
-
-But we wanted to show you that all of Red Hat's software is signed, attested, and reaching compliance with SLSA Level 3 standards (see https://slsa.dev/spec/v1.0/levels#build-l3-hardened-builds[SLSA Level 3 compliance details]).
+If you love vulnerability tracking you can read more about it here - https://access.redhat.com/security/updates/classification. But we wanted to show you that all of Red Hat's software is signed, attested, and reaching compliance with SLSA Level 3 standards (see https://slsa.dev/spec/v1.0/levels#build-l3-hardened-builds[SLSA Level 3 compliance details]).
 
 [start=2]
 . Click on images button on the platform tab and notivce that Red Hat images are signed and attested.
