@@ -33,7 +33,7 @@ SCRIPTS=(
     "01-central-configuration.sh"
     "02-compliance-operator-install.sh"
     "03-deploy-applications.sh"
-    "04-configure-rhacs-settings.sh"
+    # "04-configure-rhacs-settings.sh"
     # "05-setup-perses-monitoring.sh"
     # "06-scs-second-cluster.sh"
     # "07-compliance-operator-second-cluster.sh"
