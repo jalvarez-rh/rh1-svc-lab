@@ -43,6 +43,19 @@ if ! oc whoami &>/dev/null; then
 fi
 log "✓ OpenShift CLI connected as: $(oc whoami)"
 
+# Check current context and switch to local-cluster if needed
+CURRENT_CONTEXT=$(oc config current-context 2>/dev/null || echo "")
+if [ "$CURRENT_CONTEXT" != "local-cluster" ]; then
+    log "Current context is '$CURRENT_CONTEXT'. Switching to 'local-cluster'..."
+    if oc config use-context local-cluster >/dev/null 2>&1; then
+        log "✓ Switched to 'local-cluster' context"
+    else
+        error "Failed to switch to 'local-cluster' context. Please ensure the context exists."
+    fi
+else
+    log "✓ Already in 'local-cluster' context"
+fi
+
 # Find Central CR name
 CENTRAL_NAME=$(oc get central -n "$CENTRAL_NAMESPACE" -o jsonpath='{.items[0].metadata.name}' 2>/dev/null || echo "")
 if [ -z "$CENTRAL_NAME" ]; then

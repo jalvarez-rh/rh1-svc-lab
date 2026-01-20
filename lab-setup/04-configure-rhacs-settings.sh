@@ -33,6 +33,19 @@ trap 'error "Command failed: $(cat <<< "$BASH_COMMAND")"' ERR
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(dirname "$SCRIPT_DIR")"
 
+# Check current context and switch to local-cluster if needed
+CURRENT_CONTEXT=$(oc config current-context 2>/dev/null || echo "")
+if [ "$CURRENT_CONTEXT" != "local-cluster" ]; then
+    log "Current context is '$CURRENT_CONTEXT'. Switching to 'local-cluster'..."
+    if oc config use-context local-cluster >/dev/null 2>&1; then
+        log "✓ Switched to 'local-cluster' context"
+    else
+        error "Failed to switch to 'local-cluster' context. Please ensure the context exists."
+    fi
+else
+    log "✓ Already in 'local-cluster' context"
+fi
+
 # Detect RHACS namespace - check stackrox first (newer installations), then rhacs-operator (older installations)
 log "Detecting RHACS namespace..."
 RHACS_NAMESPACE=""

@@ -32,6 +32,19 @@ error() {
 # Trap to show error details on exit
 trap 'error "Command failed: $(cat <<< "$BASH_COMMAND")"' ERR
 
+# Check current context and switch to local-cluster if needed
+CURRENT_CONTEXT=$(oc config current-context 2>/dev/null || echo "")
+if [ "$CURRENT_CONTEXT" != "local-cluster" ]; then
+    log "Current context is '$CURRENT_CONTEXT'. Switching to 'local-cluster'..."
+    if oc config use-context local-cluster >/dev/null 2>&1; then
+        log "✓ Switched to 'local-cluster' context"
+    else
+        error "Failed to switch to 'local-cluster' context. Please ensure the context exists."
+    fi
+else
+    log "✓ Already in 'local-cluster' context"
+fi
+
 # Function to save variable to ~/.bashrc
 save_to_bashrc() {
     local var_name="$1"

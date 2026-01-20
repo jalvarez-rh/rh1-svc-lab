@@ -75,28 +75,25 @@ oc config get-contexts
 
 [source,sh]
 ----
-[lab-user@bastion ~]$ oc config  get-contexts
+[lab-user@bastion ~]$ oc config get-contexts
 CURRENT   NAME            CLUSTER            AUTHINFO                                                  
 *         aws-us          api-ocp-...:6443   kube:admin/...:6443   
           local-cluster   ocp                admin  
 ----
 
-Now you are able to switch between contexts as needed
+Now you are able to switch between contexts as needed.
 
 [source,sh,role=execute]
 ----
-# Switch to AWS cluster
-oc config use-context aws-us
-
-# Switch to local cluster
+# Switch back to local cluster
 oc config use-context local-cluster
 ----
 
 IMPORTANT: You will need to switch between contexts as needed throughout the lab. Please ensure you have access to both clusters before proceeding. Otherwise contact the instructor.
 
-==== roxctl CLI and RHACS setup
+==== Set Up the Lab While You Work on Module 1
 
-Before proceeding with the lab modules, you'll need to install the roxctl CLI tool and verify connectivity to RHACS.
+You're going to run the following setup scripts for module 2,3 and 4 while you work on module 1.
 
 *Procedure*
 
@@ -120,13 +117,15 @@ source ~/.bashrc
 [source,sh,role=execute]
 ----
 cd ~ && git clone https://github.com/jalvarez-rh/rh1-svc-lab.git || (cd ~/rh1-svc-lab && git pull origin main)
-cd ~/rh1-svc-lab/lab-setup
-./run-all-setup.sh
+cd ~/rh1-svc-lab
+./lab-setup/run-all-setup.sh
+./tssc-setup/run-all-setup.sh
+./ai-setup/run-all-setup.sh
 ----
 
-[TIP]
+[NOTE]
 ====
-You can make sure you have access to the RHACS Central Service and OpenShift Console while you're waiting for the setup to complete. 
+You'll run the same script at the beginning of each module to verify that everything is working as expected.
 ====
 
 === OpenShift Console Access

@@ -33,10 +33,11 @@ SCRIPTS=(
     "01-central-configuration.sh"
     "02-compliance-operator-install.sh"
     "03-deploy-applications.sh"
-    # "04-configure-rhacs-settings.sh"
+    "04-configure-rhacs-settings.sh"
     # "05-setup-perses-monitoring.sh"
     # "06-scs-second-cluster.sh"
     # "07-compliance-operator-second-cluster.sh"
+    "08-deploy-applications-us.sh"
 )
 
 log "========================================================="
@@ -65,6 +66,9 @@ TOTAL=${#SCRIPTS[@]}
 CURRENT=0
 FAILED_SCRIPTS=()
 
+# Store original context
+ORIGINAL_CONTEXT=$(oc config current-context 2>/dev/null || echo "")
+
 for idx in "${!SCRIPTS[@]}"; do
     script="${SCRIPTS[$idx]}"
     CURRENT=$((idx + 1))
@@ -72,6 +76,17 @@ for idx in "${!SCRIPTS[@]}"; do
     log "========================================================="
     log "Executing script $CURRENT/$TOTAL: $script"
     log "========================================================="
+    
+    # Scripts 00-04 should run in local-cluster context
+    # Script 08 should run in aws-us context (handled by script itself)
+    if [[ "$script" =~ ^0[0-4]- ]]; then
+        log "Ensuring local-cluster context for script $script..."
+        if oc config use-context local-cluster >/dev/null 2>&1; then
+            log "✓ Switched to local-cluster context"
+        else
+            warning "Failed to switch to local-cluster context. Script will use current context."
+        fi
+    fi
     
     # Make sure script is executable
     chmod +x "$SCRIPT_DIR/$script"
@@ -87,6 +102,12 @@ for idx in "${!SCRIPTS[@]}"; do
     
     log ""
 done
+
+# Restore original context if it was set
+if [ -n "$ORIGINAL_CONTEXT" ]; then
+    log "Restoring original context: $ORIGINAL_CONTEXT"
+    oc config use-context "$ORIGINAL_CONTEXT" >/dev/null 2>&1 || true
+fi
 
 # Summary
 log "========================================================="

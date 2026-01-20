@@ -110,24 +110,11 @@ log "Deploying applications from $TUTORIAL_HOME..."
 # Store current context
 CURRENT_CONTEXT=$(oc config current-context 2>/dev/null || echo "")
 
-# Ensure we're in local-cluster context
-log "Ensuring we're in local-cluster context..."
-if [ "$CURRENT_CONTEXT" != "local-cluster" ]; then
-    log "Current context is '$CURRENT_CONTEXT'. Switching to 'local-cluster'..."
-    if oc config use-context local-cluster >/dev/null 2>&1; then
-        log "✓ Switched to 'local-cluster' context"
-    else
-        error "Failed to switch to 'local-cluster' context. Please ensure the context exists."
-    fi
-else
-    log "✓ Already in 'local-cluster' context"
-fi
-
-# Deploy to local-cluster only
-deploy_to_cluster "local-cluster" "local-cluster"
+# Deploy to aws-us cluster only
+deploy_to_cluster "aws-us" "aws-us"
 
 # Restore original context if it was set and different
-if [ -n "$CURRENT_CONTEXT" ] && [ "$CURRENT_CONTEXT" != "local-cluster" ]; then
+if [ -n "$CURRENT_CONTEXT" ] && [ "$CURRENT_CONTEXT" != "aws-us" ]; then
     log ""
     log "Restoring original context: $CURRENT_CONTEXT"
     oc config use-context "$CURRENT_CONTEXT" >/dev/null 2>&1 || true
@@ -139,10 +126,10 @@ log "========================================================="
 log "Application deployment completed!"
 log "========================================================="
 log "Applications have been deployed to:"
-log "  - local-cluster"
+log "  - aws-us"
 log ""
 log "Applications will start in the background."
 log "You can check their status with:"
 log "  oc get pods -A (on current cluster)"
-log "  oc config use-context local-cluster && oc get pods -A (for local-cluster)"
+log "  oc config use-context aws-us && oc get pods -A (for aws-us)"
 log ""
