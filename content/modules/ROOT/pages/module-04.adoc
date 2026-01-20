@@ -24,7 +24,7 @@ In this module, you will install Red Hat OpenShift AI and configure a DataScienc
 
 == Installing Red Hat OpenShift AI
 
-Before data scientists can begin working with OpenShift, we need to install it. 
+Before data scientists can begin working with OpenShift, we need to install it.
 
 [[install-openshift-ai-operator]]
 
@@ -45,9 +45,9 @@ cd ~/rh1-svc-lab/ai-setup && ./setup.sh
 +
 [source,sh]
 ----
-[SETUP] 
+[SETUP]
 [SETUP] Retrieving OpenShift AI access information...
-[SETUP] 
+[SETUP]
 [SETUP] =========================================================
 [SETUP] OpenShift AI Access Information
 [SETUP] =========================================================
@@ -55,7 +55,7 @@ cd ~/rh1-svc-lab/ai-setup && ./setup.sh
 [SETUP] Username: admin
 [SETUP] Password: OpenShift admin password
 [SETUP] =========================================================
-[SETUP] 
+[SETUP]
 ----
 
 [start=2]
@@ -73,7 +73,7 @@ At the end of the script output, note the access information that will be displa
 ----
 oc get datasciencecluster default-dsc -n redhat-ods-applications
 oc get route rhods-dashboard -n redhat-ods-applications 2>/dev/null || echo "Route not yet available"
-oc get pods -n redhat-ods-applications | grep -i dashboard 
+oc get pods -n redhat-ods-applications | grep -i dashboard
 ----
 
 You should see:

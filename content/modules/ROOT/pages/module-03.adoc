@@ -14,15 +14,15 @@ The goal of this lab is to learn about the features from the Trusted Software Su
 
 First, we need to set up the applications for this module.
 
-TIP: Run the following command to ensure the environment is up to date and study up on the software supply chain concepts while it's running.
-
+. Switch to the *Bastion* tab on the right and run the following command to ensure the environment is up to date and study up on the software supply chain concepts while it's running.
++
 [source,sh,subs="attributes",role=execute]
 ----
 cd ~/rh1-svc-lab/tssc-setup && ./setup.sh
 curl -fsSL https://raw.githubusercontent.com/redhat-tssc-tmm/security-roadshow/main/cosign_gitsign_installer.sh | bash
 sudo dnf -y install podman
 ----
-
++
 **OUTPUT**
 [.console-output]
 [source,bash,subs="+macros,+attributes"]
@@ -36,9 +36,8 @@ env:
          SIGSTORE_OIDC_ISSUER=https://keycloak-rhsso.apps.cluster-gk5g4.dynamic.redhatworkshops.io/auth/realms/openshift
 parsed config:
 ----
-
-
-IMPORTANT: If you have issues make sure to as for help from a proctor. 
++
+IMPORTANT: If you have issues make sure to as for help from a proctor.
 
 [[trusted-artifact-signer]]
 
@@ -58,7 +57,7 @@ In sovereign cloud environments, maintaining control over your software supply c
 . *Modern Identity Integration*: Sigstore aligns with contemporary authentication mechanisms (e.g., OAuth, OpenID Connect), making it easier to tie signatures to identities within your organization's identity management systems—critical for maintaining sovereign control.
 . *Automation*: Sigstore fits seamlessly into automated CI/CD workflows, which are critical in modern software development pipelines. This enables consistent enforcement of signing policies across your sovereign infrastructure without manual intervention.
 
-==== Advantages of Sigstore / Trusted Artifact Signer over GPG
+=== Advantages of Sigstore / Trusted Artifact Signer over GPG
 
 Sigstore is designed to address the pain points and limitations of GPG in the context of modern software development, focusing on ease of use, transparency, and security for signing and verifying software artifacts. For sovereign cloud environments, Trusted Artifact Signer provides the additional benefit of enabling complete operational control over your signing infrastructure.
 
@@ -77,7 +76,7 @@ Sigstore is designed to address the pain points and limitations of GPG in the co
 We're going to use our patient portal frontend application to demonstrate the signing and verification process. First, we need to rebuild the application and push it to our local private registry. We sped up the process into two commands for you
 
 . Run the following commands in the terminal to retrieve your Quay user and registry URL using oc:
-
++
 [source,sh,subs="attributes",role=execute]
 ----
 QUAY_CONSOLE_URL="{quay_console_url}"
@@ -92,9 +91,8 @@ echo "QUAY_USER: $QUAY_USER"
 echo "QUAY_URL: $QUAY_URL"
 ----
 
-[start=2]
 . Run the following commands in the terminal to retrieve your Quay user and registry URL using oc:
-
++
 [source,sh,subs="attributes",role=execute]
 ----
 cd ~/
@@ -105,7 +103,7 @@ podman login https://$QUAY_URL -u $QUAY_USER -p {quay_admin_password}
 podman push $QUAY_URL/$QUAY_USER/patient-portal-frontend:1.0
 ----
 
-You now have a container image in the local Quay registry. 
+You now have a container image in the local Quay registry.
 
 [[signing-our-software]]
 
@@ -115,14 +113,13 @@ For signing and verification of container images, we'll be using the `cosign` CL
 
 `cosign` can easily be used in any CI/CD toolchain as we use it here and handles all the communication with the Sigstore / Trusted Artifact Signer services that request certificates, handle the OIDC authentication, store info in the transparency log (Rekor), etc.
 
-[start=2]
 . Run the following command in the terminal:
-
++
 [source,sh,subs="attributes",role=execute]
 ----
 cosign version
 ----
-
++
 [.console-output]
 [source,bash,subs="+macros,+attributes"]
 ----
@@ -144,9 +141,8 @@ Compiler:      gc
 Platform:      linux/amd64
 ----
 
-[start=3]
 . Run the following command in the terminal:
-
++
 [source,sh,subs="attributes",role=execute]
 ----
 export TUF_URL=$(oc get tuf -o jsonpath='{.items[0].status.url}' -n trusted-artifact-signer)
@@ -166,7 +162,7 @@ export REKOR_REKOR_SERVER=$COSIGN_REKOR_URL
 # to verify URL endpoints have been set
 env | grep URL
 ----
-
++
 [.console-output]
 [source,bash,subs="+macros,+attributes"]
 ----
@@ -181,22 +177,21 @@ SIGSTORE_FULCIO_URL=https://fulcio-server-trusted-artifact-signer.apps.cluster-8
 COSIGN_REKOR_URL=https://rekor-server-trusted-artifact-signer.apps.cluster-88k5s.88k5s.sandbox139.opentlc.com
 [lab-user@bastion ~]$
 ----
-
++
 NOTE: The reason we define multiple variables with the same values is due to the long history of the upstream Sigstore project. Some tools (like cosign and gitsign) use different environment variables for the same purpose. For various reasons, including open source principles and compatibility, we are not creating a specialized Red Hat version with simplified environment parameters. These variables will be maintained in both the upstream project and the Red Hat enterprise-ready version.
 
-[start=4]
 . As the last step, initialize `cosign` so it knows who to talk to. Run the following command in the terminal
-
++
 [source,sh,subs="attributes",role=execute]
 ----
 cosign initialize
 ----
-
++
 [.console-output]
 [source,bash,subs="+macros,+attributes"]
 ----
 [lab-user@bastion ~]$ cosign initialize
-Root status: 
+Root status:
  {
         "local": "/home/lab-user/.sigstore/root",
         "remote": "https://tuf-trusted-artifact-signer.apps.cluster-l2ktc.l2ktc.sandbox75.opentlc.com",
@@ -245,12 +240,12 @@ In sovereign cloud environments, cryptographic signing ensures that only approve
 *Procedure*
 
 . Run the following command in the terminal:
-
++
 [source,sh,subs="attributes",role=execute]
 ----
 cosign login $QUAY_URL -u $QUAY_USER -p {quay_admin_password}
 ----
-
++
 [.console-output]
 [source,bash,subs="+macros,+attributes"]
 ----
@@ -258,14 +253,13 @@ cosign login $QUAY_URL -u $QUAY_USER -p {quay_admin_password}
 auth.go:203: logged in via /home/lab-user/.podman/config.json
 ----
 
-[start=2]
 . Run the following command in the terminal:
-
++
 [source,sh,subs="attributes",role=execute]
 ----
 cosign tree $QUAY_URL/$QUAY_USER/patient-portal-frontend:1.0
 ----
-
++
 [.console-output]
 [source,bash,subs="+macros,+attributes"]
 ----
@@ -275,14 +269,13 @@ Error: entity not found in registry, error: GET https://quay.apps.cluster-gk5g4.
 error during command execution: entity not found in registry, error: GET https://quay.apps.cluster-gk5g4.dynamic.redhatworkshops.io/v2/quayadmin/patient-portal-frontend/manifests/0.1: MANIFEST_UNKNOWN: manifest unknown; map[]
 ----
 
-[start=3]
 . As `cosign` suggests, signing this image is as simple as the following. Run the following command in the terminal:
-
++
 [source,sh,subs="attributes",role=execute]
 ----
 cosign sign $QUAY_URL/$QUAY_USER/patient-portal-frontend:1.0
 ----
-
++
 [.console-output]
 [source,bash,subs="+macros,+attributes"]
 ----
@@ -300,37 +293,34 @@ Go to the following link in a browser:
 
          https://keycloak-rhsso.apps.cluster-l2ktc.l2ktc.sandbox75.opentlc.com/auth/realms/openshift/protocol/openid-connect/auth?access_type=online&client_id=trusted-artifact-signer&code_challenge=JHFlN4cLdRCGJWjkGf1S1nKYO9Nc-bnC6bhwkZXoS3M&code_challenge_method=S256&nonce=2qDckQCVBACjnviJ8bdxIWwPh1r&redirect_uri=urn%3Aietf%3Awg%3Aoauth%3A2.0%3Aoob&response_type=code&scope=openid+email&state=2qDckRnXkzmspwUHxF3f6K3NX67
 Enter verification code:
-
 ----
-
++
 NOTE: As mentioned above, the signing process ties an identity (an OIDC identity, to be specific) to the signature. The signing certificate is issued on demand, but *only issued if an OIDC identity proof can be established*.
-
-In this example, the "OAuth2 browser-based flow" is used. In other words, you will authenticate to the OIDC system by user and password via a browser login. 
-
++
+In this example, the "OAuth2 browser-based flow" is used. In other words, you will authenticate to the OIDC system by user and password via a browser login.
++
 TIP: As an alternative to the browser flow, you can use direct access grants (password grant) to get an OIDC token first, then pass it to cosign with `--identity-token=$OIDC_TOKEN`. See the example later in this module for details.
 
-[start=4]
 . Copy the URL and paste it in a new browser window or tab and log in—use one of the following user credentials:
-
++
 [cols="2,2"]
 |===
-| *Username:* | *jdoe@redhat.com* 
-| *Password:* | *secure* 
+| *Username:* | *jdoe@redhat.com*
+| *Password:* | *secure*
 |===
-
++
 NOTE: You can use any of the created users (jdoe, user1, or admin) to sign images. The username can be entered as the username (e.g., `user1`) or email address (e.g., `user1@demo.redhat.com`).
-
++
 image::11-signing-sso-login.png[keycloak login]
-
++
 image::11-signing-successcode.png[copy the success code]
-
++
 IMPORTANT: Make sure to copy the whole code, as it is longer than the text box.
-
++
 NOTE: You may have to run `rm -rf ~/.sigstore` if you get a cache error.
 
-[start=5]
 . Enter verification code:
-
++
 [.console-output]
 [source,bash,subs="+macros,+attributes"]
 ----
@@ -346,21 +336,18 @@ WARNING: Image reference quay-l2ktc.apps.cluster-l2ktc.l2ktc.sandbox75.opentlc.c
 tlog entry created with index: 1
 Pushing signature to: quay-l2ktc.apps.cluster-l2ktc.l2ktc.sandbox75.opentlc.com/quayadmin/ctf-web-to-system
 ----
-
++
 *SUCCESS!*
-
++
 With one command, you have signed the container image and pushed the container image to the registry. Furthermore, the signing event and its metadata have been recorded in the *Rekor* transparency log: `tlog entry created with index: 1`.
 
-> To check, we can again use `cosign tree`.
-
-[start=6]
-. Run the following command in the terminal:
-
+. To check, we can again use `cosign tree`. Run the following command in the terminal:
++
 [source,sh,subs="attributes",role=execute]
 ----
 cosign tree $QUAY_URL/$QUAY_USER/patient-portal-frontend:1.0
 ----
-
++
 [.console-output]
 [source,bash,subs="+macros,+attributes"]
 ----
@@ -369,22 +356,21 @@ cosign tree $QUAY_URL/$QUAY_USER/patient-portal-frontend:1.0
 └── 🔐 Signatures for an image tag: quay-l2ktc.apps.cluster-l2ktc.l2ktc.sandbox75.opentlc.com/quayadmin/ctf-web-to-system:sha256-4530d5e1556631804ce21d37271b0d3f173c350956f2312421db0840fd103c82.sig
    └── 🍒 sha256:f638a989546b998409719e3eb78c0843d880e0bbb5237afa831da685fee48880
 ----
-
++
 > We can also log in to Quay at {quay_console_url} using the Quay credentials:
-
++
 [cols="2,2"]
 |===
 | *Quay Console Username:* | {quay_admin_username}
 | *Quay Console Password:* | {quay_admin_password}
 |===
-
++
 Quay recognizes the `cosign` image signature, too!
-
++
 image::11-quay-signed-image.png[link=self, window=blank, width=100%]
 
-[start=7]
 . While you're in Quay, make the repo public so we can deploy the application without requiring credentials. Click on settings and then make the repository public.
-
++
 image::12-quay-signed-image.png.png[link=self, window=blank, width=100%]
 
 You might be wondering how a pipeline task authenticates itself, since it can't open a browser to log in. Trusted Artifact Signer / Sigstore (including the cosign tool) doesn't authenticate the user directly. Instead, it relies on the OIDC system to authenticate the request before issuing a signing certificate. This allows the full flexibility of OIDC systems for authentication.
@@ -393,13 +379,12 @@ For example, GitHub Actions and GitLab CI/CD can pass the OIDC identity of the p
 
 In general, continuous integration (CI) systems focus on providing the identity of the build or deployment environment rather than the personal identity of the user who triggered it. This helps maintain least privilege and ensures reproducibility. However, depending on your CI setup and requirements, you can leverage the flexibility of OIDC to meet your specific needs.
 
-
-=== Re Deploy the Patient Portal Frontend Application 
+=== Re Deploy the Patient Portal Frontend Application
 
 Since our other skupper-patient-demo application is deployed to the patient-portal namespace let's quickly deploy it to the signed-patient-portal namespace.
 
 . Run the following command in the terminal:
-
++
 [source,sh,subs="attributes",role=execute]
 ----
 oc create namespace signed-patient-portal
@@ -410,9 +395,8 @@ sed -i "s|namespace: patient-portal|namespace: signed-patient-portal|g" *.yml
 grep -r "namespace: signed-patient-portal" *.yml
 ----
 
-[start=2]
 . Apply the application manifests:
-
++
 [source,sh,subs="attributes",role=execute]
 ----
 oc apply -f database.yml -n signed-patient-portal
@@ -420,9 +404,8 @@ oc apply -f frontend.yml -n signed-patient-portal
 oc apply -f payment.yml -n signed-patient-portal
 ----
 
-[start=3]
 . Verify the application is deployed:
-
++
 [source,sh,subs="attributes",role=execute]
 ----
 oc get pods -n signed-patient-portal
@@ -432,35 +415,33 @@ oc get route -n signed-patient-portal
 *Let's take a look at it in RHACS.*
 
 . Navigate to Vulnerability Management -> *Results* tab and click on the "Images" button
-
++
 image::vuln-tssc-01.png[link=self, window=blank, width=100%]
 
-use the drop downs to select for the signed-patient-portal namespace and the patient-portal-frontend image.
-
+. Use the drop downs to select for the signed-patient-portal namespace and the patient-portal-frontend image.
++
 image::vuln-tssc-02.png[link=self, window=blank, width=100%]
++
+You will see that the image is signed and the signature is valid.
 
-You will see that the image is signed and the signature is valid. 
-
-[start=4]
-. Scan the signed image using roxctl to check for vulnerabilities:
-
+[ Scan the signed image using roxctl to check for vulnerabilities:
++
 [source,sh,subs="attributes",role=execute]
 ----
 roxctl image scan --image $QUAY_URL/$QUAY_USER/patient-portal-frontend:1.0
 ----
-
++
 [.console-output]
 [source,bash,subs="+macros,+attributes"]
 ----
 [lab-user@bastion ~]$ roxctl image scan --image $QUAY_URL/$QUAY_USER/
 ----
-
++
 image::vuln-tssc-03.png[link=self, window=blank, width=100%]
-
 
 [[next-steps]]
 
-== The Next Steps 
+== The Next Steps
 
 We didn't have time to cover the following topics in this lab, but they are important to consider for your own environment.
 
@@ -483,13 +464,13 @@ Regulations like U.S. EO 14028 (mandatory SBOMs for federal vendors), EU Cyber R
 
 == Module Cleanup
 
-Once you're done with this module, kindly execute the following command to reset the content, variables, repositories, etc. for the next user:
+Once you're done with this module, please execute the following command to reset the content, variables, repositories, etc. for the next user:
 
 [source,sh,subs="attributes",role=execute]
 ----
 curl -fsSL https://raw.githubusercontent.com/redhat-tssc-tmm/security-roadshow/main/cleanup_tssc-module.sh | bash -s {quay_admin_username} {quay_admin_password}
 ----
 
-You're crushing it!
+*You're crushing it!*
 
 image::https://media.giphy.com/media/v1.Y2lkPWVjZjA1ZTQ3MzBvNTN6eWR3MHF0eWNoZTI0eTVvMmRrZTMzaW4xbGIwOXJhZTJwMCZlcD12MV9naWZzX3NlYXJjaCZjdD1n/kAUtsLfsEfqaJRwe80/giphy.gif[width=400, Celebration!]

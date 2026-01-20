@@ -44,7 +44,7 @@ image::104-aws-credentials.png[link=self, window=blank, width=100%, AWS Credenti
 . Leave the *Infrastructure provider credential* as *hcp*.
 . Name your cluster *hcp-emea*, and verify that is on the *clusters* space for the hosted cluster namespace
 . Select *managed* for the Cluster Set
-. Next, select the release image *OpenShift 4.19.21* (or whatever the current 4.19 release image is). 
+. Next, select the release image *OpenShift 4.19.21* (or whatever the current 4.19 release image is).
 . Select *Single replica* for both the *Controller availability policy* and the *Infrastructure availability policy*.
 +
 [NOTE]
@@ -127,7 +127,7 @@ rhel9-lab-vm
 ----
 +
 [NOTE]
-==== 
+====
 Please notice all of the available options to configure the VM with, these will change depending on your operating system
 ====
 +
@@ -137,7 +137,7 @@ Please notice all of the available options to configure the VM with, these will 
 +
 image::12-vm-finish.png[link=self, window=blank, width=100%, Create VM]
 
-Feel free to explore the available management screens for VMs, from Metrics to Console to Snapshots and more! 
+Feel free to explore the available management screens for VMs, from Metrics to Console to Snapshots and more!
 
 [TIP]
 ====
@@ -168,7 +168,7 @@ In this next step, you'll use Red Hat® OpenShift® GitOps with Argo CD to decla
 . Enter the following information:
 * *Name:* `skupper-patient-demo`
 
-. Open the *Argo server* dropdown and select *Add Argo Server* 
+. Open the *Argo server* dropdown and select *Add Argo Server*
 +
 image::13-argo.png[link=self, window=blank, width=100%, ArgoCD Create]
 +
@@ -212,7 +212,7 @@ patient-portal
 +
 image::03-app-gitops-2.png[link=self, window=blank, width=100%, App ACM GitOps]
 
-. Under *Sync Policy* uncheck *Automaticaly sync when cluster state changes* and check *Replace resources instead of applying changes from the source repository* 
+. Under *Sync Policy* uncheck *Automaticaly sync when cluster state changes* and check *Replace resources instead of applying changes from the source repository*
 +
 image::03-app-gitops-3.png[link=self, window=blank, width=100%, App ACM GitOps]
 +
@@ -225,10 +225,10 @@ NOTE: These changes are only required as you will be modifying the application Y
 * *Label:* name
 * *Operator:* equals any off
 * *Values:* aws-us, local-cluster
-. Make sure that *Set a limit on the number of clusters selected* is checked 
+. Make sure that *Set a limit on the number of clusters selected* is checked
 . Set the number to 2
 +
-[IMPORTANT] 
+[IMPORTANT]
 ====
 Ensure *Cluster* set is set to Global and the label values to be present in the placement rule, otherwise you will have issues in the next steps.
 ====
@@ -244,7 +244,7 @@ NOTE: We will use these applications in other modules of the lab hence why we ha
 NOTE: It will take a few minutes to deploy the application, during this time you might see the Cluster / Application have a red X, this is expected and normal.
 
 . Navigate back to the *Applications* view, find the filter and select *Application Set*
-. Find the *skupper-patient-demo* app 
+. Find the *skupper-patient-demo* app
 . Click on the *Topology Tab* to view and verify that *all of the circles are green*.
 +
 image::03-application-topology-git.png[link=self, window=blank, width=100%, Application Topology]

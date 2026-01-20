@@ -83,9 +83,9 @@ oc config get-contexts
 [source,sh]
 ----
 [lab-user@bastion ~]$ oc config get-contexts
-CURRENT   NAME            CLUSTER            AUTHINFO                                                  
-*         aws-us          api-ocp-...:6443   kube:admin/...:6443   
-          local-cluster   ocp                admin  
+CURRENT   NAME            CLUSTER            AUTHINFO
+*         aws-us          api-ocp-...:6443   kube:admin/...:6443
+          local-cluster   ocp                admin
 ----
 +
 Now you are able to switch between contexts as needed.
@@ -124,7 +124,7 @@ source ~/.bashrc
 +
 [source,sh,subs="attributes",role=execute]
 ----
-cd ~ && git clone https://github.com/jalvarez-rh/rh1-svc-lab.git 
+cd ~ && git clone https://github.com/jalvarez-rh/rh1-svc-lab.git
 cd ~/rh1-svc-lab
 ./lab-setup/run-all-setup.sh
 ./tssc-setup/setup.sh
