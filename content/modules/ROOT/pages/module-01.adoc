@@ -268,6 +268,23 @@ NOTE: It will take a few minutes to deploy the application, during this time you
 
 image::03-application-topology-git.png[link=self, window=blank, width=100%, Application Topology]
 
+[start=16]
+. Under the topology view, Select the *Route* and click on the *Launch Route URL*
+
+NOTE: This will take you to the Front end for the Patient Portal application, which is now running in both the *aws-us* cluster and the *hcp-emea* Hosted Controlled Plane (HCP) CLuster.
+
+IMPORTANT: If you get a "Application is not available" page change the URL to use http:// and that should fix the issue. 
+
+image::03-application-route-git.png[link=self, window=blank, width=100%, Application Route]
+
+=== Conclusion
+
+In this opening module, you moved beyond basic cluster setup to orchestrating a unified environment through RHACM fleet cluster management. By leveraging Red Hat GitOps to drive applications and policies, you’ve essentially abstracted the underlying infrastructure, allowing fleet virtualization to handle the heavy lifting behind the scenes. This transition is critical because it shifts the focus from manual configuration to a policy-driven architecture where connectivity and governance are inherent to the system.
+
+This seamless integration provides a clear blueprint for digital sovereignty. By using GitOps to push declarative policies across your entire fleet, you are effectively enforcing your own jurisdictional standards regardless of where the physical nodes reside. You aren’t just deploying software; you’re asserting that your security posture and operational rules stay consistent across both private and public clouds, ensuring that no single cloud provider dictates your architecture.
+
+Ultimately, the power of this module lies in how it decouples your services from the hardware. Through fleet virtualization, you’ve built a portable, vendor-agnostic ecosystem that allows you to maintain total authority over your data and workloads.
+
 **Congratulations! **
 
 image::https://media.giphy.com/media/v1.Y2lkPTc5MGI3NjExdjl5YTd4M2o1MWZ4ZjBmMjM3cmJyMHYzZTFsbHB4ZDg0MXN1dzJvcCZlcD12MV9naWZzX3NlYXJjaCZjdD1n/ely3apij36BJhoZ234/giphy.gif[Celebration, width=400, align="center"]
