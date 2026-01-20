@@ -81,7 +81,7 @@ You should see:
 * Dashboard route named `rhods-dashboard`
 * Dashboard pods (typically named `rhods-dashboard-*`) in `Running` status
 +
-NOTE:The dashboard runs with multiple replicas for high availability, so you may see 2 or more dashboard pods. If components are not ready, wait a few minutes and run the command again.
+NOTE: The dashboard runs with multiple replicas for high availability, so you may see 2 or more dashboard pods. If components are not ready, wait a few minutes and run the command again.
 
 [[jupyter-notebooks-access]]
 
@@ -95,12 +95,12 @@ With OpenShift AI installed and the DataScienceCluster configured, data scientis
 +
 [source,sh,role=execute]
 ----
-oc get route rhods-dashboard -n redhat-ods-applications -o jsonpath='{.spec.host}'
+oc get route rhods-dashboard -n redhat-ods-applications -o jsonpath='{.spec.host}'; echo
 ----
 
 . Log in to the dashboard using:
-* Username: `admin`
-* Password: Your OpenShift admin password (same as ACS_PORTAL_PASSWORD)
+* *Username*: `{openshift_cluster_admin_username}`
+* *Password*: `{openshift_cluster_admin_password}`
 +
 image::04-openshift-ai-dashboard-01.png[OpenShift AI Dashboard Login, width=100%, link=self, window=blank]
 
@@ -114,18 +114,18 @@ image::04-openshift-ai-dashboard-03.png[OpenShift AI Applications View, width=10
 
 . To create a Jupyter notebook server:
 .. Click on *Applications* -> *Enabled* -> *Jupyter*
-.. Click *Create workbench*
+.. Click *Open application* in the *Start basic workbench* tile
 +
 image::04-openshift-ai-dashboard-04.png[Create Jupyter Workbench, width=100%, link=self, window=blank]
 
 . Configure your workbench:
-.. Select a notebook image (e.g., "Standard Data Science" or "Minimal Python")
-.. Configure the notebook server resources (CPU, memory) as needed
-.. Click *Create* to launch your notebook server
+.. Select *Jupyter | Data Science | CPU | Python 3.12 2025.2* for the Workbench image
+.. Select `Medium` for the *Container Size*
+.. Click *Start Workbench* to launch your notebook server
 +
 image::04-openshift-ai-dashboard-05.png[Configure Jupyter Workbench, width=100%, link=self, window=blank]
 
-. Once your notebook server is running, click *Open* to access your Jupyter environment:
+. Once your notebook server is running, click *Open in a new tab* to access your Jupyter environment (if you get prompted to log in just use the admin credentials again):
 +
 image::04-openshift-ai-dashboard-06.png[Jupyter Notebook Server Running, width=100%, link=self, window=blank]
 
