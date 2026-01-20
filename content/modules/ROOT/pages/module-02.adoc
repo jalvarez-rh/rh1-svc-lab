@@ -182,6 +182,7 @@ spec:
       - image-registry.openshift-image-registry.svc:5000
       - gcr.io
       - docker.io
+      - {quay_console_url}
 EOF
 ----
 

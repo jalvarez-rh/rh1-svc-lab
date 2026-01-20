@@ -205,7 +205,7 @@ image::03-app-gitops.png[link=self, window=blank, width=100%, App GitOps]
 
 [start=5]
 . Under repository types, select the GIT repository
-. enter the URL:
+. enter the URL and select "Create new option" for the Repository URL
 +
 [source,sh,subs="attributes",role=execute]
 ----
@@ -267,15 +267,6 @@ NOTE: It will take a few minutes to deploy the application, during this time you
 . Click on the *Topology Tab* to view and verify that *all of the circles are green*.
 
 image::03-application-topology-git.png[link=self, window=blank, width=100%, Application Topology]
-
-[start=16]
-. Under the topology view, Select the *Route* and click on the *Launch Route URL*
-
-NOTE: This will take you to the Front end for the Patient Portal application, which is now running in both the *aws-us* cluster and the *hcp-emea* Hosted Controlled Plane (HCP) CLuster.
-
-IMPORTANT: If you get a "Application is not available" page change the URL to use http:// and that should fix the issue. 
-
-image::03-application-route-git.png[link=self, window=blank, width=100%, Application Route]
 
 === Conclusion
 

@@ -74,6 +74,8 @@ Sigstore is designed to address the pain points and limitations of GPG in the co
 
 == Rebuilding the Patient Portal Frontend Application
 
+We're going to use our patient portal frontend application to demonstrate the signing and verification process. First, we need to rebuild the application and push it to our local private registry. We sped up the process into two commands for you
+
 . Run the following commands in the terminal to retrieve your Quay user and registry URL using oc:
 
 [source,sh,subs="attributes",role=execute]
@@ -86,10 +88,11 @@ export QUAY_USER="{quay_admin_username}"
 export QUAY_URL="${QUAY_URL}"
 EOF
 source ~/.bashrc
-echo $QUAY_USER
-echo $QUAY_URL
+echo "QUAY_USER: $QUAY_USER"
+echo "QUAY_URL: $QUAY_URL"
 ----
 
+[start=2]
 . Run the following commands in the terminal to retrieve your Quay user and registry URL using oc:
 
 [source,sh,subs="attributes",role=execute]
@@ -101,6 +104,8 @@ podman build -t $QUAY_URL/$QUAY_USER/patient-portal-frontend:1.0 .
 podman login https://$QUAY_URL -u $QUAY_USER -p {quay_admin_password}
 podman push $QUAY_URL/$QUAY_USER/patient-portal-frontend:1.0
 ----
+
+You now have a container image in the local Quay registry. 
 
 [[signing-our-software]]
 
@@ -138,10 +143,6 @@ GoVersion:     go1.22.9 (Red Hat 1.22.9-2.el9_5)
 Compiler:      gc
 Platform:      linux/amd64
 ----
-
-This initialization can be done via command-line parameters or by setting environment variables that are read when no command-line parameters are present.
-
-NOTE: Cosign itself doesn't need access to OpenShift, but since we have Trusted Artifact Signer installed on OpenShift (a RHEL installation is another deployment option), we will be using some `oc` commands to get the required endpoints.
 
 [start=3]
 . Run the following command in the terminal:
@@ -247,13 +248,13 @@ In sovereign cloud environments, cryptographic signing ensures that only approve
 
 [source,sh,subs="attributes",role=execute]
 ----
-cosign login https://$QUAY_URL -u $QUAY_USER -p {quay_admin_password}
+cosign login $QUAY_URL -u $QUAY_USER -p {quay_admin_password}
 ----
 
 [.console-output]
 [source,bash,subs="+macros,+attributes"]
 ----
-[lab-user@bastion ~]$ cosign login https://$QUAY_URL -u $QUAY_USER -p MzI2OTI0
+[lab-user@bastion ~]$ cosign login $QUAY_URL -u $QUAY_USER -p MzI2OTI0
 auth.go:203: logged in via /home/lab-user/.podman/config.json
 ----
 
@@ -304,7 +305,7 @@ Enter verification code:
 
 NOTE: As mentioned above, the signing process ties an identity (an OIDC identity, to be specific) to the signature. The signing certificate is issued on demand, but *only issued if an OIDC identity proof can be established*.
 
-In this example, the "OAuth2 browser-based flow" is used. In other words, you will authenticate to the OIDC system by user and password via a browser login. We are running `cosign` in an `ssh` session with no connection to your system, therefore the check for a browser to open the login page fails: `error opening browser: exec: "xdg-open": executable file not found in $PATH`.
+In this example, the "OAuth2 browser-based flow" is used. In other words, you will authenticate to the OIDC system by user and password via a browser login. 
 
 TIP: As an alternative to the browser flow, you can use direct access grants (password grant) to get an OIDC token first, then pass it to cosign with `--identity-token=$OIDC_TOKEN`. See the example later in this module for details.
 
@@ -313,8 +314,8 @@ TIP: As an alternative to the browser flow, you can use direct access grants (pa
 
 [cols="2,2"]
 |===
-| *Username:* | *jdoe@redhat.com* or *user1* or *admin*
-| *Password:* | *secure* (for jdoe) or *116608* (for user1/admin)
+| *Username:* | *jdoe@redhat.com* 
+| *Password:* | *secure* 
 |===
 
 NOTE: You can use any of the created users (jdoe, user1, or admin) to sign images. The username can be entered as the username (e.g., `user1`) or email address (e.g., `user1@demo.redhat.com`).
@@ -381,205 +382,81 @@ Quay recognizes the `cosign` image signature, too!
 
 image::11-quay-signed-image.png[link=self, window=blank, width=100%]
 
+[start=7]
+. While you're in Quay, make the repo public so we can deploy the application without requiring credentials. Click on settings and then make the repository public.
+
+image::12-quay-signed-image.png.png[link=self, window=blank, width=100%]
+
 You might be wondering how a pipeline task authenticates itself, since it can't open a browser to log in. Trusted Artifact Signer / Sigstore (including the cosign tool) doesn't authenticate the user directly. Instead, it relies on the OIDC system to authenticate the request before issuing a signing certificate. This allows the full flexibility of OIDC systems for authentication.
 
 For example, GitHub Actions and GitLab CI/CD can pass the OIDC identity of the pipeline runner via OIDC tokens into the pipeline.
 
-In general, continuous integration (CI) systems focus on providing the identity of the build or deployment environment rather than the personal identity of the user who triggered it. This helps maintain least privilege and ensures reproducibility.
+In general, continuous integration (CI) systems focus on providing the identity of the build or deployment environment rather than the personal identity of the user who triggered it. This helps maintain least privilege and ensures reproducibility. However, depending on your CI setup and requirements, you can leverage the flexibility of OIDC to meet your specific needs.
 
-However, depending on your CI setup and requirements, you can leverage the flexibility of OIDC to meet your specific needs.
 
-**EXAMPLE**
+=== Re Deploy the Patient Portal Frontend Application 
 
-In our workshop environment, we are using Keycloak as SSO / OIDC system. We can request a short-lived OIDC token from Keycloak and use this for authentication (and therefore, *signing* of the image).
+Since our other skupper-patient-demo application is deployed to the patient-portal namespace let's quickly deploy it to the signed-patient-portal namespace.
 
-1) First, we need to get the OIDC token issuer endpoint from Keycloak:
-
-[source,sh,subs="attributes",role=execute]
-----
-export OIDC_TOKEN_SERVICE=$(curl -s $OIDC_ISSUER_URL | jq -r '.["token-service"]')/token
-echo $OIDC_TOKEN_SERVICE
-----
-
-[.console-output]
-[source,bash,subs="+macros,+attributes"]
-----
-[lab-user@bastion ~]$ export OIDC_TOKEN_SERVICE=$(curl -s $OIDC_ISSUER_URL | jq -r '.["token-service"]')/token
-echo $OIDC_TOKEN_SERVICE
-https://keycloak-rhsso.apps.cluster-l2ktc.l2ktc.sandbox75.opentlc.com/auth/realms/openshift/protocol/openid-connect/token
-----
-
-2) Now, we are requesting a token from that endpoint for our signing user. You can use any of the created users (jdoe, user1, or admin):
+. Run the following command in the terminal:
 
 [source,sh,subs="attributes",role=execute]
 ----
-# Using jdoe user
-export OIDC_TOKEN=$(curl -s --request POST --url $OIDC_TOKEN_SERVICE --header 'content-type: application/x-www-form-urlencoded' --data 'grant_type=password' --data 'client_id=trusted-artifact-signer' --data 'username=jdoe@redhat.com'  --data 'password=secure' --data 'scope=openid email' | jq -r '.["access_token"]')
-
-# Or using user1 user (alternative)
-# export OIDC_TOKEN=$(curl -s --request POST --url $OIDC_TOKEN_SERVICE --header 'content-type: application/x-www-form-urlencoded' --data 'grant_type=password' --data 'client_id=trusted-artifact-signer' --data 'username=user1'  --data 'password=116608' --data 'scope=openid email' | jq -r '.["access_token"]')
-
-echo $OIDC_TOKEN
+oc create namespace signed-patient-portal
+git clone https://github.com/mfosterrox/demo-applications.git demo-applications
+cd demo-applications/skupper-demo
+sed -i "s|quay.io/skupper/patient-portal-frontend:latest|$QUAY_URL/$QUAY_USER/patient-portal-frontend:1.0|g" frontend.yml
+sed -i "s|namespace: patient-portal|namespace: signed-patient-portal|g" *.yml
+grep -r "namespace: signed-patient-portal" *.yml
 ----
-
-[.console-output]
-[source,bash,subs="+macros,+attributes"]
-----
-[lab-user@bastion ~]$ export OIDC_TOKEN=$(curl -s --request POST --url $OIDC_TOKEN_SERVICE --header 'content-type: application/x-www-form-urlencoded' --data 'grant_type=password' --data 'client_id=trusted-artifact-signer' --data 'username=jdoe@redhat.com'  --data 'password=secure' --data 'scope=openid email' | jq -r '.["access_token"]')
-echo $OIDC_TOKEN
-eyJhbGciOiJSUzI1NiIsInR5cC...
-...IgOiAiSldUIiwia2lkIiA6ICJl
-----
-
-WARNING: This is just an example—naturally, in your own CI system, you would not use the username and password of the signing user in clear text. Rather, you would store them in a Kubernetes Secret or in a Vault. Or, depending on your setup, you already have the pipeline user's OIDC token as an environment variable during your pipeline run. Additionally, you wouldn't echo the token so it doesn't show in logs—even though it might only be short-lived, this is not a good practice.
-
-3) Now that we have the token, we can pass that to `cosign` for authentication:
-
-[source,sh,subs="attributes",role=execute]
-----
-cosign sign -y --identity-token=$OIDC_TOKEN $QUAY_URL/$QUAY_USER/patient-portal-frontend:1.0
-----
-
-[.console-output]
-[source,bash,subs="+macros,+attributes"]
-----
-[lab-user@bastion ~]$ cosign sign -y --identity-token=$OIDC_TOKEN $QUAY_URL/$QUAY_USER/patient-portal-frontend:1.0
-Generating ephemeral keys...
-Retrieving signed certificate...
-Successfully verified SCT...
-WARNING: Image reference quay-l2ktc.apps.cluster-l2ktc.l2ktc.sandbox75.opentlc.com/quayadmin/patient-portal-frontend:1.0 uses a tag, not a digest, to identify the image to sign.
-    This can lead you to sign a different image than the intended one. Please use a
-    digest (example.com/ubuntu@sha256:abc123...) rather than tag
-    (example.com/ubuntu:latest) for the input to cosign. The ability to refer to
-    images by tag will be removed in a future release.
-
-        Note that there may be personally identifiable information associated with this signed artifact.
-        This may include the email address associated with the account with which you authenticate.
-        This information will be used for signing this artifact and will be stored in public transparency logs and cannot be removed later.
-
-By typing 'y', you attest that you grant (or have permission to grant) and agree to have this information stored permanently in transparency logs.
-tlog entry created with index: 2
-Pushing signature to: quay-l2ktc.apps.cluster-l2ktc.l2ktc.sandbox75.opentlc.com/quayadmin/ctf-web-to-system
-----
-
-NOTE: You might have seen the `cosign` warning about using a tag rather than a `sha256` digest. Yes, tags can be reassigned and can be considered inappropriate for signing (and verification) purposes. We have left this out for the sake of simplicity, but if you'd like, you can obtain the image's `sha256` digest via the Quay console or by using `podman inspect`, for example.
-
-[.console-output]
-[source,bash,subs="+macros,+attributes"]
-----
-[lab-user@bastion ~]$ cosign sign --identity-token=$OIDC_TOKEN $QUAY_URL/$QUAY_USER/ctf-web-to-system@sha256:4530d5e1556631804ce21d37271b0d3f173c350956f2312421db0840fd103c82
-Generating ephemeral keys...
-Retrieving signed certificate...
-Successfully verified SCT...
-
-        Note that there may be personally identifiable information associated with this signed artifact.
-        This may include the email address associated with the account with which you authenticate.
-        This information will be used for signing this artifact and will be stored in public transparency logs and cannot be removed later.
-
-By typing 'y', you attest that you grant (or have permission to grant) and agree to have this information stored permanently in transparency logs.
-tlog entry created with index: 4
-Pushing signature to: quay-l2ktc.apps.cluster-l2ktc.l2ktc.sandbox75.opentlc.com/quayadmin/ctf-web-to-system
-----
-
-[[verifying-signatures]]
-
-==== Verifying Signatures
-
-Verifying an image signature is even easier than signing:
-
-*Procedure*
-
-. Run the following command:
-
-[source,sh,subs="attributes",role=execute]
-----
-cosign verify --certificate-identity jdoe@redhat.com $QUAY_URL/$QUAY_USER/patient-portal-frontend:1.0 | jq
-----
-
-[.console-output]
-[source,bash,subs="+macros,+attributes"]
-----
-[lab-user@bastion ~]$ cosign verify --certificate-identity jdoe@redhat.com $QUAY_URL/$QUAY_USER/patient-portal-frontend:1.0 | jq
-
-Verification for quay-lpv5s.apps.cluster-lpv5s.lpv5s.sandbox1300.opentlc.com/quayadmin/patient-portal-frontend:1.0 --
-The following checks were performed on each of these signatures:
-  - The cosign claims were validated
-  - Existence of the claims in the transparency log was verified offline
-  - The code-signing certificate was verified using trusted certificate authority certificates
-[
-  {
-    "critical": {
-      "identity": {
-        "podman-reference": "quay-lpv5s.apps.cluster-lpv5s.lpv5s.sandbox1300.opentlc.com/quayadmin/patient-portal-frontend"
-      },
-      "image": {
-        "podman-manifest-digest": "sha256:9323448ee75bfb5380004038bd04e2d7be5a45707f3895b620e6937aac6ebba7"
-      },
-      "type": "cosign container image signature"
-    },
-    "optional": {
-      "1.3.6.1.4.1.57264.1.1": "https://keycloak-rhsso.apps.cluster-lpv5s.lpv5s.sandbox1300.opentlc.com/auth/realms/openshift",
-...
-----
-
-In this case, we are asking `cosign` (and therefore *Trusted Artifact Signer*) to verify if `jdoe@redhat.com` has signed this image. We can also use regular expressions to check if anyone from Red Hat has signed this image, using `--certificate-identity-regexp`:
 
 [start=2]
-. Run the following command:
+. Apply the application manifests:
 
 [source,sh,subs="attributes",role=execute]
 ----
-cosign verify --certificate-identity-regexp ^[a-zA-Z0-9._%+-]+@redhat\.com$ $QUAY_URL/$QUAY_USER/patient-portal-frontend:1.0 | jq
+oc apply -f database.yml -n signed-patient-portal
+oc apply -f frontend.yml -n signed-patient-portal
+oc apply -f payment.yml -n signed-patient-portal
 ----
-
-[.console-output]
-[source,bash,subs="+macros,+attributes"]
-----
-[lab-user@bastion ~]$ cosign verify --certificate-identity-regexp ^[a-zA-Z0-9._%+-]+@redhat\.com$ $QUAY_URL/$QUAY_USER/patient-portal-frontend:1.0 | jq
-
-Verification for quay-lpv5s.apps.cluster-lpv5s.lpv5s.sandbox1300.opentlc.com/quayadmin/patient-portal-frontend:1.0 --
-The following checks were performed on each of these signatures:
-  - The cosign claims were validated
-  - Existence of the claims in the transparency log was verified offline
-  - The code-signing certificate was verified using trusted certificate authority certificates
-[
-  {
-    "critical": {
-      "identity": {
-        "podman-reference": "quay-lpv5s.apps.cluster-lpv5s.lpv5s.sandbox1300.opentlc.com/quayadmin/patient-portal-frontend"
-      },
-      "image": {
-        "podman-manifest-digest": "sha256:9323448ee75bfb5380004038bd04e2d7be5a45707f3895b620e6937aac6ebba7"
-      },
-      "type": "cosign container image signature"
-    },
-    "optional": {
-      "1.3.6.1.4.1.57264.1.1": "https://keycloak-rhsso.apps.cluster-lpv5s.lpv5s.sandbox1300.opentlc.com/auth/realms/openshift",
-----
-
-We can also verify that the person (to be correct, the OIDC identity) who signed the image was authenticated against a specific OIDC Issuer (using the `--certificate-oidc-issuer` flag) or against an OIDC Issuer somewhere in our domain:
 
 [start=3]
-. Run the following command:
+. Verify the application is deployed:
 
 [source,sh,subs="attributes",role=execute]
 ----
-cosign verify --certificate-identity jdoe@redhat.com --certificate-oidc-issuer-regexp \.opentlc\.com $QUAY_URL/$QUAY_USER/patient-portal-frontend:1.0 | jq
+oc get pods -n signed-patient-portal
+oc get route -n signed-patient-portal
 ----
 
-NOTE: We are using `jq` for readability in these examples; it is not required.
+*Let's take a look at it in RHACS.*
+
+. Navigate to Vulnerability Management -> *Results* tab and click on the "Images" button
+
+image::vuln-tssc-01.png[link=self, window=blank, width=100%]
+
+use the drop downs to select for the signed-patient-portal namespace and the patient-portal-frontend image.
+
+image::vuln-tssc-02.png[link=self, window=blank, width=100%]
+
+You will see that the image is signed and the signature is valid. 
+
+[start=4]
+. Scan the signed image using roxctl to check for vulnerabilities:
+
+[source,sh,subs="attributes",role=execute]
+----
+roxctl image scan --image $QUAY_URL/$QUAY_USER/patient-portal-frontend:1.0
+----
 
 [.console-output]
 [source,bash,subs="+macros,+attributes"]
 ----
-[lab-user@bastion ~]$ cosign verify --certificate-identity jdoe@redhat.com --certificate-oidc-issuer-regexp \.opentlc\.com $QUAY_URL/$QUAY_USER/patient-portal-frontend:1.0 | jq
-
-Verification for quay-l2ktc.apps.cluster-l2ktc.l2ktc.sandbox75.opentlc.com/quayadmin/patient-portal-frontend:1.0 --
-The following checks were performed on each of these signatures:
-  - The cosign claims were validated
-  - Existence of the claims in the transparency log was verified offline
-  - The code-signing certificate was verified using trusted certificate authority certificates
+[lab-user@bastion ~]$ roxctl image scan --image $QUAY_URL/$QUAY_USER/
 ----
+
+image::vuln-tssc-03.png[link=self, window=blank, width=100%]
+
 
 [[next-steps]]
 
