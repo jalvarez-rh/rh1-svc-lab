@@ -1,4 +1,4 @@
-[[technology-supply-chain]]
+[technology-supply-chain]]
 
 = Technology and Supply Chain
 
@@ -384,10 +384,6 @@ cosign tree $QUAY_URL/$QUAY_USER/patient-portal-frontend:1.0
 Quay recognizes the `cosign` image signature, too!
 +
 image::11-quay-signed-image.png[link=self, window=blank, width=100%]
-
-. While you're in Quay, make the repo public so we can deploy the application without requiring credentials. Click on settings and then make the repository public.
-+
-image::12-quay-signed-image.png[link=self, window=blank, width=100%]
 
 You might be wondering how a pipeline task authenticates itself, since it can't open a browser to log in. Trusted Artifact Signer / Sigstore (including the cosign tool) doesn't authenticate the user directly. Instead, it relies on the OIDC system to authenticate the request before issuing a signing certificate. This allows the full flexibility of OIDC systems for authentication.
 

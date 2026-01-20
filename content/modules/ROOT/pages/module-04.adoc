@@ -18,7 +18,7 @@ Red Hat OpenShift AI addresses these challenges by enabling you to run AI worklo
 * **Operational Autonomy**: You can operate independently of external AI service providers, adapting to changing business and regulatory needs
 * **Cost Optimization**: By bringing AI compute to your data, you reduce data transfer costs and avoid vendor lock-in pricing models
 
-In this module, you will install Red Hat OpenShift AI and configure a DataScienceCluster that enables data scientists and developers to work with Jupyter notebooks, build machine learning pipelines, and deploy AI models—all while maintaining complete sovereignty over your data and infrastructure.
+In this module, you will install Red Hat OpenShift AI and configure a DataScienceCluster that enables data scientists and developers to work with Jupyter notebooks, build a basic workbook, and understand how to deploy AI models—all to bring you to your data while maintaining sovereignty over said data and infrastructure.
 
 [[openshift-ai-installation]]
 
@@ -99,29 +99,33 @@ oc get route rhods-dashboard -n redhat-ods-applications -o jsonpath='{.spec.host
 ----
 
 . Log in to the dashboard using:
-* *Username*: `{openshift_cluster_admin_username}`
-* *Password*: `{openshift_cluster_admin_password}`
+* Username: `admin`
+* Password: {openshift_cluster_admin_password}
 +
-image::04-openshift-ai-dashboard-01.png[OpenShift AI Dashboard Login, width=100%, link=self, window=blank]
 
 . Once logged in, you'll see the OpenShift AI dashboard home page:
 +
-image::04-openshift-ai-dashboard-02.png[OpenShift AI Dashboard Home, width=100%, link=self, window=blank]
+image::04-openshift-ai-dashboard-01.png[OpenShift AI Dashboard Login, width=100%, link=self, window=blank]
 
-. Navigate to the *Applications* -> *Enabled* section to see available components:
+. Navigate to the *Applications* -> *Explore* section to see available applications that can be added to your cluster:
 +
 image::04-openshift-ai-dashboard-03.png[OpenShift AI Applications View, width=100%, link=self, window=blank]
 
 . To create a Jupyter notebook server:
-.. Click on *Applications* -> *Enabled* -> *Jupyter*
-.. Click *Open application* in the *Start basic workbench* tile
+.. Click on *Applications* -> *Enabled* -> *Start basic workbench*
+.. Click *Create workbench*
 +
 image::04-openshift-ai-dashboard-04.png[Create Jupyter Workbench, width=100%, link=self, window=blank]
 
 . Configure your workbench:
-.. Select *Jupyter | Data Science | CPU | Python 3.12 2025.2* for the Workbench image
-.. Select `Medium` for the *Container Size*
-.. Click *Start Workbench* to launch your notebook server
+.. Select a notebook image ("Jupyter | Minimal | CPU | Python 3.12 | 2025.2")
++
+[IMPORTANT]
+====
+Notice the accelerators location that are not available for the notebook image. If your cluster had access to GPU, you would be able to select the GPU accelerator. You can also use environment variables to configure access to your storage/databases
+====
+
+.. Click *Create* to launch your notebook server
 +
 image::04-openshift-ai-dashboard-05.png[Configure Jupyter Workbench, width=100%, link=self, window=blank]
 
@@ -129,40 +133,16 @@ image::04-openshift-ai-dashboard-05.png[Configure Jupyter Workbench, width=100%,
 +
 image::04-openshift-ai-dashboard-06.png[Jupyter Notebook Server Running, width=100%, link=self, window=blank]
 
+. Once your notebook server is running, click *Open* to access your Jupyter environment.
 . Your Jupyter notebook interface will open in a new tab:
-+
-image::04-openshift-ai-dashboard-07.png[Jupyter Notebook Interface, width=100%, link=self, window=blank]
-
 . In the Jupyter notebook interface, you can create new notebooks, upload files, or browse existing projects:
-+
-image::04-openshift-ai-dashboard-08.png[Jupyter Notebook File Browser, width=100%, link=self, window=blank]
-
 . Create a new Python notebook by clicking *New* -> *Python 3* (or your preferred kernel):
-+
-image::04-openshift-ai-dashboard-09.png[Create New Notebook, width=100%, link=self, window=blank]
-
 . Your new notebook will open, ready for you to write and execute code cells:
-+
-image::04-openshift-ai-dashboard-10.png[New Python Notebook, width=100%, link=self, window=blank]
-
 . You can install additional Python packages using pip in a code cell:
-+
-image::04-openshift-ai-dashboard-11.png[Installing Python Packages, width=100%, link=self, window=blank]
-
 . The notebook environment provides access to your OpenShift cluster resources. You can verify connectivity:
-+
-image::04-openshift-ai-dashboard-12.png[Notebook Cluster Access, width=100%, link=self, window=blank]
-
 . You can also manage your workbenches from the OpenShift AI dashboard. Navigate back to see your running workbench:
-+
-image::04-openshift-ai-dashboard-13.png[Workbench Management View, width=100%, link=self, window=blank]
-
 . From the workbench details page, you can stop, restart, or delete your notebook server:
-+
-image::04-openshift-ai-dashboard-14.png[Workbench Details and Actions, width=100%, link=self, window=blank]
-
 . The OpenShift AI dashboard also provides monitoring and resource usage information for your workbenches:
-+
-image::04-openshift-ai-dashboard-15.png[Workbench Resource Monitoring, width=100%, link=self, window=blank]
-+
+
+
 NOTE: The first time you create a workbench, it may take a few minutes to pull the container image and start the server. Subsequent starts will be faster.
