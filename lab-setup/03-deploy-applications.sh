@@ -108,15 +108,6 @@ deploy_to_cluster() {
         warning "k8s-deployment-manifests directory not found at: $TUTORIAL_HOME/k8s-deployment-manifests"
     fi
     
-    # Deploy skupper-demo application
-    if [ -d "$TUTORIAL_HOME/skupper-demo" ]; then
-        log "Deploying skupper-demo application to $CLUSTER_NAME..."
-        oc apply -f "$TUTORIAL_HOME/skupper-demo/" || warning "Some resources in skupper-demo may have failed to apply to $CLUSTER_NAME"
-        log "✓ skupper-demo deployment attempted on $CLUSTER_NAME"
-    else
-        warning "skupper-demo directory not found. Skipping skupper-demo deployment to $CLUSTER_NAME"
-    fi
-    
     log "✓ Deployment to $CLUSTER_NAME completed"
 }
 
