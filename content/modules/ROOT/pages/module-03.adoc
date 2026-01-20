@@ -391,66 +391,6 @@ For example, GitHub Actions and GitLab CI/CD can pass the OIDC identity of the p
 
 In general, continuous integration (CI) systems focus on providing the identity of the build or deployment environment rather than the personal identity of the user who triggered it. This helps maintain least privilege and ensures reproducibility. However, depending on your CI setup and requirements, you can leverage the flexibility of OIDC to meet your specific needs.
 
-=== Redeploy the Patient Portal Frontend Application
-
-Since our other skupper-patient-demo application is deployed to the patient-portal namespace let's quickly deploy it to the signed-patient-portal namespace.
-
-. Run the following command in the terminal:
-+
-[source,sh,subs="attributes",role=execute]
-----
-git clone https://github.com/mfosterrox/demo-applications.git demo-applications
-cd demo-applications/skupper-demo
-sed -i "s|quay.io/skupper/patient-portal-frontend:latest|$QUAY_URL/$QUAY_USER/patient-portal-frontend:1.0|g" frontend.yml
-sed -i "s|name: patient-portal|name: signed-patient-portal|g" database.yml
-sed -i "s|namespace: patient-portal|namespace: signed-patient-portal|g" *.yml
-grep -r "namespace: signed-patient-portal" *.yml
-----
-
-. Apply the application manifests:
-+
-[source,sh,subs="attributes",role=execute]
-----
-oc apply -f database.yml -n signed-patient-portal
-oc apply -f frontend.yml -n signed-patient-portal
-oc apply -f payment.yml -n signed-patient-portal
-----
-
-. Verify the application is deployed:
-+
-[source,sh,subs="attributes",role=execute]
-----
-oc get pods -n signed-patient-portal
-oc get route -n signed-patient-portal
-----
-
-*Let's take a look at it in RHACS.*
-
-. Switch to the *Red Hat Advanced Cluster Security* tab on the right and navigate to *Vulnerability Management* -> *Results* tab. Then click on the *Images* button
-+
-image::vuln-tssc-01.png[link=self, window=blank, width=100%]
-
-. Use the drop downs to select for the signed-patient-portal namespace and the patient-portal-frontend image.
-+
-image::vuln-tssc-02.png[link=self, window=blank, width=100%]
-+
-You will see that the image is signed and the signature is valid.
-
-. Scan the signed image using roxctl to check for vulnerabilities:
-+
-[source,sh,subs="attributes",role=execute]
-----
-roxctl image scan --image $QUAY_URL/$QUAY_USER/patient-portal-frontend:1.0
-----
-+
-[.console-output]
-[source,bash,subs="+macros,+attributes"]
-----
-[lab-user@bastion ~]$ roxctl image scan --image $QUAY_URL/$QUAY_USER/
-----
-+
-image::vuln-tssc-03.png[link=self, window=blank, width=100%]
-
 [[next-steps]]
 
 == Next Steps
