@@ -26,14 +26,31 @@ sudo dnf -y install podman
 .Sample Output
 [source,bash,subs="+macros,+attributes"]
 ----
+[INFO] Cosign installed successfully:
+  ______   ______        _______. __    _______ .__   __.
+ /      | /  __  \      /       ||  |  /  _____||  \ |  |
+|  ,----'|  |  |  |    |   (----`|  | |  |  __  |   \|  |
+|  |     |  |  |  |     \   \    |  | |  | |_ | |  . `  |
+|  `----.|  `--'  | .----)   |   |  | |  |__| | |  |\   |
+ \______| \______/  |_______/    |__|  \______| |__| \__|
+cosign: A tool for Container Signing, Verification and Storage in an OCI registry.
+
+GitVersion:    5c43d256
+GitCommit:     5c43d256f1391f505ada9f9c46c3e31b6e219c8e
+GitTreeState:  clean
+BuildDate:     2025-11-19T10:04:54Z
+GoVersion:     go1.24.6 (Red Hat 1.24.6-1.el9_6) X:strictfipsruntime
+Compiler:      gc
+Platform:      linux/amd64
+
 [INFO] Gitsign installed successfully:
 gitsign version v0.0.0-20251119095025-6ae9439418bc+dirty
-env:
-         TUF_URL=https://tuf-trusted-artifact-signer.apps.cluster-gk5g4.dynamic.redhatworkshops.io
-         SIGSTORE_REKOR_URL=https://rekor-server-trusted-artifact-signer.apps.cluster-gk5g4.dynamic.redhatworkshops.io
-         SIGSTORE_FULCIO_URL=https://fulcio-server-trusted-artifact-signer.apps.cluster-gk5g4.dynamic.redhatworkshops.io
-         SIGSTORE_OIDC_ISSUER=https://keycloak-rhsso.apps.cluster-gk5g4.dynamic.redhatworkshops.io/auth/realms/openshift
 parsed config:
+{
+  "Fulcio": "https://fulcio.sigstore.dev",
+  "FulcioRoot": "",
+  "Rekor": "https://rekor.sigstore.dev",
+
 ----
 +
 IMPORTANT: If you have issues make sure to ask for help from a proctor.
@@ -51,14 +68,14 @@ Trusted Artifact Signer provides a production-ready deployment of the https://ww
 In sovereign cloud environments, maintaining control over your software supply chain is essential for regulatory compliance, data protection, and operational independence. Trusted Artifact Signer addresses these requirements through:
 
 . *Supply Chain Security*: Modern software development requires robust mechanisms to secure dependencies and artifacts, which https://www.gnupg.org/[GNU Privacy Guard (GPG)] struggles to address effectively. For sovereign cloud operations, this ensures only approved, verified artifacts enter your infrastructure.
-. *Usability*: Developers need simpler, more intuitive signing solutions without the burden of manual key management. This reduces operational overhead while maintaining strict security controls essential for sovereign environments.
+. *Usability*: Developers need simpler, more intuitive (code-)signing solutions without the burden of manual key management. This reduces operational overhead while maintaining strict security controls essential for sovereign environments.
 . *Transparency*: A centralized, tamper-evident log system ensures accountability and traceability of signatures, enhancing trust and providing the auditability required for sovereign cloud compliance.
-. *Modern Identity Integration*: Sigstore aligns with contemporary authentication mechanisms (e.g., OAuth, OpenID Connect), making it easier to tie signatures to identities within your organization's identity management systems—critical for maintaining sovereign control.
-. *Automation*: Sigstore fits seamlessly into automated CI/CD workflows, which are critical in modern software development pipelines. This enables consistent enforcement of signing policies across your sovereign infrastructure without manual intervention.
+. *Modern Identity Integration*: Trusted Artifact Signer (Sigstore) aligns with contemporary authentication mechanisms (e.g., OAuth, OpenID Connect), making it easier to tie signatures to identities within your organization's identity management systems—critical for maintaining sovereign control.
+. *Automation*: Trusted Artifact Signer (Sigstore) fits seamlessly into automated CI/CD workflows, which are critical in modern software development pipelines. This enables consistent enforcement of signing policies across your sovereign infrastructure without manual intervention.
 
 === Advantages of Sigstore / Trusted Artifact Signer over GPG
 
-Sigstore is designed to address the pain points and limitations of GPG in the context of modern software development, focusing on ease of use, transparency, and security for signing and verifying software artifacts. For sovereign cloud environments, Trusted Artifact Signer provides the additional benefit of enabling complete operational control over your signing infrastructure.
+Sigstore / Trusted Artifact Signer is designed to address the pain points and limitations of GPG in the context of modern software development, focusing on ease of use, transparency, and security for signing and verifying software artifacts. For sovereign cloud environments, Trusted Artifact Signer provides the additional benefit of enabling complete operational control over your signing and verification infrastructure (as opposed to the public good instance at https://docs.sigstore.dev/about/overview/#how-to-use-sigstore[sigstore.dev], which is primarily targeted at providing transparency and security to the Open Source ecosystem).
 
 * Enables sovereign control by allowing organizations to operate signing services within their own infrastructure boundaries.
 * Eliminates manual key management.
@@ -92,7 +109,7 @@ echo "QUAY_USER: $QUAY_USER"
 echo "QUAY_URL: $QUAY_URL"
 ----
 
-. Run the following commands in the terminal to retrieve your Quay user and registry URL using oc:
+. Run the following commands in the terminal to build and push the `patient-portal-frontend` image to your Quay instance:
 +
 [source,sh,subs="attributes",role=execute]
 ----
@@ -175,7 +192,7 @@ SIGSTORE_FULCIO_URL=https://fulcio-server-trusted-artifact-signer.apps.cluster-m
 COSIGN_REKOR_URL=https://rekor-server-trusted-artifact-signer.apps.cluster-m2mgb.dyn.redhatworkshops.io
 ----
 +
-NOTE: The reason we define multiple variables with the same values is due to the long history of the upstream Sigstore project. Some tools (like cosign and gitsign) use different environment variables for the same purpose. For various reasons, including open source principles and compatibility, we are not creating a specialized Red Hat version with simplified environment parameters. These variables will be maintained in both the upstream project and the Red Hat enterprise-ready version.
+NOTE: The reason we define multiple variables with the same values is due to the long history of the upstream Sigstore project. Some tools (like `cosign` and `gitsign`) use different environment variables for the same purpose. For various reasons, including open source principles and compatibility, we are not creating a specialized Red Hat version with simplified environment parameters. These variables will be maintained in both the upstream project and the Red Hat enterprise-ready version.
 
 . As the last step, initialize `cosign` so it knows who to talk to. Run the following command in the terminal
 +
@@ -334,7 +351,7 @@ WARNING: Image reference quay-l2ktc.apps.cluster-l2ktc.l2ktc.sandbox75.opentlc.c
     images by tag will be removed in a future release.
 
 tlog entry created with index: 1
-Pushing signature to: quay-l2ktc.apps.cluster-l2ktc.l2ktc.sandbox75.opentlc.com/quayadmin/ctf-web-to-system
+Pushing signature to: quay-l2ktc.apps.cluster-l2ktc.l2ktc.sandbox75.opentlc.com/quayadmin/patient-portal-frontend:1.0
 ----
 +
 *SUCCESS!*
@@ -386,10 +403,10 @@ Since our other skupper-patient-demo application is deployed to the patient-port
 +
 [source,sh,subs="attributes",role=execute]
 ----
-oc create namespace signed-patient-portal
 git clone https://github.com/mfosterrox/demo-applications.git demo-applications
 cd demo-applications/skupper-demo
 sed -i "s|quay.io/skupper/patient-portal-frontend:latest|$QUAY_URL/$QUAY_USER/patient-portal-frontend:1.0|g" frontend.yml
+sed -i "s|name: patient-portal|name: signed-patient-portal|g" database.yml
 sed -i "s|namespace: patient-portal|namespace: signed-patient-portal|g" *.yml
 grep -r "namespace: signed-patient-portal" *.yml
 ----
