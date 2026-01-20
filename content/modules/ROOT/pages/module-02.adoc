@@ -37,7 +37,7 @@ Implement process and network controls to detect malicious runtime incidents and
 
 === RHACS Console Access
 
-Your RHACS Console is available in the showroom environment. In case you want to open it in another window it is here:  {acs_route}[window=blank]
+Switch to the *Red Hat Advanced Cluster Security* tab on the right. In case you want to open it in another window it is here:  {acs_route}[window=blank]
 
 Administrator login is available with:
 
@@ -51,23 +51,20 @@ Administrator login is available with:
 
 == RHACS Compliance Operator Installation and Compliance Checks
 
-Before making changes to your cluster, it’s essential to understand your current compliance posture. Red Hat Advanced Cluster Security (RHACS) seamlessly integrates with the OpenShift Compliance Operator to provide out-of-the-box compliance checks—including industry standards such as E8 and DISA STIG. You can also define custom profiles that combine multiple standards into one, streamlining your audit processes and allowing you to easily tailor compliance requirements to your organization or region. This flexibility enables you to create global profiles and maintain consistent, auditable compliance across all OpenShift environments.
+Before making changes to your cluster, it's essential to understand your current compliance posture. Red Hat Advanced Cluster Security (RHACS) seamlessly integrates with the OpenShift Compliance Operator to provide out-of-the-box compliance checks—including industry standards such as E8 and DISA STIG. You can also define custom profiles that combine multiple standards into one, streamlining your audit processes and allowing you to easily tailor compliance requirements to your organization or region. This flexibility enables you to create global profiles and maintain consistent, auditable compliance across all OpenShift environments.
 
 === Checking Your Compliance Posture
 
 The first step to any changes in a cluster is to analyze what you need to change RHACS integrates with the compliance operator to bring you a variety of compliance checks from the E8 to DISA STIG and more. RHACS can also set up custom compliance checks so you can create profiles that have both DISA STIG and E8 standards together for easier auditing and to create a profile that can become global if necessary.
 
-[start=1]
 . Click on the *Compliance* -> *OpenShift Schedules* tab.
-
++
 image::assurance-01.png[link=self, window=blank, width=100%]
 
-[start=2]
 . Next, click on the *Create scan schdule*.
-
++
 image::assurance-02.png[link=self, window=blank, width=100%]
 
-[start=3]
 . Next, fill in the form with the following information:
 
 * Name:
@@ -85,50 +82,43 @@ Daily compliance scan for all profiles covering CIS, E8, Moderate, NERC-CIP, PCI
 * Frequency: *Daily*
 * Time: 00:00 UTC
 
-. Click Next
+. Click *Next*
 . Select the clusters: *production* (We haven't installed RHACS into the other clusters yet. A huge mistake if you ask us!)
-. Click Next
+. Click *Next*
 . Add the following profiles (in order):
-    * ocp4-cis (99 rules, Platform, Version 1.5.0)
-    * ocp4-cis-node (100 rules, Node, Version 1.5.0)
-    * ocp4-e8 (14 rules, Platform)
-    * ocp4-moderate (136 rules, Platform, Revision 4)
-    * ocp4-moderate-node (120 rules, Node, Revision 4)
-    * ocp4-nerc-cip (133 rules, Platform)
-    * ocp4-nerc-cip-node (120 rules, Node)
-    * ocp4-pci-dss (120 rules, Platform, Version 3.2.1)
-    * ocp4-pci-dss-node (114 rules, Node, Version 3.2.1)
-    * ocp4-stig (50 rules, Platform, Version V2R1)
-
-
+* ocp4-cis (99 rules, Platform, Version 1.5.0)
+* ocp4-cis-node (100 rules, Node, Version 1.5.0)
+* ocp4-e8 (14 rules, Platform)
+* ocp4-moderate (136 rules, Platform, Revision 4)
+* ocp4-moderate-node (120 rules, Node, Revision 4)
+* ocp4-nerc-cip (133 rules, Platform)
+* ocp4-nerc-cip-node (120 rules, Node)
+* ocp4-pci-dss (120 rules, Platform, Version 3.2.1)
+* ocp4-pci-dss-node (114 rules, Node, Version 3.2.1)
+* ocp4-stig (50 rules, Platform, Version V2R1)
++
 NOTE: There are many profiles to select but here we are selecting the most common profiles that are used in most organizations. If you want to only add the ones necessary for the lab. Select ......
 
-[start=8]
-. Click Next
-
+. Click *Next*
++
 [NOTE]
 ====
 We will not add a delivery destination so we will skip this step. However you can send notifications via email, get details via API or download reports via the console.
 ====
 
-[start=9]
-. Click Next
+. Click *Next*
 . Review your masterpiece and click *Save*
-
++
 image::assurance-05.png[link=self, window=blank, width=100%]
-
-
++
 TIP: You should see the new schedule in the list and it will be performing it's first scan. If you click the 3 dots on the right side of the schedule you can trigger a manual scan, download the report or delete the schedule.
-
++
 image::assurance-06.png[link=self, window=blank, width=100%]
 
-
-[start=11]
 . Head over to the OpenShift coverage section where you can view all of the details from the scan.
-
-
++
 image::assurance-07.png[link=self, window=blank, width=100%]
-
++
 IMPORTANT: The RHACS compliance coverage dashboard provides a comprehensive overview of your scan schedules and results. In the Coverage tab, you can review all scan schedules or filter to view specific schedules such as the "acs-catch-all". Each scan displays coverage across a variety of compliance standards—including CIS, OCP, E8, NERC-CIP, NIST 853, PCI-DSS, and DISA-STIG. You can filter results by specific checks for greater detail. On the right side of the dashboard, you’ll see the cluster’s overall compliance status, along with a breakdown of which checks are passing or failing.
 
 === Analyze Compliance Results
@@ -137,34 +127,30 @@ Managing multi-region and multi-geo environments presents specific challenges. T
 
 === Make a Simple Cluster Change to Pass the Compliance Check
 
-Let's focus on the ocp4-e8 compliance checks. To pass the `ocp4-e8-ocp-allowed-registries` standard, you need to set an allowlist of container registries that OpenShift can pull images from. 
+Let's focus on the *ocp4-e8* compliance checks. To pass the `ocp4-e8-ocp-allowed-registries` standard, you need to set an allowlist of container registries that OpenShift can pull images from. 
 
 First let's take a look at the standard;
 
-[start=1]
 . Click on the *Compliance* -> *OpenShift Coverage* -> *E8* tab.
-
++
 image::compliance-01.png[link=self, window=blank, width=100%]
 
-[start=2]
-Let's first check the failing standards by sorting by compliance status.
-
+. Let's first check the failing standards by sorting by compliance status.
++
 image::compliance-02.png[link=self, window=blank, width=100%]
++
 image::compliance-03.png[link=self, window=blank, width=100%]
 
-[start=3]
 . And then clicking on the failing standard 'ocp4-e8-ocp-allowed-registries'.
-
++
 Here you will see both the clusters impacted by this failing standard and guidance on how to resolve the issue.
 
-[start=4]
 . Click on the *Details* tab next to *Results* and review the findings for the failing check. 
-
++
 To address this, limit the set of container registries that OpenShift is allowed to pull images from by configuring the cluster with a new allowlist. We will do this by applying a YAML configuration as an OpenShift administrator, and then re-scan the cluster to verify compliance.
 
-[start=5]
 . Create the Image Configuration YAML by copying and pasting the following into the bastion host terminal.
-
++
 [source,bash,subs="+macros,+attributes",role=execute]
 ----
 oc config use-context local-cluster
@@ -185,7 +171,7 @@ spec:
       - {quay_console_url}
 EOF
 ----
-
++
 [TIP]
 .For some extra context
 ====
@@ -196,14 +182,13 @@ Here are the notes on the allowed registries policy:
 * Every registry accessed by the cluster must be included in this list for the policy to pass.
 ====
 
-[start=6]
 . Check that your changes have been accepted:
-
++
 [source,bash,subs="+macros,+attributes",role=execute]
 ----
 oc get image.config.openshift.io/cluster -o yaml | grep allowedRegistries -A 10
 ----
-
++
 **Output**
 [source,bash,subs="+macros,+attributes"]
 ----
@@ -218,24 +203,19 @@ status:
   internalRegistryHostname: image-registry.openshift-image-registry.svc:5000
 ----
 
-[start=7]
-**Verification**
+=== Verification
 
 . To verify remediation and compliance with the `ocp4-e8-ocp-allowed-registries` requirement:
-
 .. Go back to the *RHACS* console.
 .. Navigate to *Compliance* → *Scan Schedules* and locate your schedule (for example, `acs-catch-all`).
 .. Use the menu on the schedule (three dots) and select "Run scan" to trigger a manual scan.
 
-**Check Results**
+=== Check Results
 
-[start=8]
-
-.Click on the *Compliance* -> *OpenShift Coverage* -> *E8* tab.
-
-- The `ocp4-e8-ocp-allowed-registries` check should now pass, showing your registry restrictions are correctly configured.
-- If the check still fails, double-check your YAML for typos or missing registries in use by workloads.
-
+. Click on the *Compliance* -> *OpenShift Coverage* -> *E8* tab.
+* The `ocp4-e8-ocp-allowed-registries` check should now pass, showing your registry restrictions are correctly configured.
+* If the check still fails, double-check your YAML for typos or missing registries in use by workloads.
++
 [IMPORTANT]
 ====
 Changes to Image configuration may take a few minutes to propagate in OpenShift. If the compliance check still fails after rescanning, wait a few minutes and run the scan again.
@@ -265,50 +245,45 @@ Now, our security and operations teams want simplifed workflows and flexibility 
 
 *Procedure*
 
-[start=1]
 . First, verify the pods are running in the patient-portal namespace:
-
++
 [source,sh,role=execute]
 ----
 oc get pods -n patient-portal
 ----
 
-[start=2]
 . Get the frontend pod name and exec into the container:
-
++
 [source,sh,role=execute]
 ----
 POD=$(oc get pod -n patient-portal -l app=frontend -o jsonpath="{.items[0].metadata.name}")
 oc exec -n patient-portal $POD -it -- /bin/sh
 ----
 
-[start=3]
 . Check the operating system release information:
-
++
 [source,sh,role=execute]
 ----
 cat /etc/os-release
 ----
-
++
 [NOTE]
 ====
 If you see */home/fritz $* you've confirmed you have a shell and access to the frontend application.
 ====
 
-[start=4]
 . Since this is an alpine image, we can see the package manager is apk. Try to run the package manager update command:
-
++
 [source,sh,role=execute]
 ----
 apk update
 ----
-
++
 NOTE: OpenShift enforces strict security policies by default (via the restricted Security Context Constraint or SCC). 
 
-[start=5]
 . Exit from the container (type exit)and return to the bastion host terminal.
 . Then, create a security policy (As code) to enforce runtime protection against package manager execution. Apply the following policy configuration:
-
++
 [source,bash,subs="+macros,+attributes",role=execute]
 ----
 oc apply -f - <<EOF
@@ -361,44 +336,39 @@ EOF
 
 === Testing the Runtime Policy
 
-Next, you will use tmux to watch OpenShift events while running the test so you can see how RHACS enforces the policy at runtime.
+Next, you will use `tmux` to watch OpenShift events while running the test so you can see how RHACS enforces the policy at runtime.
 
 *Procedure*
-[start=1]
 
-. start tmux with two panes:
+. Start tmux with two panes:
 
 [source,sh,role=execute]
 ----
 tmux new-session \; split-window -v \; attach
 ----
 
-[start=2]
-
 . Next, run a watch on OpenShift events in the first shell pane:
-
++
 [source,sh,role=execute]
 ----
 oc get events -n patient-portal -w
 ----
 
-[start=3]
-
 . Press *Ctrl+b, o* to switch to the next pane. (Ctrl+b THEN o)
-
++
 [IMPORTANT]
 ====
-Ctrl+b is the prefix key for tmux. o is the command to switch to the next pane.
+`Ctrl+b` is the prefix key for tmux. `o` is the command to switch to the next pane.
 ====
 
 . Exec into our *patient-frontend* application by getting the pod details and adding them to the following command.
-
++
 [source,sh,role=execute]
 ----
 POD=$(oc get pod -n patient-portal -l app=frontend -o jsonpath="{.items[0].metadata.name}")
 oc exec -n patient-portal $POD -i --tty -- /bin/sh
 ----
-
++
 *Sample output*
 [source,bash]
 ----
@@ -407,16 +377,15 @@ oc exec -n patient-portal $POD -i --tty -- /bin/sh
 /home/fritz $ 
 ----
 
-[start=5]
 . Run the alpine package manager in this shell:
-
++
 [source,sh,role=execute]
 ----
 apk update
 ----
 
 . Examine the output and expect to see that the package manager attempts to perform an update operation:
-
++
 [source,texinfo,subs="attributes"]
 ----
 /home/fritz $ apk update
@@ -426,9 +395,8 @@ ERROR: Failed to open apk database: Permission denied
 [demo-user@bastion ~]$ 
 ----
 
-[start=6]
 . Examine the oc get events tmux pane (The pane on the bottom), and note that it shows that RHACS detected the package manager invocation and deleted the pod:
-
++
 [source,texinfo,subs="attributes"]
 ----
 ^C^C[demo-user@bastion ~]$ oc get events -n patient-portal -w
@@ -443,18 +411,15 @@ LAST SEEN   TYPE      REASON                 OBJECT                           ME
 50s         Normal    SuccessfulCreate       replicaset/frontend-8667d5c56b   Created pod: frontend-8667d5c56b-s6dph
 50s         Warning   StackRox enforcement   deployment/frontend              A pod (frontend-8667d5c56b-f9fcj) violated StackRox policy "Alpine Linux Package Manager Execution - Enforce" and was killed
 ----
-
++
 NOTE: After a few seconds, you can see the pod is deleted and recreated. In your tmux shell pane, note that your shell session has terminated and that you are returned to the Bastion VM command line.
 
-[start=7]
-
 . Exit the tmux session and return to the bastion host terminal:
-+
 .. If you are still inside the container shell, type `exit` to exit the container.
 .. Press `Ctrl+C` to stop the `watch` command running in the tmux pane.
 .. Type `exit` to exit the tmux session and return to the bastion host terminal.
 
-Congrats! You have successfully stopped yourself from downloading malicious packages! However, the security investigative process continues, as you have now raised a flag that must be triaged! you will triage our violations after you look at deploy time policies.
+*Congrats!* You have successfully stopped yourself from downloading malicious packages! However, the security investigative process continues, as you have now raised a flag that must be triaged! you will triage our violations after you look at deploy time policies.
 
 [[report-and-resolve-violations]]
 
@@ -468,23 +433,22 @@ Event audits are crucial not just for security best practices, but also to meet 
 
 *Procedure*
 
-. In RHACS, navigate to the Violations page.
+. In RHACS, navigate to the *Violations* page.
 . Filter by the policy violation Policy - Name - r/apk OR by the most recent policy violations. You will see a policy violation that has been enforced.
-
++
 image::acs-violations-01.png[link=self, window=blank, width=100%, Violations Menu]
 
 . Click on your "Alpine Linux Package Manager Execution - Patient-Portal Enforcement" to view the details.
-
++
 image::acs-violations-02.png[link=self, window=blank, width=100%, Violations Menu]
-
++
 [IMPORTANT]
 ====
 If configured properly, each violation record should be pushed to a Security Information and Event Management (SIEM) application and is available to be retrieved via the API. The forensic data shown in the UI is recorded, including the timestamp, process user IDs, process arguments, process ancestors, and enforcement action.
 ====
-
++
 NOTE: You must resolve the issue before it will disappear from the Violations page.
 
-[start=4]
 . Remove the deployment that violates the policy by click the three dots and selecting "Mark as resolved"
 
 [[workload-vulnerability-management-image-signing]]
@@ -494,7 +458,6 @@ NOTE: You must resolve the issue before it will disappear from the Violations pa
 In this section, you will look at the Workload Vulnerability Management and image signature verification features of RHACS.
 
 Sovereignty over your organization's data and services is fundamentally linked to how you manage risk across the entire software supply chain. In today's global and hybrid cloud environments, ensuring that only trusted, verified software components are deployed is crucial for maintaining compliance, controlling data flows, and preventing exposure to supply chain vulnerabilities. Effective software supply chain management—encompassing image provenance, signature verification, vulnerability scanning, and compliance enforcement—not only mitigates risk but also upholds your organization's autonomy and ability to meet regulatory requirements unique to each operating region. 
-
 
 [[understanding-responsibilities-software-supply-chain]]
 
@@ -507,15 +470,15 @@ image::acs-vulnerability-management-01.png[link=self, window=blank, width=100%, 
 Red Hat always shows you how our software is performing as well. 
 
 . Click on the *Platform* tab to see the OpenShift platform related vulnerabilities.
-
++
 image::acs-vulnerability-management-02.png[link=self, window=100%, width=100%, Vulnerability Management]
-
++
 If you love vulnerability tracking you can read more about it here - https://access.redhat.com/security/updates/classification. But we wanted to show you that all of Red Hat's software is signed, attested, and reaching compliance with SLSA Level 3 standards (see https://slsa.dev/spec/v1.0/levels#build-l3-hardened-builds[SLSA Level 3 compliance details]).
 
-[start=2]
 . Click on images button on the platform tab and notivce that Red Hat images are signed and attested.
-
++
 image::acs-vulnerability-management-03.png[link=self, window=100%, width=100%, Vulnerability Management]
++
 image::acs-vulnerability-management-04.png[link=self, window=100%, width=100%, Vulnerability Management]
 
 And while you can create SBOMs while you're here, we wanted to you to work on building your own software and signing it with your own keys. Before that, there is one project we wanted to highlight that can help you shrink the number of vulenrabilities in your environment.
@@ -524,11 +487,10 @@ And while you can create SBOMs while you're here, we wanted to you to work on bu
 
 === Project Hummingbird
 
-Project Hummingbird is a Red Hat initiative focused on delivering a lightweight, enterprise-ready version of Red Hat Enterprise Linux designed to be optimized for cloud and edge deployments. It enables organizations to maintain a consistent platform across diverse environments, ensuring robust performance, improved security, and simplified management. Hummingbird’s modern footprint is tailored for fast startup, minimal resource usage, and efficient scalability, making it ideal for running containerized workloads, especially in multi-cloud or distributed edge locations.
+Project Hummingbird is a Red Hat initiative focused on delivering a lightweight, enterprise-ready version of Red Hat Enterprise Linux designed to be optimized for cloud and edge deployments. It enables organizations to maintain a consistent platform across diverse environments, ensuring robust performance, improved security, and simplified management. Hummingbird's modern footprint is tailored for fast startup, minimal resource usage, and efficient scalability, making it ideal for running containerized workloads, especially in multi-cloud or distributed edge locations.
 
 For more information, visit the official Red Hat Project Hummingbird page: https://www.redhat.com/en/technologies/linux-platforms/enterprise-linux/hummingbird
 
 **Hey! Great job! **
 
 image::https://media.giphy.com/media/v1.Y2lkPWVjZjA1ZTQ3ODhkZThkZXVxb2twdHloazAzc2VhNWJpeWowenRpeTJoczY3MTAyZyZlcD12MV9naWZzX3NlYXJjaCZjdD1n/RIjVnmAtOD4l4c2Ert/giphy.gif[Fun celebration, width=400]
-
