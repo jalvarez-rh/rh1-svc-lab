@@ -61,6 +61,7 @@ cd ~/rh1-svc-lab/ai-setup && ./setup.sh
 . Make sure you have access to the OpenShift AI dashboard before proceeding.
 +
 At the end of the script output, note the access information that will be displayed. This includes:
+
 * Dashboard URL (will be available after DataScienceCluster is created)
 * Username: admin
 * Password: {openshift_cluster_admin_password}
@@ -75,9 +76,10 @@ oc get pods -n redhat-ods-applications | grep -i dashboard
 ----
 +
 You should see:
-* DataScienceCluster status showing "Ready"
+
+* DataScienceCluster status showing `Ready`
 * Dashboard route named `rhods-dashboard`
-* Dashboard pods (typically named `rhods-dashboard-*`) in "Running" status
+* Dashboard pods (typically named `rhods-dashboard-*`) in `Running` status
 +
 NOTE:The dashboard runs with multiple replicas for high availability, so you may see 2 or more dashboard pods. If components are not ready, wait a few minutes and run the command again.
 
