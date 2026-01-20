@@ -703,16 +703,31 @@ fi
 # Step 5: Install RHTAS Operator
 echo "Installing RHTAS Operator..."
 
-# Check if subscription already exists
-if oc get subscription trusted-artifact-signer -n openshift-operators 2>/dev/null; then
-    echo "RHTAS Operator subscription 'trusted-artifact-signer' already exists, skipping creation"
+# Ensure we're targeting the correct namespace
+OPERATOR_NAMESPACE="openshift-operators"
+
+# Check if subscription already exists in the correct namespace
+if oc get subscription trusted-artifact-signer -n $OPERATOR_NAMESPACE >/dev/null 2>&1; then
+    echo "RHTAS Operator subscription 'trusted-artifact-signer' already exists in $OPERATOR_NAMESPACE, skipping creation"
 else
+    # Clean up any subscriptions in wrong namespaces (optional, but helpful)
+    echo "Checking for subscriptions in incorrect namespaces..."
+    WRONG_SUBS=$(oc get subscription -A -o jsonpath='{range .items[?(@.metadata.name=="trusted-artifact-signer" && @.metadata.namespace!="openshift-operators")]}{.metadata.namespace}{" "}{.metadata.name}{"\n"}{end}' 2>/dev/null || echo "")
+    if [ -n "$WRONG_SUBS" ]; then
+        echo "Warning: Found subscriptions in incorrect namespaces:"
+        echo "$WRONG_SUBS" | while read -r ns name; do
+            echo "  - $ns/$name"
+        done
+        echo "  These should only exist in $OPERATOR_NAMESPACE namespace"
+        echo "  To clean them up, run: oc delete subscription trusted-artifact-signer -n <namespace>"
+    fi
+    
     cat <<EOF | oc apply -f -
 apiVersion: operators.coreos.com/v1alpha1
 kind: Subscription
 metadata:
   name: trusted-artifact-signer
-  namespace: openshift-operators
+  namespace: ${OPERATOR_NAMESPACE}
 spec:
   channel: stable
   installPlanApproval: Automatic
@@ -721,7 +736,7 @@ spec:
   sourceNamespace: openshift-marketplace
   startingCSV: rhtas-operator.v1.3.1
 EOF
-    echo "✓ RHTAS Operator subscription created"
+    echo "✓ RHTAS Operator subscription created in $OPERATOR_NAMESPACE namespace"
 fi
 
 # Wait for RHTAS Operator to be ready
@@ -877,13 +892,70 @@ while [ $WAIT_COUNT -lt $MAX_WAIT_PODS ]; do
         echo "  Still waiting for operator pods... (${WAIT_COUNT}s/${MAX_WAIT_PODS}s)"
         echo "    Operator pods status:"
         oc get pods -n openshift-operators -l name=trusted-artifact-signer-operator 2>/dev/null || echo "    No operator pods found"
+        
+        # Check for deployments
+        echo "    Checking for operator deployment:"
+        oc get deployment -n openshift-operators -l name=trusted-artifact-signer-operator 2>/dev/null || echo "    No deployment found"
+        
+        # Check for any pods with errors
+        echo "    Checking for pods in error states:"
+        oc get pods -n openshift-operators -l name=trusted-artifact-signer-operator --field-selector=status.phase!=Running 2>/dev/null || echo "    No non-running pods found"
+        
+        # Check CSV conditions for clues
+        echo "    CSV conditions:"
+        oc get csv $CSV_NAME -n openshift-operators -o jsonpath='{.status.conditions[*].type}{"\n"}' 2>/dev/null | while read -r cond; do
+            if [ -n "$cond" ]; then
+                cond_status=$(oc get csv $CSV_NAME -n openshift-operators -o jsonpath="{.status.conditions[?(@.type==\"$cond\")].status}" 2>/dev/null || echo "")
+                cond_msg=$(oc get csv $CSV_NAME -n openshift-operators -o jsonpath="{.status.conditions[?(@.type==\"$cond\")].message}" 2>/dev/null || echo "")
+                if [ "$cond_status" != "True" ] && [ -n "$cond_msg" ]; then
+                    echo "      $cond: $cond_status - $cond_msg"
+                fi
+            fi
+        done
+        
+        # Check recent events
+        echo "    Recent events in openshift-operators namespace:"
+        oc get events -n openshift-operators --field-selector involvedObject.name=$CSV_NAME --sort-by='.lastTimestamp' --no-headers 2>/dev/null | tail -3 || echo "    No recent events found"
     fi
 done
 
 if [ "$OPERATOR_PODS_READY" = false ]; then
+    echo ""
     echo "Warning: Operator pods are not ready after ${MAX_WAIT_PODS} seconds"
-    echo "Operator pods status:"
+    echo ""
+    echo "=== Diagnostic Information ==="
+    echo ""
+    echo "1. Operator pods status:"
     oc get pods -n openshift-operators -l name=trusted-artifact-signer-operator 2>/dev/null || echo "  No operator pods found"
+    echo ""
+    
+    echo "2. Operator deployment status:"
+    oc get deployment -n openshift-operators -l name=trusted-artifact-signer-operator -o yaml 2>/dev/null | grep -A 10 "status:" || echo "  No deployment found"
+    echo ""
+    
+    echo "3. ReplicaSet status:"
+    oc get replicaset -n openshift-operators -l name=trusted-artifact-signer-operator 2>/dev/null || echo "  No replicasets found"
+    echo ""
+    
+    echo "4. CSV status and conditions:"
+    oc get csv $CSV_NAME -n openshift-operators -o yaml 2>/dev/null | grep -A 20 "status:" | head -30 || echo "  Could not retrieve CSV status"
+    echo ""
+    
+    echo "5. Recent events related to operator:"
+    oc get events -n openshift-operators --field-selector involvedObject.name=$CSV_NAME --sort-by='.lastTimestamp' --no-headers 2>/dev/null | tail -10 || echo "  No recent events found"
+    echo ""
+    
+    echo "6. All pods in openshift-operators namespace (for context):"
+    oc get pods -n openshift-operators --no-headers 2>/dev/null | grep -i "trusted\|rhtas" || echo "  No RHTAS-related pods found"
+    echo ""
+    
+    echo "=== Troubleshooting Commands ==="
+    echo ""
+    echo "To investigate further, run:"
+    echo "  oc describe csv $CSV_NAME -n openshift-operators"
+    echo "  oc get deployment -n openshift-operators -l name=trusted-artifact-signer-operator -o yaml"
+    echo "  oc get events -n openshift-operators --sort-by='.lastTimestamp' | grep -i 'trusted\|rhtas' | tail -20"
+    echo "  oc logs -n openshift-operators -l name=trusted-artifact-signer-operator --tail=50"
     echo ""
     echo "This may cause issues when deploying RHTAS components. Continuing anyway..."
 fi
