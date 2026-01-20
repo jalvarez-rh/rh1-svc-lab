@@ -201,7 +201,7 @@ In this next step, you'll use Red Hat® OpenShift® GitOps with Argo CD to decla
 . Navigate to *Applications* from the left side menu.
 . Click *Create application*, select *ArgoCD AppicationSet-Push Model*.
 . Enter the following information:
-* *Name:* skupper-patient-demo-us
+* *Name:* skupper-patient-demo-world
 * *Argo Server:* openshift-gitops
 . Click *NEXT*
 
@@ -245,40 +245,31 @@ NOTE: These changes are only required as you will be modifying the application Y
 . Under *Label expressions* click *add label* and select the following
 * *Label:* location
 * *Operator:* equals any off
-* *Values:* us
+* *Values:* us, emea.
+. Make sure that *Set a limit on the number of clusters selected* is checked 
+. Set the number to 2
 
 image::03-app-placement-us.png[link=self, window=blank, width=100%, ACM App Placement US]
 
 [start=14]
 . Verify all of the information is correct and click *Submit*.
 
-NOTE: It will take a few minutes to deploy the application, during this time you might see the Cluster / Application have a red X, this is expected and normal.
-
-[start=15]
-. While this application deploys, Repeat the steps to deploy the application to the *hcp-emea* cluster. Make sure the application name is set to *skupper-patient-demo-emea*
-
-. Under *Placement* for application deployment, verify that *New Placement* is selected.
-* *Cluster set:* managed
-. Under *Label expressions* click *add label* and select the following
-* *Label:* location
-* *Operator:* equals any off
-* *Values:* emea
+NOTE: It will take a few minutes to deploy the application, during this time you might see the Cluster / Application have a red X, this is expected and normal, please allow 5 minutes before checking logs.
 
 NOTE: We will use these applications in other modules of the lab hence why we have you deploy it twice in two different locations. 
 
-image::03-app-placement-emea.png[link=self, window=blank, width=100%, ACM App Placement EMEA]
 
-[start=16]
+[start=15]
 . Navigate back to the application view, find the filter and select *Application Set*
-. Find the *skupper-patient-demo-us* app 
+. Find the *skupper-patient-demo-world* app 
 . Click on the *Topology Tab* to view and verify that *all of the circles are green*.
 
 image::03-application-topology-git.png[link=self, window=blank, width=100%, Application Topology]
 
-[start=17]
+[start=16]
 . Under the topology view, Select the *Route* and click on the *Launch Route URL*
 
-NOTE: This will take you to the Front end for the Patient Portal application, which is now running in our Hosted Controlled Plane (HCP) CLuster.
+NOTE: This will take you to the Front end for the Patient Portal application, which is now running in both the *aws-us* cluster and the *hcp-emea* Hosted Controlled Plane (HCP) CLuster.
 
 IMPORTANT: If you get a "Application is not available" page change the URL to use http:// and that should fix the issue. 
 
@@ -288,5 +279,3 @@ image::03-application-route-git.png[link=self, window=blank, width=100%, Applica
 
 image::https://media.giphy.com/media/v1.Y2lkPTc5MGI3NjExdjl5YTd4M2o1MWZ4ZjBmMjM3cmJyMHYzZTFsbHB4ZDg0MXN1dzJvcCZlcD12MV9naWZzX3NlYXJjaCZjdD1n/ely3apij36BJhoZ234/giphy.gif[Celebration, width=400, align="center"]
 
-
-You have successfully deployed an application using RHACM and OpenShift GitOps. This approach utilized a Git repository containing the manifests that defined your application. RHACM took those manifests and used them as deployables, which were then deployed to the target cluster.
