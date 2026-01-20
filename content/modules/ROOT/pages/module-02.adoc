@@ -115,6 +115,8 @@ TIP: You should see the new schedule in the list and it will be performing it's 
 image::assurance-06.png[link=self, window=blank, width=100%]
 
 . Head over to the OpenShift coverage section where you can view all of the details from the scan.
+
+NOTE: This will take a few minutes to load, so please be patient.
 +
 image::assurance-07.png[link=self, window=blank, width=100%]
 +
@@ -215,6 +217,10 @@ status:
 .. Navigate to *Compliance* → *OpenShift Schedules* and locate your schedule (for example, `acs-catch-all`).
 .. Use the menu on the schedule (three dots) and select *Run scan* to trigger a manual scan.
 
+Updating your allowed image registries is one of the fastest and most effective ways to improve security and compliance in OpenShift. Other quick hardening steps include enabling audit log forwarding and activating host node auditing with Linux auditd. These security configurations can be applied consistently across the entire cluster using the MachineConfig Operator.
+
+For even better results, you can automate these settings so new clusters are secure and compliant from the moment they are created. Tools like Ansible, Advanced Cluster Management (RHACM), or GitOps workflows make this automation straightforward and reliable.
+
 === Check Results
 
 . Click on the *Compliance* -> *OpenShift Coverage* -> *E8* tab.
@@ -225,10 +231,6 @@ status:
 ====
 Changes to Image configuration may take a few minutes to propagate in OpenShift. If the compliance check still fails after rescanning, wait a few minutes and run the scan again.
 ====
-
-Updating your allowed image registries is one of the fastest and most effective ways to improve security and compliance in OpenShift. Other quick hardening steps include enabling audit log forwarding and activating host node auditing with Linux auditd. These security configurations can be applied consistently across the entire cluster using the MachineConfig Operator.
-
-For even better results, you can automate these settings so new clusters are secure and compliant from the moment they are created. Tools like Ansible, Advanced Cluster Management (RHACM), or GitOps workflows make this automation straightforward and reliable.
 
 [[maintaining-control-in-sovereign-multi-region-environments]]
 
@@ -431,9 +433,9 @@ NOTE: After a few seconds, you can see the pod is deleted and recreated. In your
 .. Press `Ctrl+C` to stop the `watch` command running in the tmux pane.
 .. Type `exit` or `Ctrl-D` to exit the tmux session and return to the bastion host terminal.
 
-*Congrats!* You have successfully stopped yourself from downloading malicious packages! However, the security investigative process continues, as you have now raised a flag that must be triaged! You will triage our violations after you look at deploy time policies.
+*Congrats!* 
 
-[[report-and-resolve-violations]]
+You have successfully stopped yourself from downloading malicious packages! However, the security investigative process continues, as you have now raised a flag that must be triaged! You will triage our violations after you look at deploy time policies.
 
 [[violations-reporting-audit-compliance]]
 
@@ -487,7 +489,9 @@ Red Hat always shows you how our software is performing as well.
 +
 image::acs-vulnerability-management-02.png[link=self, window=100%, width=100%, Vulnerability Management]
 +
-If you love vulnerability tracking you can read more about it here - https://access.redhat.com/security/updates/classification. But we wanted to show you that all of Red Hat's software is signed, attested, and reaching compliance with SLSA Level 3 standards (see https://slsa.dev/spec/v1.0/levels#build-l3-hardened-builds[SLSA Level 3 compliance details]).
+For more information about vulnerability tracking and classification, see https://access.redhat.com/security/updates/classification[Red Hat Security Updates Classification].
+
+Red Hat software is signed, attested, and compliant with SLSA Level 3 standards. For details about SLSA Level 3 compliance, see https://slsa.dev/spec/v1.0/levels#build-l3-hardened-builds[SLSA Level 3 compliance details].
 
 . Click on images button on the platform tab and notivce that Red Hat images are signed and attested.
 +
@@ -503,7 +507,7 @@ And while you can create SBOMs while you're here, we wanted to you to work on bu
 
 Project Hummingbird is a Red Hat initiative focused on delivering a lightweight, enterprise-ready version of Red Hat Enterprise Linux designed to be optimized for cloud and edge deployments. It enables organizations to maintain a consistent platform across diverse environments, ensuring robust performance, improved security, and simplified management. Hummingbird's modern footprint is tailored for fast startup, minimal resource usage, and efficient scalability, making it ideal for running containerized workloads, especially in multi-cloud or distributed edge locations.
 
-For more information, visit the official Red Hat Project Hummingbird page: https://www.redhat.com/en/technologies/linux-platforms/enterprise-linux/hummingbird
+For more information about Red Hat Project Hummingbird, see https://www.redhat.com/en/technologies/linux-platforms/enterprise-linux/hummingbird[Red Hat Project Hummingbird].
 
 **Hey! Great job! **
 

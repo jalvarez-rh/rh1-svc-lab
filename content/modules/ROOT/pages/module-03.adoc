@@ -36,7 +36,7 @@ env:
 parsed config:
 ----
 +
-IMPORTANT: If you have issues make sure to as for help from a proctor.
+IMPORTANT: If you have issues make sure to ask for help from a proctor.
 
 [[trusted-artifact-signer]]
 
@@ -50,7 +50,7 @@ Trusted Artifact Signer provides a production-ready deployment of the https://ww
 
 In sovereign cloud environments, maintaining control over your software supply chain is essential for regulatory compliance, data protection, and operational independence. Trusted Artifact Signer addresses these requirements through:
 
-. *Supply Chain Security*: Modern software development requires robust mechanisms to secure dependencies and artifacts, which GNU Privacy Guard (GPG) (https://www.gnupg.org/) struggles to address effectively. For sovereign cloud operations, this ensures only approved, verified artifacts enter your infrastructure.
+. *Supply Chain Security*: Modern software development requires robust mechanisms to secure dependencies and artifacts, which https://www.gnupg.org/[GNU Privacy Guard (GPG)] struggles to address effectively. For sovereign cloud operations, this ensures only approved, verified artifacts enter your infrastructure.
 . *Usability*: Developers need simpler, more intuitive signing solutions without the burden of manual key management. This reduces operational overhead while maintaining strict security controls essential for sovereign environments.
 . *Transparency*: A centralized, tamper-evident log system ensures accountability and traceability of signatures, enhancing trust and providing the auditability required for sovereign cloud compliance.
 . *Modern Identity Integration*: Sigstore aligns with contemporary authentication mechanisms (e.g., OAuth, OpenID Connect), making it easier to tie signatures to identities within your organization's identity management systems—critical for maintaining sovereign control.
@@ -72,7 +72,7 @@ Sigstore is designed to address the pain points and limitations of GPG in the co
 
 == Rebuilding the Patient Portal Frontend Application
 
-We're going to use our patient portal frontend application to demonstrate the signing and verification process. First, we need to rebuild the application and push it to our local private registry. We sped up the process into two commands for you
+We're going to use our patient portal frontend application to demonstrate the signing and verification process. First, we need to rebuild the application and push it to our local private registry. We've streamlined the process into two commands for you.
 
 . Run the following commands in the terminal to retrieve your Quay user and registry URL using oc:
 +
@@ -188,7 +188,7 @@ cosign initialize
 [source,bash,subs="+macros,+attributes"]
 ----
 [lab-user@bastion ~]$ cosign initialize
-Root status:
+Root status: 
  {
         "local": "/home/lab-user/.sigstore/root",
         "remote": "https://tuf-trusted-artifact-signer.apps.cluster-l2ktc.l2ktc.sandbox75.opentlc.com",
@@ -378,7 +378,7 @@ For example, GitHub Actions and GitLab CI/CD can pass the OIDC identity of the p
 
 In general, continuous integration (CI) systems focus on providing the identity of the build or deployment environment rather than the personal identity of the user who triggered it. This helps maintain least privilege and ensures reproducibility. However, depending on your CI setup and requirements, you can leverage the flexibility of OIDC to meet your specific needs.
 
-=== Re Deploy the Patient Portal Frontend Application
+=== Redeploy the Patient Portal Frontend Application
 
 Since our other skupper-patient-demo application is deployed to the patient-portal namespace let's quickly deploy it to the signed-patient-portal namespace.
 

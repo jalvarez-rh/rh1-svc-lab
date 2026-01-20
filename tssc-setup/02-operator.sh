@@ -779,20 +779,59 @@ if [ -z "$CSV_NAME" ]; then
     exit 1
 fi
 
-# Wait for CSV to be in Succeeded phase
-echo "Waiting for CSV to be installed (Succeeded phase)..."
+# Wait for CSV to be in Succeeded phase AND deployment to be ready
+echo "Waiting for CSV to be installed (Succeeded phase) and deployment to be ready..."
 MAX_WAIT_CSV_INSTALL=600
 WAIT_COUNT=0
 CSV_SUCCEEDED=false
+DEPLOYMENT_READY=false
 
+# Find the deployment name
+DEPLOYMENT_NAME=""
 while [ $WAIT_COUNT -lt $MAX_WAIT_CSV_INSTALL ]; do
     CSV_PHASE=$(oc get csv $CSV_NAME -n openshift-operators -o jsonpath='{.status.phase}' 2>/dev/null || echo "")
     CSV_CONDITIONS=$(oc get csv $CSV_NAME -n openshift-operators -o jsonpath='{.status.conditions[*].type}' 2>/dev/null || echo "")
     
+    # Try to find the deployment name from CSV
+    if [ -z "$DEPLOYMENT_NAME" ]; then
+        DEPLOYMENT_NAME=$(oc get csv $CSV_NAME -n openshift-operators -o jsonpath='{.spec.install.spec.deployments[*].name}' 2>/dev/null | awk '{print $1}' || echo "")
+        if [ -z "$DEPLOYMENT_NAME" ]; then
+            # Try alternative method - look for deployments with operator name
+            DEPLOYMENT_NAME=$(oc get deployment -n openshift-operators -o name 2>/dev/null | grep -i "rhtas\|trusted-artifact-signer" | head -1 | sed 's|deployment.apps/||' || echo "")
+        fi
+    fi
+    
+    # Check CSV phase
     if [ "$CSV_PHASE" = "Succeeded" ]; then
         CSV_SUCCEEDED=true
-        echo "✓ CSV is in Succeeded phase"
-        break
+        
+        # Also check if deployment is actually ready
+        if [ -n "$DEPLOYMENT_NAME" ]; then
+            DEPLOYMENT_READY_REPLICAS=$(oc get deployment $DEPLOYMENT_NAME -n openshift-operators -o jsonpath='{.status.readyReplicas}' 2>/dev/null || echo "0")
+            DEPLOYMENT_REPLICAS=$(oc get deployment $DEPLOYMENT_NAME -n openshift-operators -o jsonpath='{.spec.replicas}' 2>/dev/null || echo "1")
+            
+            if [ "$DEPLOYMENT_READY_REPLICAS" = "$DEPLOYMENT_REPLICAS" ] && [ "$DEPLOYMENT_READY_REPLICAS" != "0" ]; then
+                DEPLOYMENT_READY=true
+                echo "✓ CSV is in Succeeded phase"
+                echo "✓ Deployment $DEPLOYMENT_NAME is ready ($DEPLOYMENT_READY_REPLICAS/$DEPLOYMENT_REPLICAS replicas)"
+                break
+            else
+                # CSV says succeeded but deployment isn't ready yet
+                if [ $((WAIT_COUNT % 30)) -eq 0 ] && [ $WAIT_COUNT -gt 0 ]; then
+                    echo "  CSV is Succeeded but deployment not ready yet... (${WAIT_COUNT}s/${MAX_WAIT_CSV_INSTALL}s)"
+                    echo "    Deployment $DEPLOYMENT_NAME: $DEPLOYMENT_READY_REPLICAS/$DEPLOYMENT_REPLICAS replicas ready"
+                    # Check deployment conditions
+                    DEPLOYMENT_CONDITIONS=$(oc get deployment $DEPLOYMENT_NAME -n openshift-operators -o jsonpath='{.status.conditions[*].type}' 2>/dev/null || echo "")
+                    if [ -n "$DEPLOYMENT_CONDITIONS" ]; then
+                        echo "    Deployment conditions: ${DEPLOYMENT_CONDITIONS}"
+                    fi
+                fi
+            fi
+        else
+            # Can't find deployment, but CSV is succeeded - might be OK
+            echo "✓ CSV is in Succeeded phase (deployment name not found, will check pods)"
+            break
+        fi
     elif [ "$CSV_PHASE" = "Failed" ]; then
         echo "Error: CSV installation failed. Phase: $CSV_PHASE"
         echo "CSV conditions:"
@@ -807,6 +846,10 @@ while [ $WAIT_COUNT -lt $MAX_WAIT_CSV_INSTALL ]; do
         if [ -n "$CSV_CONDITIONS" ]; then
             echo "    Conditions: ${CSV_CONDITIONS}"
         fi
+        if [ -n "$DEPLOYMENT_NAME" ]; then
+            DEPLOYMENT_STATUS=$(oc get deployment $DEPLOYMENT_NAME -n openshift-operators -o jsonpath='{.status.conditions[?(@.type=="Available")].status}' 2>/dev/null || echo "")
+            echo "    Deployment $DEPLOYMENT_NAME Available status: ${DEPLOYMENT_STATUS:-Unknown}"
+        fi
     fi
 done
 
@@ -816,6 +859,15 @@ if [ "$CSV_SUCCEEDED" = false ]; then
     oc get csv $CSV_NAME -n openshift-operators -o yaml | grep -A 10 "status:" || echo "  Could not retrieve CSV status"
     echo ""
     echo "Continuing, but operator may not be fully ready..."
+elif [ "$DEPLOYMENT_READY" = false ] && [ -n "$DEPLOYMENT_NAME" ]; then
+    echo "Warning: CSV is Succeeded but deployment $DEPLOYMENT_NAME is not ready"
+    echo "Deployment status:"
+    oc get deployment $DEPLOYMENT_NAME -n openshift-operators -o yaml | grep -A 15 "status:" || echo "  Could not retrieve deployment status"
+    echo ""
+    echo "Checking deployment events:"
+    oc get events -n openshift-operators --field-selector involvedObject.name=$DEPLOYMENT_NAME --sort-by='.lastTimestamp' --no-headers 2>/dev/null | tail -5 || echo "  No recent events"
+    echo ""
+    echo "Continuing, but operator pods may not be running..."
 fi
 
 # Wait for CRDs to be installed
@@ -869,11 +921,35 @@ fi
 # Wait for operator pods to be running
 echo ""
 echo "Waiting for RHTAS operator pods to be running..."
+
+# Find deployment name if not already found
+if [ -z "$DEPLOYMENT_NAME" ]; then
+    DEPLOYMENT_NAME=$(oc get deployment -n openshift-operators -o name 2>/dev/null | grep -i "rhtas\|trusted-artifact-signer\|controller-manager" | head -1 | sed 's|deployment.apps/||' || echo "")
+    if [ -z "$DEPLOYMENT_NAME" ]; then
+        # Try to get from CSV
+        DEPLOYMENT_NAME=$(oc get csv $CSV_NAME -n openshift-operators -o jsonpath='{.spec.install.spec.deployments[*].name}' 2>/dev/null | awk '{print $1}' || echo "")
+    fi
+fi
+
 MAX_WAIT_PODS=300
 WAIT_COUNT=0
 OPERATOR_PODS_READY=false
 
 while [ $WAIT_COUNT -lt $MAX_WAIT_PODS ]; do
+    # First check deployment status if we found it
+    if [ -n "$DEPLOYMENT_NAME" ]; then
+        DEPLOYMENT_READY_REPLICAS=$(oc get deployment $DEPLOYMENT_NAME -n openshift-operators -o jsonpath='{.status.readyReplicas}' 2>/dev/null || echo "0")
+        DEPLOYMENT_REPLICAS=$(oc get deployment $DEPLOYMENT_NAME -n openshift-operators -o jsonpath='{.spec.replicas}' 2>/dev/null || echo "1")
+        DEPLOYMENT_AVAILABLE=$(oc get deployment $DEPLOYMENT_NAME -n openshift-operators -o jsonpath='{.status.conditions[?(@.type=="Available")].status}' 2>/dev/null || echo "")
+        
+        if [ "$DEPLOYMENT_READY_REPLICAS" = "$DEPLOYMENT_REPLICAS" ] && [ "$DEPLOYMENT_READY_REPLICAS" != "0" ] && [ "$DEPLOYMENT_AVAILABLE" = "True" ]; then
+            OPERATOR_PODS_READY=true
+            echo "✓ Deployment $DEPLOYMENT_NAME is ready ($DEPLOYMENT_READY_REPLICAS/$DEPLOYMENT_REPLICAS replicas)"
+            break
+        fi
+    fi
+    
+    # Also check pods directly
     OPERATOR_PODS=$(oc get pods -n openshift-operators -l name=trusted-artifact-signer-operator --field-selector=status.phase=Running --no-headers 2>/dev/null | wc -l || echo "0")
     
     if [ "$OPERATOR_PODS" -gt 0 ]; then
@@ -895,11 +971,33 @@ while [ $WAIT_COUNT -lt $MAX_WAIT_PODS ]; do
         
         # Check for deployments
         echo "    Checking for operator deployment:"
-        oc get deployment -n openshift-operators -l name=trusted-artifact-signer-operator 2>/dev/null || echo "    No deployment found"
+        if [ -n "$DEPLOYMENT_NAME" ]; then
+            oc get deployment $DEPLOYMENT_NAME -n openshift-operators 2>/dev/null || echo "    Deployment $DEPLOYMENT_NAME not found"
+            if [ -n "$DEPLOYMENT_NAME" ]; then
+                DEPLOYMENT_STATUS=$(oc get deployment $DEPLOYMENT_NAME -n openshift-operators -o jsonpath='{.status.conditions[?(@.type=="Available")].status}' 2>/dev/null || echo "")
+                DEPLOYMENT_MSG=$(oc get deployment $DEPLOYMENT_NAME -n openshift-operators -o jsonpath='{.status.conditions[?(@.type=="Available")].message}' 2>/dev/null || echo "")
+                echo "    Deployment $DEPLOYMENT_NAME Available: ${DEPLOYMENT_STATUS:-Unknown}"
+                if [ -n "$DEPLOYMENT_MSG" ]; then
+                    echo "    Message: $DEPLOYMENT_MSG"
+                fi
+            fi
+        else
+            oc get deployment -n openshift-operators -l name=trusted-artifact-signer-operator 2>/dev/null || echo "    No deployment found"
+        fi
         
         # Check for any pods with errors
         echo "    Checking for pods in error states:"
         oc get pods -n openshift-operators -l name=trusted-artifact-signer-operator --field-selector=status.phase!=Running 2>/dev/null || echo "    No non-running pods found"
+        
+        # Check ReplicaSet status if deployment exists
+        if [ -n "$DEPLOYMENT_NAME" ]; then
+            RS_NAME=$(oc get replicaset -n openshift-operators -l app=$DEPLOYMENT_NAME --sort-by='.metadata.creationTimestamp' -o jsonpath='{.items[-1].metadata.name}' 2>/dev/null || echo "")
+            if [ -n "$RS_NAME" ]; then
+                RS_READY=$(oc get replicaset $RS_NAME -n openshift-operators -o jsonpath='{.status.readyReplicas}' 2>/dev/null || echo "0")
+                RS_REPLICAS=$(oc get replicaset $RS_NAME -n openshift-operators -o jsonpath='{.spec.replicas}' 2>/dev/null || echo "0")
+                echo "    ReplicaSet $RS_NAME: $RS_READY/$RS_REPLICAS ready"
+            fi
+        fi
         
         # Check CSV conditions for clues
         echo "    CSV conditions:"

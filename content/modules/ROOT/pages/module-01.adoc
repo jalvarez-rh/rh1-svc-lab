@@ -121,12 +121,12 @@ NOTE: Notice all of the available templates to use, Windows VMs are fully suppor
 
 . Under Virtual machine name, enter the following and leave all other options as default (Disk size, Disk Source):
 +
-[source,sh]
+[source,sh,role=execute]
 ----
 rhel9-lab-vm
 ----
 +
-[NOTE]
+[CAUTION]
 ====
 Please notice all of the available options to configure the VM with, these will change depending on your operating system
 ====
@@ -233,29 +233,35 @@ NOTE: These changes are only required as you will be modifying the application Y
 Ensure *Cluster* set is set to Global and the label values to be present in the placement rule, otherwise you will have issues in the next steps.
 ====
 +
-image::03-app-placement-us.png[link=self, window=blank, width=100%, ACM App Placement US]
-
 . Verify all of the information is correct and click *Submit*.
+
+image::03-app-placement-us.png[link=self, window=blank, width=100%, ACM App Placement US]
 +
 NOTE: It will take a few minutes to deploy the application, during this time you might see the Cluster / Application have a red X, this is expected and normal, please allow 5 minutes before checking logs.
 +
-NOTE: We will use these applications in other modules of the lab hence why we have you deploy it twice in two different locations.
-+
-NOTE: It will take a few minutes to deploy the application, during this time you might see the Cluster / Application have a red X, this is expected and normal.
 
-. Navigate back to the *Applications* view, find the filter and select *Application Set*
-. Find the *skupper-patient-demo* app
-. Click on the *Topology Tab* to view and verify that *all of the circles are green*.
+IMPORTANT: We will use these applications in other modules of the lab hence why we have you deploy it twice in two different locations.
 +
-image::03-application-topology-git.png[link=self, window=blank, width=100%, Application Topology]
 
-=== Conclusion
+=== Wrapping Up
 
 In this opening module, you moved beyond basic cluster setup to orchestrating a unified environment through RHACM fleet cluster management. By leveraging Red Hat GitOps to drive applications and policies, you've essentially abstracted the underlying infrastructure, allowing fleet virtualization to handle the heavy lifting behind the scenes. This transition is critical because it shifts the focus from manual configuration to a policy-driven architecture where connectivity and governance are inherent to the system.
 
 This seamless integration provides a clear blueprint for digital sovereignty. By using GitOps to push declarative policies across your entire fleet, you are effectively enforcing your own jurisdictional standards regardless of where the physical nodes reside. You aren’t just deploying software; you’re asserting that your security posture and operational rules stay consistent across both private and public clouds, ensuring that no single cloud provider dictates your architecture.
 
 Ultimately, the power of this module lies in how it decouples your services from the hardware. Through fleet virtualization, you’ve built a portable, vendor-agnostic ecosystem that allows you to maintain total authority over your data and workloads.
+
+=== Verify the Application Deployment Before Moving On
+
+Procedure:
+
+[start=1]
+
+. Navigate back to the *Applications* view, find the filter and select *Application Set*
+. Find the *skupper-patient-demo* app
+. Click on the *Topology Tab* to view and verify that *all of the circles are green*.
++
+image::03-application-topology-git.png[link=self, window=blank, width=100%, Application Topology]
 
 **Congratulations!**
 
