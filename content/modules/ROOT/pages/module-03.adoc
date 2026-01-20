@@ -80,11 +80,11 @@ We're going to use our patient portal frontend application to demonstrate the si
 ----
 QUAY_CONSOLE_URL="{quay_console_url}"
 QUAY_URL=${QUAY_CONSOLE_URL#https://}
-QUAY_URL=${QUAY_URL#http://}
+export QUAY_URL=${QUAY_URL#http://}
 
 cat >> ~/.bashrc <<'EOF'
-export QUAY_USER="{quay_admin_username}"
-export QUAY_URL="${QUAY_URL}"
+export QUAY_USER={quay_admin_username}
+export QUAY_URL=$QUAY_URL
 EOF
 
 source ~/.bashrc
