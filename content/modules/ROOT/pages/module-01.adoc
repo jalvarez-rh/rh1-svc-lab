@@ -45,7 +45,7 @@ image::104-aws-credentials.png[link=self, window=blank, width=100%, AWS Credenti
 . Name your cluster *hcp-emea*, and verify that is on the *clusters* space for the hosted cluster namespace
 . Select *managed* for the Cluster Set
 . Next, select the release image *OpenShift 4.19.21* (or whatever the current 4.19 release image is). 
-. Select *single replica* for both the *Controller availability policy* and the *Infrastructure availability policy*.
+. Select *Single replica* for both the *Controller availability policy* and the *Infrastructure availability policy*.
 +
 [NOTE]
 ====
@@ -57,18 +57,20 @@ Single replica means components are not expected to be resilient to problems acr
 +
 image::105-create-cluster-details.png[link=self, window=blank, width=100%, Create Cluster Details]
 
-. On the next screen you can customize the name for the node pools, the amount of pool replicas, cores and memory, enter the name *hcp-emea* for the Node pool name and leave the other details as default.
+. On the next screen you can customize the name for the node pools, the amount of pool replicas, cores and memory.
++
+Enter the name `hcp-emea` for the *Node pool name* and leave the other details as default.
 . Click on *Next* to proceed.
 +
 image::106-create-cluster-nodepools.png[link=self, window=blank, width=100%, Create Cluster NodePools]
 
-. The next screen allows you to configure storage mappings type to use and it's associated variables, we will leave these as default as these have already been configured on the backend.
+. The next screen allows you to configure storage mappings type to use and it's associated variables. We will leave these as default as these have already been configured on the backend.
 +
 Click on *Next* to proceed.
 +
 image::107-create-cluster-networking.png[link=self, window=blank, width=100%, Create Cluster Networking]
 
-. Click *Next* on each screen to proceed to the final *Review and Create* screen. You will see a description of the cluster you are creating.
+. Click *Next* on each screen to proceed to the final *Review* screen. You will see a description of the cluster you are creating.
 . Click the blue *Create* button to start the deployment process.
 +
 image::108-create-cluster-summary-create.png[link=self, window=blank, width=100%, Create Cluster Summary Page]
@@ -193,7 +195,7 @@ image::03-app-gitops.png[link=self, window=blank, width=100%, App GitOps]
 https://github.com/mfosterrox/demo-applications.git
 ----
 . Enter revision `main` and select *Create new option* for the Revision
-. Select *Path* from the dropdown (if you don't see anything in the dropdown make sure you created new opeions in the previous steps):
+. Select *Path* from the dropdown (if you don't see anything in the dropdown make sure you created new options in the previous steps):
 +
 [source,sh,subs="attributes",role=execute]
 ----
