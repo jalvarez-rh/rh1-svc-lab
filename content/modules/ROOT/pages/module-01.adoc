@@ -23,68 +23,63 @@ From the Clusters screen, you can quickly see how simple it is to deploy a new c
 
 *Procedure*
 
-[start=1]
-. In the top left of the screen, click the drop down menu and select *Fleet Management*
+. On the top left of the OpenShift Console, click the drop down menu and select *Fleet Management*
++
+[HINT]
+====
+If you don't see the dropdown your window is not wide enough - just click the "hamburger menu" (the three dashes) to reveal the side menu.
+====
+
 . Next, click on the *Create cluster* button in the center of the screen:
-
++
 image::103-create-cluster.png[link=self, window=blank, width=100%, Create Cluster]
++
+NOTE: You'll notice that the only option already highlighted is Red Hat OpenShift Virtualization, indicating that your credentials are saved for the purpose of speeding up this lab. You will use this to deploy the new cluster, but feel free to explore the window to see other available cluster types.
 
-NOTE: You’ll notice that the only option already highlighted is Red Hat OpenShift Virtualization, indicating that your credentials are saved for the purpose of speeding up this lab. You will use this to deploy the new cluster, but feel free to explore the window to see other available cluster types.
-
-[start=3]
-. Click on the Red Hat OpenShift Virtualization button. You will see one options for the control plane type: *Hosted*
-
+. Click on the *Red Hat OpenShift Virtualization* button. You will see one option for the control plane type: *Hosted*
++
 image::104-aws-credentials.png[link=self, window=blank, width=100%, AWS Credentials]
 
-[start=4]
-. Click on the *hosted* option.
-. Leave the infrastructure Provider Credentials as *hcp* 
+. Click on the *Hosted* option.
+. Leave the *Infrastructure provider credential* as *hcp*.
 . Name your cluster *hcp-emea*, and verify that is on the *clusters* space for the hosted cluster namespace
 . Select *managed* for the Cluster Set
-. Next, select the release image *OpenShift 4.19.21*. 
-. Select *single replica* for both the Controller availability policy and the Infrastructure availability policy. 
-
+. Next, select the release image *OpenShift 4.19.21* (or whatever the current 4.19 release image is). 
+. Select *single replica* for both the *Controller availability policy* and the *Infrastructure availability policy*.
++
 [NOTE]
 ====
 Single replica means components are not expected to be resilient to problems across most fault boundaries associated with high availability. This usually means running critical workloads with just 1 replica and with toleration of full disruption of the component.
 ====
 
-[start=10]
 . Create a label called *location=emea* - we will use this later on for other exercises.
 . Click on *Next* to continue.
-
++
 image::105-create-cluster-details.png[link=self, window=blank, width=100%, Create Cluster Details]
 
-On the next screen you can customize the name for the node pools, the amount of pool replicas, cores and memory, enter the name *hcp-emea* for the Node pool name and leave the other details as default.
-
-[start=11]
+. On the next screen you can customize the name for the node pools, the amount of pool replicas, cores and memory, enter the name *hcp-emea* for the Node pool name and leave the other details as default.
 . Click on *Next* to proceed.
-
++
 image::106-create-cluster-nodepools.png[link=self, window=blank, width=100%, Create Cluster NodePools]
 
-The next screen allows you to configure storage mappings type to use and it's associated variables, we will leave these as default as these have already been configured on the backend.
-
-[start=12]
-. Click on *Next* to proceed.
-
+. The next screen allows you to configure storage mappings type to use and it's associated variables, we will leave these as default as these have already been configured on the backend.
++
+Click on *Next* to proceed.
++
 image::107-create-cluster-networking.png[link=self, window=blank, width=100%, Create Cluster Networking]
 
-[start=13]
 . Click *Next* on each screen to proceed to the final *Review and Create* screen. You will see a description of the cluster you are creating.
 . Click the blue *Create* button to start the deployment process.
-
++
 image::108-create-cluster-summary-create.png[link=self, window=blank, width=100%, Create Cluster Summary Page]
 
-[start=15]
 . Sit back and watch RHACM do it's thing. You should see the Cluster creation process starting in the UI.
-
++
 image::03-cluster-creation.png[link=self, window=blank, width=100%, View New Cluster]
-
-NOTE: Deploying this Hosted Control Plane (HCP) cluster will take about 5 to 10 minutes. You’ll continue the lab while waiting for this cluster to provision, we will use it later on.
++
+NOTE: Deploying this Hosted Control Plane (HCP) cluster will take about 5 to 10 minutes. You'll continue the lab while waiting for this cluster to provision, we will use it later on.
 
 [[label-an-existing-cluster]]
-
-
 
 [[multi-env-workloads]]
 
@@ -108,12 +103,11 @@ By the end of this exercise, you will:
 
 *Procedure*
 
-[start=1]
 . On the left switcher use the drop down to select *Fleet Virtualization*
 +
 image::08-dropdown-menu.png[link=self, window=blank, width=100%, Create VM]
 
-. Click the *Create* dropdown select *From template*
+. Click the *Create* dropdown and select *From template*
 +
 image::09-create-menu.png[link=self, window=blank, width=100%, Create VM]
 
@@ -121,7 +115,7 @@ image::09-create-menu.png[link=self, window=blank, width=100%, Create VM]
 +
 image::10-template-menu.png[link=self, window=blank, width=100%, Create VM]
 +
-NOTE: Notice all of the avaiable templates to use, Windows VMs are fully supported as well.
+NOTE: Notice all of the available templates to use, Windows VMs are fully supported as well.
 
 . Under Virtual machine name, enter the following and leave all other options as default (Disk size, Disk Source):
 +
@@ -138,7 +132,7 @@ Please notice all of the available options to configure the VM with, these will 
 . Click *Quick create Virtual Machine* and watch for progress, this should take a couple of minutes to complete.
 
 . Once completed you will see the live console as well as stats about your VM.
-
++
 image::12-vm-finish.png[link=self, window=blank, width=100%, Create VM]
 
 Feel free to explore the available management screens for VMs, from Metrics to Console to Snapshots and more! 
@@ -167,116 +161,101 @@ In this next step, you'll use Red Hat® OpenShift® GitOps with Argo CD to decla
 
 *Procedure*
 
-[start=1]
 . From the **Fleet Management** tab, navigate to *Applications* from the left side menu.
-. Click *Create application, select ArgoCD AppicationSet-Push Model*.
+. Click *Create application*, select *ArgoCD ApplicationSet - Push Model*.
 . Enter the following information:
-* *Name:* Enter the following:
-+
-[source,sh]
-----
-skupper-patient-demo
-----
-. Under the Argo server select *Add Argo Server* 
+* *Name:* `skupper-patient-demo`
+
+. Open the *Argo server* dropdown and select *Add Argo Server* 
 +
 image::13-argo.png[link=self, window=blank, width=100%, ArgoCD Create]
 +
 . Enter the following information:
-* *Name:* Enter the following:
+* *Name:* `openshift-gitops-global`
+* *Namespace:* `openshift-gitops` (select from dropdown)
+* *ClusterSet:* `global` (remove `default`)
 +
-[source,sh]
-----
-openshift-gitops-global
-----
+IMPORTANT: Ensure Cluster set is set to `global`, otherwise you will have issues in the next steps.
 +
-* *Namespace:* openshift-gitops
-* *ClusterSet:* global
-
-IMPORTANT: Ensure Cluster set is set to global, otherwise you will have issues in the next steps.
-
 image::03-argoconfig.png[link=self, window=blank, width=100%, ArgoCD Config]
 
-[[deploy-applications-using-openshift-gitops]]
-
 . Click *Add*
-. Click *NEXT*
-
+. Select your newly registered ArgoCD server from the *Argo server* dropdown
+. Click *Next*
++
 image::03-app-gitops.png[link=self, window=blank, width=100%, App GitOps]
 
-[start=5]
-. Under repository types, select the GIT repository
-. enter the URL and select "Create new option" for the Repository URL
+. Under repository types, select the *Git* repository type
+. Enter the URL and select *Create new option* for the Repository URL
 +
 [source,sh,subs="attributes",role=execute]
 ----
 https://github.com/mfosterrox/demo-applications.git
 ----
-. Set Revision: main
-. Set Path:
+. Enter revision `main` and select *Create new option* for the Revision
+. Select *Path* from the dropdown (if you don't see anything in the dropdown make sure you created new opeions in the previous steps):
 +
 [source,sh,subs="attributes",role=execute]
 ----
 skupper-demo
 ----
+
 . Set Destination:
 +
 [source,sh,subs="attributes",role=execute]
 ----
 patient-portal
 ----
-. Then click *NEXT*
-
+. Then click *Next*
++
 image::03-app-gitops-2.png[link=self, window=blank, width=100%, App ACM GitOps]
 
-[start=11]
 . Under *Sync Policy* uncheck *Automaticaly sync when cluster state changes* and check *Replace resources instead of applying changes from the source repository* 
-
++
 image::03-app-gitops-3.png[link=self, window=blank, width=100%, App ACM GitOps]
-
++
 NOTE: These changes are only required as you will be modifying the application YAML on RHACM and you don't want it to sync to a Git Repo, you normaly wouldn't uncheck these in a real production enviroment.
 
-[start=12]
-. Under *Placement* for application deployment, verify that *New Placement* is selected.
-* *Cluster set:* Select *Global*
-. Under *Label expressions* click *add label* and select the following
+. Click *Next*
+. Under *Placement*, verify that *New Placement* is selected.
+* *Cluster set:* Select `global`
+. Under *Label expressions* click *Add label expression* and select the following
 * *Label:* name
 * *Operator:* equals any off
 * *Values:* aws-us, local-cluster
 . Make sure that *Set a limit on the number of clusters selected* is checked 
 . Set the number to 2
-
++
 [IMPORTANT] 
 ====
 Ensure *Cluster* set is set to Global and the label values to be present in the placement rule, otherwise you will have issues in the next steps.
 ====
-
++
 image::03-app-placement-us.png[link=self, window=blank, width=100%, ACM App Placement US]
 
-[start=14]
 . Verify all of the information is correct and click *Submit*.
-
++
 NOTE: It will take a few minutes to deploy the application, during this time you might see the Cluster / Application have a red X, this is expected and normal, please allow 5 minutes before checking logs.
-
-NOTE: We will use these applications in other modules of the lab hence why we have you deploy it twice in two different locations. 
++
+NOTE: We will use these applications in other modules of the lab hence why we have you deploy it twice in two different locations.
++
 NOTE: It will take a few minutes to deploy the application, during this time you might see the Cluster / Application have a red X, this is expected and normal.
 
-
-[start=15]
-. Navigate back to the application view, find the filter and select *Application Set*
+. Navigate back to the *Applications* view, find the filter and select *Application Set*
 . Find the *skupper-patient-demo* app 
 . Click on the *Topology Tab* to view and verify that *all of the circles are green*.
-
++
 image::03-application-topology-git.png[link=self, window=blank, width=100%, Application Topology]
 
 === Conclusion
 
-In this opening module, you moved beyond basic cluster setup to orchestrating a unified environment through RHACM fleet cluster management. By leveraging Red Hat GitOps to drive applications and policies, you’ve essentially abstracted the underlying infrastructure, allowing fleet virtualization to handle the heavy lifting behind the scenes. This transition is critical because it shifts the focus from manual configuration to a policy-driven architecture where connectivity and governance are inherent to the system.
+In this opening module, you moved beyond basic cluster setup to orchestrating a unified environment through RHACM fleet cluster management. By leveraging Red Hat GitOps to drive applications and policies, you've essentially abstracted the underlying infrastructure, allowing fleet virtualization to handle the heavy lifting behind the scenes. This transition is critical because it shifts the focus from manual configuration to a policy-driven architecture where connectivity and governance are inherent to the system.
 
 This seamless integration provides a clear blueprint for digital sovereignty. By using GitOps to push declarative policies across your entire fleet, you are effectively enforcing your own jurisdictional standards regardless of where the physical nodes reside. You aren’t just deploying software; you’re asserting that your security posture and operational rules stay consistent across both private and public clouds, ensuring that no single cloud provider dictates your architecture.
 
 Ultimately, the power of this module lies in how it decouples your services from the hardware. Through fleet virtualization, you’ve built a portable, vendor-agnostic ecosystem that allows you to maintain total authority over your data and workloads.
 
-**Congratulations! **
+**Congratulations!**
 
 image::https://media.giphy.com/media/v1.Y2lkPTc5MGI3NjExdjl5YTd4M2o1MWZ4ZjBmMjM3cmJyMHYzZTFsbHB4ZDg0MXN1dzJvcCZlcD12MV9naWZzX3NlYXJjaCZjdD1n/ely3apij36BJhoZ234/giphy.gif[Celebration, width=400, align="center"]
 

@@ -50,7 +50,7 @@ The Environment for this lab already provides the following links for you:
 * This content on the left
 * On the right there are three tabs:
 ** *OpenShift Console*: this is where you will spend the majority of the time configuring the various environments and applications
-** *Red Hat Advanced Cluster Security Console*: the console for configuring security related items
+** *Red Hat Advanced Cluster Security*: the console for configuring security related items
 ** *Bastion*: command line access to the environment. You will run commands in this tab to deploy a few initial settings and interact with the applications.
 
 Before proceeding with the lab modules, you will need to configure kubectl contexts for the clusters, install a few insecure applications and the roxctl CLI tool.
@@ -64,7 +64,7 @@ This lab uses two OpenShift clusters. You'll need to set up kubectl contexts to 
 [start=1]
 . Switch to the *Bastion* tab on the right.
 . Log in to the AWS cluster and create the `aws-us` context and rename the existing `admin` context to `local-cluster`
-
++
 [source,sh,subs="attributes",role=execute]
 ----
 oc config rename-context admin local-cluster
@@ -72,7 +72,6 @@ oc login -u kubeadmin -p {aws_openshift_kubeadmin_password} {aws_openshift_api_u
 oc config rename-context $(oc config current-context) aws-us
 ----
 
-[start=2]
 . Verify that the changes have occured and the context is configured:
 +
 [source,sh,role=execute]
@@ -92,6 +91,7 @@ CURRENT   NAME            CLUSTER            AUTHINFO
 Now you are able to switch between contexts as needed.
 
 . Make sure to switch back to the local cluster context before continuing.
++
 [source,sh,role=execute]
 ----
 # Switch back to local cluster
@@ -120,7 +120,7 @@ EOF
 source ~/.bashrc
 ----
 
-. Clone the repository and run the ACS setup script to install `roxctl` and configure RHACS access:
+. Clone the repository and run the setup scripts to configure your environment:
 +
 [source,sh,subs="attributes",role=execute]
 ----
