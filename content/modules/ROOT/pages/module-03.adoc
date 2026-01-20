@@ -23,8 +23,7 @@ curl -fsSL https://raw.githubusercontent.com/redhat-tssc-tmm/security-roadshow/m
 sudo dnf -y install podman
 ----
 +
-**OUTPUT**
-[.console-output]
+.Sample Output
 [source,bash,subs="+macros,+attributes"]
 ----
 [INFO] Gitsign installed successfully:
@@ -102,7 +101,7 @@ podman build -t $QUAY_URL/$QUAY_USER/patient-portal-frontend:1.0 .
 podman login https://$QUAY_URL -u $QUAY_USER -p {quay_admin_password}
 podman push $QUAY_URL/$QUAY_USER/patient-portal-frontend:1.0
 ----
-
++
 You now have a container image in the local Quay registry.
 
 [[signing-our-software]]
@@ -357,7 +356,7 @@ cosign tree $QUAY_URL/$QUAY_USER/patient-portal-frontend:1.0
    └── 🍒 sha256:f638a989546b998409719e3eb78c0843d880e0bbb5237afa831da685fee48880
 ----
 +
-> We can also log in to Quay at {quay_console_url} using the Quay credentials:
+> We can also log in to Quay at {quay_console_url}^ using the Quay credentials:
 +
 [cols="2,2"]
 |===
@@ -371,7 +370,7 @@ image::11-quay-signed-image.png[link=self, window=blank, width=100%]
 
 . While you're in Quay, make the repo public so we can deploy the application without requiring credentials. Click on settings and then make the repository public.
 +
-image::12-quay-signed-image.png.png[link=self, window=blank, width=100%]
+image::12-quay-signed-image.png[link=self, window=blank, width=100%]
 
 You might be wondering how a pipeline task authenticates itself, since it can't open a browser to log in. Trusted Artifact Signer / Sigstore (including the cosign tool) doesn't authenticate the user directly. Instead, it relies on the OIDC system to authenticate the request before issuing a signing certificate. This allows the full flexibility of OIDC systems for authentication.
 
@@ -424,7 +423,7 @@ image::vuln-tssc-02.png[link=self, window=blank, width=100%]
 +
 You will see that the image is signed and the signature is valid.
 
-[ Scan the signed image using roxctl to check for vulnerabilities:
+. Scan the signed image using roxctl to check for vulnerabilities:
 +
 [source,sh,subs="attributes",role=execute]
 ----
@@ -441,7 +440,7 @@ image::vuln-tssc-03.png[link=self, window=blank, width=100%]
 
 [[next-steps]]
 
-== The Next Steps
+== Next Steps
 
 We didn't have time to cover the following topics in this lab, but they are important to consider for your own environment.
 
