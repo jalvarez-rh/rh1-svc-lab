@@ -12,7 +12,7 @@ Red Hat is perfectly positioned to take advantage of these customer needs. With 
 In this lab, you will progress through a simplified migration process where you, the customer, will bring your workflows and applications to an on premise and cloud environment, bringing your platform, to your data, in a compliant, secure, and repeatable manner.
 
 [[what-youll-learn]]
-== What You Will Learn
+== What You'll Learn
 
 This lab demonstrates how Red Hat Solutions can empower enterprises to manage their own sovereign cloud architectures enabling application and data mobility and policy enforcement.
 
@@ -114,13 +114,13 @@ source ~/.bashrc
 [start=2]
 . Clone the repository and run the ACS setup script to install `roxctl` and configure RHACS access:
 
-[source,sh,role=execute]
+[source,sh,subs="attributes",role=execute]
 ----
-cd ~ && git clone https://github.com/jalvarez-rh/rh1-svc-lab.git || (cd ~/rh1-svc-lab && git pull origin main)
+cd ~ && git clone https://github.com/jalvarez-rh/rh1-svc-lab.git 
 cd ~/rh1-svc-lab
 ./lab-setup/run-all-setup.sh
-./tssc-setup/run-all-setup.sh
-./ai-setup/run-all-setup.sh
+./tssc-setup/setup.sh
+./ai-setup/setup.sh
 ----
 
 [NOTE]
@@ -157,7 +157,7 @@ Administrator login credentials:
 |===
 
 [[whats-next]]
-== What Is Next
+== What's Next
 
 Click on any module above to begin. We recommend starting with Module 1 and proceeding sequentially, as each module builds upon concepts from previous modules.
 

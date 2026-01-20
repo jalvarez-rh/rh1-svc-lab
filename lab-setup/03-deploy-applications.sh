@@ -45,20 +45,27 @@ fi
 log "✓ OpenShift CLI connected as: $(oc whoami)"
 log "Prerequisites validated successfully"
 
-# Clone demo apps repository
-log "Cloning demo apps repository..."
-if [ ! -d "demo-apps" ]; then
-    if ! git clone -b acs-demo-apps https://github.com/SeanRickerd/demo-apps demo-apps; then
-        error "Failed to clone demo-apps repository. Check network connectivity and repository access."
-    fi
-    log "✓ Demo apps repository cloned successfully"
+# Clone demo-applications repository
+log "Cloning demo-applications repository..."
+DEMO_APPS_REPO_DIR=""
+if [ -d "$HOME/demo-applications" ]; then
+    log "demo-applications repository already exists at $HOME/demo-applications"
+    DEMO_APPS_REPO_DIR="$HOME/demo-applications"
+elif [ -d "$PROJECT_ROOT/../demo-applications" ]; then
+    log "demo-applications repository found at $PROJECT_ROOT/../demo-applications"
+    DEMO_APPS_REPO_DIR="$PROJECT_ROOT/../demo-applications"
 else
-    log "Demo apps repository already exists, skipping clone"
+    if git clone https://github.com/mfosterrox/demo-applications.git "$HOME/demo-applications"; then
+        log "✓ Cloned demo-applications repository"
+        DEMO_APPS_REPO_DIR="$HOME/demo-applications"
+    else
+        error "Failed to clone demo-applications repository. Check network connectivity and repository access."
+    fi
 fi
 
-# Set TUTORIAL_HOME environment variable
+# Set TUTORIAL_HOME environment variable to point to demo-applications
 log "Setting TUTORIAL_HOME environment variable..."
-TUTORIAL_HOME="$(pwd)/demo-apps"
+TUTORIAL_HOME="$DEMO_APPS_REPO_DIR"
 if [ ! -d "$TUTORIAL_HOME" ]; then
     error "TUTORIAL_HOME directory does not exist: $TUTORIAL_HOME"
 fi
@@ -92,13 +99,22 @@ deploy_to_cluster() {
     fi
     log "✓ Connected to $CLUSTER_NAME cluster as: $(oc whoami)"
     
-    # Deploy kubernetes-manifests
-    if [ -d "$TUTORIAL_HOME/kubernetes-manifests" ]; then
-        log "Deploying kubernetes-manifests to $CLUSTER_NAME..."
-        oc apply -f "$TUTORIAL_HOME/kubernetes-manifests/" --recursive || warning "Some resources in kubernetes-manifests may have failed to apply to $CLUSTER_NAME"
-        log "✓ kubernetes-manifests deployment attempted on $CLUSTER_NAME"
+    # Deploy k8s-deployment-manifests (all applications)
+    if [ -d "$TUTORIAL_HOME/k8s-deployment-manifests" ]; then
+        log "Deploying k8s-deployment-manifests to $CLUSTER_NAME..."
+        oc apply -f "$TUTORIAL_HOME/k8s-deployment-manifests/" --recursive || warning "Some resources in k8s-deployment-manifests may have failed to apply to $CLUSTER_NAME"
+        log "✓ k8s-deployment-manifests deployment attempted on $CLUSTER_NAME"
     else
-        warning "kubernetes-manifests directory not found at: $TUTORIAL_HOME/kubernetes-manifests"
+        warning "k8s-deployment-manifests directory not found at: $TUTORIAL_HOME/k8s-deployment-manifests"
+    fi
+    
+    # Deploy skupper-demo application
+    if [ -d "$TUTORIAL_HOME/skupper-demo" ]; then
+        log "Deploying skupper-demo application to $CLUSTER_NAME..."
+        oc apply -f "$TUTORIAL_HOME/skupper-demo/" || warning "Some resources in skupper-demo may have failed to apply to $CLUSTER_NAME"
+        log "✓ skupper-demo deployment attempted on $CLUSTER_NAME"
+    else
+        warning "skupper-demo directory not found. Skipping skupper-demo deployment to $CLUSTER_NAME"
     fi
     
     log "✓ Deployment to $CLUSTER_NAME completed"
