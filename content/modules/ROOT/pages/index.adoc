@@ -45,15 +45,24 @@ This lab is organized into four modules:
 [[getting-started]]
 == Getting Started
 
+The Environment for this lab already provides the following links for you:
+
+* This content on the left
+* On the right there are three tabs:
+** *OpenShift Console*: this is where you will spend the majority of the time configuring the various environments and applications
+** *Red Hat Advanced Cluster Security Console*: the console for configuring security related items
+** *Bastion*: command line access to the environment. You will run commands in this tab to deploy a few initial settings and interact with the applications.
+
 Before proceeding with the lab modules, you will need to configure kubectl contexts for the clusters, install a few insecure applications and the roxctl CLI tool.
 
-==== Configure kubectl Contexts
+=== Configure kubectl contexts
 
 This lab uses two OpenShift clusters. You'll need to set up kubectl contexts to easily switch between them.
 
 *Procedure*
 
 [start=1]
+. Switch to the *Bastion* tab on the right.
 . Log in to the AWS cluster and create the `aws-us` context and rename the existing `admin` context to `local-cluster`
 
 [source,sh,subs="attributes",role=execute]
@@ -65,14 +74,13 @@ oc config rename-context $(oc config current-context) aws-us
 
 [start=2]
 . Verify that the changes have occured and the context is configured:
-
++
 [source,sh,role=execute]
 ----
 oc config get-contexts
 ----
-
-**OUTPUT**
-
++
+.**OUTPUT**
 [source,sh]
 ----
 [lab-user@bastion ~]$ oc config get-contexts
@@ -80,26 +88,27 @@ CURRENT   NAME            CLUSTER            AUTHINFO
 *         aws-us          api-ocp-...:6443   kube:admin/...:6443   
           local-cluster   ocp                admin  
 ----
-
++
 Now you are able to switch between contexts as needed.
 
+. Make sure to switch back to the local cluster context before continuing.
 [source,sh,role=execute]
 ----
 # Switch back to local cluster
 oc config use-context local-cluster
 ----
-
++
 IMPORTANT: You will need to switch between contexts as needed throughout the lab. Please ensure you have access to both clusters before proceeding. Otherwise contact the instructor.
 
-==== Set Up the Lab While You Work on Module 1
+=== Set Up the Lab While You Work on Module 1
 
-You're going to run the following setup scripts for module 2,3 and 4 while you work on module 1.
+You're going to run the following setup scripts for module 2, 3 and 4 while you work on module 1.
 
 *Procedure*
 
 [start=1]
 . Add the RHACS environment variables (The "Bastion" tab in the right panel) to your ~/.bashrc file:
-
++
 [source,sh,subs="attributes",role=execute]
 ----
 cat >> ~/.bashrc << 'EOF'
@@ -111,9 +120,8 @@ EOF
 source ~/.bashrc
 ----
 
-[start=2]
 . Clone the repository and run the ACS setup script to install `roxctl` and configure RHACS access:
-
++
 [source,sh,subs="attributes",role=execute]
 ----
 cd ~ && git clone https://github.com/jalvarez-rh/rh1-svc-lab.git 
@@ -122,7 +130,7 @@ cd ~/rh1-svc-lab
 ./tssc-setup/setup.sh
 ./ai-setup/setup.sh
 ----
-
++
 [NOTE]
 ====
 You'll run the same script at the beginning of each module to verify that everything is working as expected.
@@ -132,7 +140,7 @@ You'll run the same script at the beginning of each module to verify that everyt
 
 The Red Hat Advanced Cluster Management for Kubernetes (RHACM) Console is now integrated with OpenShift Console. To access it, select *Fleet Management* from the dropdown menu on the left once you log in.
 
-Your OpenShift cluster console is available in the right panel. In case you want to open it in another window it is here: {openshift_cluster_console_url}[window=blank]
+Switch to the *OpenShift Console* tab in the right panel. In case you want to open it in another window it is here: {openshift_cluster_console_url}[window=blank]
 
 NOTE: ctrl + click on the URL to open URLs in a new tab.
 
@@ -146,7 +154,7 @@ Administrator login credentials:
 
 === RHACS Console Access
 
-Your RHACS Console is available in the right panel. In case you want to open it in another window it is here: {acs_route}[window=blank]
+Your RHACS Console is also available in the right panel. In case you want to open it in another window it is here: {acs_route}[window=blank]
 
 Administrator login credentials:
 
