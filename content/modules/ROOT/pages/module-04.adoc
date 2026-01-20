@@ -62,9 +62,9 @@ cd ~/rh1-svc-lab/ai-setup && ./setup.sh
 +
 At the end of the script output, note the access information that will be displayed. This includes:
 
-* Dashboard URL (will be available after DataScienceCluster is created)
-* Username: admin
-* Password: {openshift_cluster_admin_password}
+* *Dashboard URL* (will be available after DataScienceCluster is created)
+* *Username*: `admin`
+* *Password*: `{openshift_cluster_admin_password}`
 
 . Verify the installation by checking the DataScienceCluster status, dashboard route, and pods:
 +
