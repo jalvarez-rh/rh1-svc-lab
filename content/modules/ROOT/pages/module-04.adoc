@@ -120,29 +120,46 @@ image::04-openshift-ai-dashboard-04.png[Create Jupyter Workbench, width=100%, li
 . Configure your workbench:
 .. Select a notebook image ("Jupyter | Minimal | CPU | Python 3.12 | 2025.2")
 +
+image::04-openshift-ai-dashboard-05.png[Configure Jupyter Workbench, width=100%, link=self, window=blank]
++
+
 [IMPORTANT]
 ====
 Notice the accelerators location that are not available for the notebook image. If your cluster had access to GPU, you would be able to select the GPU accelerator. You can also use environment variables to configure access to your storage/databases
 ====
 
++
 .. Click *Create* to launch your notebook server
 +
-image::04-openshift-ai-dashboard-05.png[Configure Jupyter Workbench, width=100%, link=self, window=blank]
 
-. Once your notebook server is running, click *Open in a new tab* to access your Jupyter environment (if you get prompted to log in just use the admin credentials again):
++
+. Once your notebook server is running, click *Open in a new tab* to access your Jupyter environment (if you get prompted to log in, use Username: `admin` and Password: `{openshift_cluster_admin_password}`):
 +
 image::04-openshift-ai-dashboard-06.png[Jupyter Notebook Server Running, width=100%, link=self, window=blank]
 
 . Once your notebook server is running, click *Open* to access your Jupyter environment.
 . Your Jupyter notebook interface will open in a new tab:
-. In the Jupyter notebook interface, you can create new notebooks, upload files, or browse existing projects:
-. Create a new Python notebook by clicking *New* -> *Python 3* (or your preferred kernel):
-. Your new notebook will open, ready for you to write and execute code cells:
-. You can install additional Python packages using pip in a code cell:
-. The notebook environment provides access to your OpenShift cluster resources. You can verify connectivity:
-. You can also manage your workbenches from the OpenShift AI dashboard. Navigate back to see your running workbench:
-. From the workbench details page, you can stop, restart, or delete your notebook server:
-. The OpenShift AI dashboard also provides monitoring and resource usage information for your workbenches:
+.. In the Jupyter notebook interface, you can create new notebooks, upload files, or browse existing projects:
+. Create a new Python notebook by clicking *Python 12 Notebook* 
+
+image::04-ai.png[Jupyter Notebook, width=100%, link=self, window=blank]
+
+> Your new notebook will open, ready for you to write and execute code. 
+
+Try to get one of the examples to run in the environment -> https://github.com/PacktPublishing/Python-Artificial-Intelligence-Projects-for-Beginners/tree/master/Chapter01
 
 
-NOTE: The first time you create a workbench, it may take a few minutes to pull the container image and start the server. Subsequent starts will be faster.
+TIP: You can install additional Python packages using pip in a code cell
+
+[[module-conclusion]]
+
+== Bringing Intelligence to Your Data
+
+Red Hat OpenShift AI enables you to bring your data scientists and AI platforms directly to where your data resides—within the networks and infrastructure you trust. By deploying OpenShift AI on-premises or in your sovereign cloud environment, you maintain complete control over your data, models, and AI workloads while enabling your teams to innovate and build powerful machine learning solutions.
+
+This approach ensures that your sensitive data never leaves your trusted infrastructure, your AI models remain under your governance, and your organization can meet regulatory compliance requirements without compromise. Whether you're training models on proprietary datasets, deploying inference workloads, or collaborating across teams, OpenShift AI provides the foundation for sovereign AI operations that align with your security, compliance, and operational requirements.
+
+*You've successfully brought intelligence to your data—keeping it safe, secure, and sovereign.*
+
+image::https://media.giphy.com/media/v1.Y2lkPWVjZjA1ZTQ3MzBvNTN6eWR3MHF0eWNoZTI0eTVvMmRrZTMzaW4xbGIwOXJhZTJwMCZlcD12MV9naWZzX3NlYXJjaCZjdD1n/kAUtsLfsEfqaJRwe80/giphy.gif[width=400, Celebration!]
+

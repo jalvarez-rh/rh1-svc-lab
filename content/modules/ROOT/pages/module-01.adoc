@@ -52,7 +52,6 @@ image::104-aws-credentials.png[link=self, window=blank, width=100%, AWS Credenti
 Single replica means components are not expected to be resilient to problems across most fault boundaries associated with high availability. This usually means running critical workloads with just 1 replica and with toleration of full disruption of the component.
 ====
 
-. Create a label called *location=emea* - we will use this later on for other exercises.
 . Click on *Next* to continue.
 +
 image::105-create-cluster-details.png[link=self, window=blank, width=100%, Create Cluster Details]
@@ -236,12 +235,13 @@ Ensure *Cluster* set is set to Global and the label values to be present in the 
 . Verify all of the information is correct and click *Submit*.
 
 image::03-app-placement-us.png[link=self, window=blank, width=100%, ACM App Placement US]
-+
+
+
 NOTE: It will take a few minutes to deploy the application, during this time you might see the Cluster / Application have a red X, this is expected and normal, please allow 5 minutes before checking logs.
-+
+
 
 IMPORTANT: We will use these applications in other modules of the lab hence why we have you deploy it twice in two different locations.
-+
+
 
 === Wrapping Up
 
