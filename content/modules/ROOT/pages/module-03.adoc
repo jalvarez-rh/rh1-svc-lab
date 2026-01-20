@@ -82,7 +82,7 @@ QUAY_CONSOLE_URL="{quay_console_url}"
 QUAY_URL=${QUAY_CONSOLE_URL#https://}
 export QUAY_URL=${QUAY_URL#http://}
 
-cat >> ~/.bashrc <<'EOF'
+cat >> ~/.bashrc <<EOF
 export QUAY_USER={quay_admin_username}
 export QUAY_URL=$QUAY_URL
 EOF
