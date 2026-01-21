@@ -305,7 +305,7 @@ spec:
   policyName: Alpine Linux Package Manager Execution - Patient-Portal Enforcement
   description: Alert when the Alpine Linux package manager (apk) is executed at runtime
   rationale: Use of package managers at runtime indicates that new software may be being introduced into containers while they are running.
-  remediation: Run `apk --purge del apk-tools` in the image build for production containers. Change applications to no longer use package managers at runtime, if applicable.
+  remediation: Run 'apk --purge del apk-tools' in the image build for production containers. Change applications to no longer use package managers at runtime, if applicable.
   categories:
     - Anomalous Activity
     - Package Management
@@ -355,11 +355,6 @@ Next, you will use `tmux` to watch OpenShift events while running the test so yo
 ----
 tmux new-session \; split-window -v \; attach
 ----
-+
-[TIP]
-====
-Should you see some extra characters in one of the tmux panes just delete them.
-====
 
 . Next, run a watch on OpenShift events in the first shell pane:
 +
@@ -383,7 +378,7 @@ POD=$(oc get pod -n patient-portal -l app=frontend -o jsonpath="{.items[0].metad
 oc exec -n patient-portal $POD -i --tty -- /bin/sh
 ----
 +
-*Sample output*
+.Sample output
 [source,bash]
 ----
 [demo-user@bastion ~]$ POD=$(oc get pod -n patient-portal -l app=frontend -o jsonpath="{.items[0].metadata.name}")
