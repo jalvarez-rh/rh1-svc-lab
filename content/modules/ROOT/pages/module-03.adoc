@@ -21,6 +21,7 @@ First, we need to set up the applications for this module.
 cd ~/rh1-svc-lab/tssc-setup && ./setup.sh
 curl -fsSL https://raw.githubusercontent.com/redhat-tssc-tmm/security-roadshow/main/cosign_gitsign_installer.sh | bash
 sudo dnf -y install podman
+cosign version
 ----
 +
 .Sample Output
@@ -99,10 +100,8 @@ QUAY_CONSOLE_URL="{quay_console_url}"
 QUAY_URL=${QUAY_CONSOLE_URL#https://}
 export QUAY_URL=${QUAY_URL#http://}
 
-cat >> ~/.bashrc <<EOF
-export QUAY_USER={quay_admin_username}
-export QUAY_URL=$QUAY_URL
-EOF
+echo "export QUAY_USER={quay_admin_username}" >>~/.bashrc
+echo "export QUAY_URL=$QUAY_URL" >>~/.bashrc
 
 source ~/.bashrc
 echo "QUAY_USER: $QUAY_USER"
