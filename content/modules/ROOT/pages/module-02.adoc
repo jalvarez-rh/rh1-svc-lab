@@ -447,7 +447,7 @@ Event audits are crucial not just for security best practices, but also to meet 
 +
 image::acs-violations-01.png[link=self, window=blank, width=100%, Violations Menu]
 
-. Click on your "Alpine Linux Package Manager Execution - Patient-Portal Enforcement" to view the details.
+. Click on your *Alpine Linux Package Manager Execution - Patient-Portal Enforcement* to view the details.
 +
 image::acs-violations-02.png[link=self, window=blank, width=100%, Violations Menu]
 +
@@ -458,7 +458,7 @@ If configured properly, each violation record should be pushed to a Security Inf
 +
 NOTE: You must resolve the issue before it will disappear from the Violations page.
 
-. Back on the list of violations remove the deployment that violates the policy by click the three dots and selecting "Mark as resolved".
+. Back on the list of violations remove the deployment that violates the policy by click the three dots and selecting *Mark as resolved*.
 
 [[workload-vulnerability-management-image-signing]]
 
@@ -485,7 +485,7 @@ Red Hat always shows you how our software is performing as well.
 image::acs-vulnerability-management-02.png[link=self, window=100%, width=100%, Vulnerability Management]
 +
 For more information about vulnerability tracking and classification, see https://access.redhat.com/security/updates/classification[Red Hat Security Updates Classification].
-
++
 Red Hat software is signed, attested, and compliant with SLSA Level 3 standards. For details about SLSA Level 3 compliance, see https://slsa.dev/spec/v1.0/levels#build-l3-hardened-builds[SLSA Level 3 compliance details].
 
 . Click on images button on the platform tab and notivce that Red Hat images are signed and attested.
@@ -493,7 +493,7 @@ Red Hat software is signed, attested, and compliant with SLSA Level 3 standards.
 image::acs-vulnerability-management-03.png[link=self, window=100%, width=100%, Vulnerability Management]
 +
 image::acs-vulnerability-management-04.png[link=self, window=100%, width=100%, Vulnerability Management]
-
++
 And while you can create SBOMs while you're here, we wanted to you to work on building your own software and signing it with your own keys. Before that, there is one project we wanted to highlight that can help you shrink the number of vulenrabilities in your environment.
 
 [[project-hummingbird]]
