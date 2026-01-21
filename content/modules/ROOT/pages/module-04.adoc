@@ -140,7 +140,7 @@ image::04-openshift-ai-dashboard-06.png[Jupyter Notebook Server Running, width=1
 . Once your notebook server is running, click *Open* to access your Jupyter environment.
 . Your Jupyter notebook interface will open in a new tab:
 .. In the Jupyter notebook interface, you can create new notebooks, upload files, or browse existing projects:
-. Create a new Python notebook by clicking *Python 12 Notebook* 
+. Create a new Python notebook by clicking *Python 3.12 Notebook* 
 
 image::04-ai.png[Jupyter Notebook, width=100%, link=self, window=blank]
 
@@ -148,6 +148,7 @@ image::04-ai.png[Jupyter Notebook, width=100%, link=self, window=blank]
 
 Try to get one of the examples to run in the environment -> https://github.com/PacktPublishing/Python-Artificial-Intelligence-Projects-for-Beginners/tree/master/Chapter01
 
+You can copy the code directly into the notebook or you can upload a file from your local machine.
 
 TIP: You can install additional Python packages using pip in a code cell
 

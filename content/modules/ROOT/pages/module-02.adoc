@@ -8,6 +8,16 @@ Assurance is critical for sovereignty, ensuring that applications operate in a c
 
 So let's get practical in our example of an EMEA environment and a US environment and observe, audit, police and manage our clusters and application applications. We will start by looking at the security, compliance and environment insights that we can get from Red Hat Advanced Cluster Security for Kubernetes (RHACS).
 
+== Ensure the RHACS Operator is Installed and Running
+
+. Run the following script in the bastion host terminal to ensure the RHACS operator is installed and running;
+
+[source,sh,subs="attributes",role=execute]
+----
+cd ~/rh1-svc-lab
+./lab-setup/02-compliance-operator-install.sh
+----
+
 [[security-and-environment-insights]]
 
 == Security and Environment Insights
@@ -85,16 +95,16 @@ Daily compliance scan for all profiles covering CIS, E8, Moderate, NERC-CIP, PCI
 . Select the clusters: *production* (We haven't installed RHACS into the other clusters yet. A huge mistake if you ask us!)
 . Click *Next*
 . Add the following profiles (in order):
-* `ocp4-cis` (99 rules, Platform, Version 1.5.0)
-* `ocp4-cis-node` (100 rules, Node, Version 1.5.0)
-* `ocp4-e8` (14 rules, Platform)
-* `ocp4-moderate` (136 rules, Platform, Revision 4)
-* `ocp4-moderate-node` (120 rules, Node, Revision 4)
-* `ocp4-nerc-cip` (133 rules, Platform)
-* `ocp4-nerc-cip-node` (120 rules, Node)
-* `ocp4-pci-dss` (120 rules, Platform, Version 3.2.1)
-* `ocp4-pci-dss-node` (114 rules, Node, Version 3.2.1)
-* `ocp4-stig` (50 rules, Platform, Version V2R1)
+* `ocp4-cis` 
+* `ocp4-cis-node` 
+* `ocp4-e8` 
+* `ocp4-moderate` 
+* `ocp4-moderate-node` 
+* `ocp4-nerc-cip`
+* `ocp4-nerc-cip-node` 
+* `ocp4-pci-dss` 
+* `ocp4-pci-dss-node` 
+* `ocp4-stig` 
 +
 NOTE: There are many profiles to select but here we are selecting the most common profiles that are used in most organizations. If you want to only add the ones necessary for the lab. Select ......
 
@@ -118,9 +128,10 @@ image::assurance-06.png[link=self, window=blank, width=100%]
 +
 NOTE: This will take a few minutes to load, so please be patient.
 +
+TIP: The RHACS compliance coverage dashboard provides a comprehensive overview of your scan schedules and results. In the Coverage tab, you can review all scan schedules or filter to view specific schedules such as the "acs-catch-all". Each scan displays coverage across a variety of compliance standards—including CIS, OCP, E8, NERC-CIP, NIST 853, PCI-DSS, and DISA-STIG. You can filter results by specific checks for greater detail. On the right side of the dashboard, you'll see the cluster's overall compliance status, along with a breakdown of which checks are passing or failing.
++
 image::assurance-07.png[link=self, window=blank, width=100%]
 +
-IMPORTANT: The RHACS compliance coverage dashboard provides a comprehensive overview of your scan schedules and results. In the Coverage tab, you can review all scan schedules or filter to view specific schedules such as the "acs-catch-all". Each scan displays coverage across a variety of compliance standards—including CIS, OCP, E8, NERC-CIP, NIST 853, PCI-DSS, and DISA-STIG. You can filter results by specific checks for greater detail. On the right side of the dashboard, you'll see the cluster's overall compliance status, along with a breakdown of which checks are passing or failing.
 
 === Analyze Compliance Results
 
