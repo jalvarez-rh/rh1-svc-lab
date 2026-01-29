@@ -215,7 +215,8 @@ oc get image.config.openshift.io/cluster -o yaml | grep allowedRegistries -A 10
     - registry.redhat.io
     - registry.access.redhat.com
     - image-registry.openshift-image-registry.svc:5000
-    - my-trusted-registry.internal.example.com
+    - gcr.io
+    - docker.io
     - quay.io
 status:
   internalRegistryHostname: image-registry.openshift-image-registry.svc:5000

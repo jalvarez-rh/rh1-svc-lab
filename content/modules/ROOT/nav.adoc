@@ -43,6 +43,3 @@
 ** xref:module-04.adoc#install-datascience-cluster[Step 2: Create DataScienceCluster]
 ** xref:module-04.adoc#verify-installation[Verifying the Installation]
 ** xref:module-04.adoc#jupyter-notebooks-access[Accessing Jupyter Notebooks]
-** xref:module-04.adoc#data-pipeline[Create Simple Data Pipeline Across Environments]
-** xref:module-04.adoc#ai-compute[Bringing AI/Compute to Your Data]
-** xref:module-04.adoc#gpu-inference[GPU Support and Inference Server]
