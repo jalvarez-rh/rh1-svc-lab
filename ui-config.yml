@@ -14,5 +14,5 @@ tabs:
 # - name: Red Hat Quay
 #   url: 'https://quay.${DOMAIN}'
 - name: Bastion
-  path: /wettys
+  path: /wetty
   port: 443
