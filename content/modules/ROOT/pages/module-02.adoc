@@ -94,7 +94,7 @@ Daily compliance scan for all profiles covering CIS, E8, Moderate, NERC-CIP, PCI
 . Click *Next*
 . Select the clusters: *production* (We haven't installed RHACS into the other clusters yet. A huge mistake if you ask us!)
 . Click *Next*
-. Add the following profiles (in order):
+. Add the following profiles:
 * `ocp4-cis` 
 * `ocp4-cis-node` 
 * `ocp4-e8` 
@@ -454,7 +454,7 @@ Event audits are crucial not just for security best practices, but also to meet 
 *Procedure*
 
 . On the right switch back to the *Red Hat Advanced Cluster Security* tab and navigate to the *Violations* page.
-. Filter by the policy violation *Policy*, *Name*, `r/apk` OR by the most recent policy violations (sort by time). You will see a policy violation that has been enforced.
+. Filter by the policy violation *Policy*, *Name*, `r/alpine` OR by the most recent policy violations (sort by time). You will see a policy violation that has been enforced.
 +
 image::acs-violations-01.png[link=self, window=blank, width=100%, Violations Menu]
 

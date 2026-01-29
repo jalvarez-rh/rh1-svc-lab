@@ -81,16 +81,20 @@ image::106-create-cluster-nodepools.png[link=self, window=blank, width=100%, Cre
 ====
 The next screen allows you to configure storage mappings type to use and it's associated variables. We will leave these as default as these have already been configured on the backend and you do not need to change them.
 ====
-+
-.Click on *Next* to proceed.
-+
+
+[start=15]
+. Click on *Next* to proceed.
+
+
 image::107-create-cluster-networking.png[link=self, window=blank, width=100%, Create Cluster Networking]
 
+[start=16]
 . Click *Next* on each screen to proceed to the final *Review* screen. You will see a description of the cluster you are creating.
 . Click the blue *Create* button to start the deployment process.
 +
 image::108-create-cluster-summary-create.png[link=self, window=blank, width=100%, Create Cluster Summary Page]
 
+[start=18]
 . Sit back and watch RHACM do it's thing. You should see the Cluster creation process starting in the UI.
 +
 image::03-cluster-creation.png[link=self, window=blank, width=100%, View New Cluster]
