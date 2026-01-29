@@ -372,7 +372,7 @@ cosign tree $QUAY_URL/$QUAY_USER/patient-portal-frontend:1.0
    └── 🍒 sha256:c20e35a851fe1f348be662e94f3095edfe85955d1d7b9ee8de2afbfc3c94f7e2
 ----
 +
-> We can also log in to Quay[{quay_console_url}^] using the Quay credentials:
+> We can also log in to Quay[{quay_console_url}] using the Quay credentials:
 +
 [cols="2,2"]
 |===
