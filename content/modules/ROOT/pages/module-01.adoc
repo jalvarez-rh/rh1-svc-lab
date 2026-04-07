@@ -233,7 +233,7 @@ https://github.com/mfosterrox/demo-applications.git
 skupper-demo
 ----
 
-. Set Destination:
+. Set destination:
 +
 [source,sh,subs="attributes",role=execute]
 ----
@@ -243,11 +243,8 @@ patient-portal
 +
 image::03-app-gitops-2.png[link=self, window=blank, width=100%, App ACM GitOps]
 
-. Under *Sync Policy* uncheck *Automaticaly sync when cluster state changes* and check *Replace resources instead of applying changes from the source repository*
+. Under *Sync Policy* uncheck *Automaticaly sync when cluster state changes* let's leave these settings as default.
 +
-image::03-app-gitops-3.png[link=self, window=blank, width=100%, App ACM GitOps]
-+
-NOTE: These changes are only required as you will be modifying the application YAML on RHACM and you don't want it to sync to a Git Repo, you normaly wouldn't uncheck these in a real production enviroment.
 
 . Click *Next*
 . Under *Placement*, verify that *New Placement* is selected.
@@ -265,11 +262,16 @@ Ensure *Cluster* set is set to Global and the label values to be present in the 
 ====
 +
 . Verify all of the information is correct and click *Submit*.
-
++
 image::03-app-placement-us.png[link=self, window=blank, width=100%, ACM App Placement US]
++
+[NOTE]
+====
+*equals any off* defaults to "In" meaning that the application will be deployed to the global cluster set with any label value of aws-us or local-cluster.
+====
++
 
-IMPORTANT: We will use these applications in other modules of the lab hence why we have you deploy it twice in two different locations.
-
+IMPORTANT: We will use these applications in other modules of the lab hence why we have you deploy it twice in two different different clusters.
 
 === Wrapping Up
 

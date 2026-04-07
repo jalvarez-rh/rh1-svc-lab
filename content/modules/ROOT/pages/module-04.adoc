@@ -113,12 +113,13 @@ image::04-openshift-ai-dashboard-03.png[OpenShift AI Applications View, width=10
 
 . To create a Jupyter notebook server:
 .. Click on *Applications* -> *Enabled* -> *Start basic workbench*
-.. Click *Create workbench*
 +
 image::04-openshift-ai-dashboard-04.png[Create Jupyter Workbench, width=100%, link=self, window=blank]
 
 . Configure your workbench:
 .. Select a notebook image ("Jupyter | Minimal | CPU | Python 3.12 | 2025.2")
+.. Deployment size set to *Small*
+.. Click *Create workbench*
 +
 image::04-openshift-ai-dashboard-05.png[Configure Jupyter Workbench, width=100%, link=self, window=blank]
 +

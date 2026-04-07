@@ -34,7 +34,6 @@
 ** xref:module-03.adoc#next-steps[The Next Steps]
 ** xref:module-03.adoc#signing-verifying-git-commits[Signing and Verifying Git Commits]
 ** xref:module-03.adoc#trusted-profile-analyzer[Trusted Profile Analyzer]
-** xref:module-03.adoc#module-cleanup[Module Cleanup]
 
 * xref:module-04.adoc[4. Data and AI]
 ** xref:module-04.adoc#sovereign-ai-overview[Sovereign AI: Bringing Intelligence to Your Data]
